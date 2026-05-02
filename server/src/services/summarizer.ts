@@ -1,4 +1,4 @@
-import { query, getOne, getMany } from '../db/index.js';
+import { query, getMany } from '../db/index.js';
 import { generateId, truncate } from '../lib/utils.js';
 import { callAi } from './ai-client.js';
 
@@ -9,6 +9,28 @@ interface ArticleForSummary {
   raw_content: string;
   language: string;
   source_name: string;
+}
+
+async function claimPendingArticles(limit: number): Promise<ArticleForSummary[]> {
+  const result = await query<ArticleForSummary>(
+    `UPDATE articles a
+     SET summary_status = 'processing'
+     FROM (
+       SELECT a2.id
+       FROM articles a2
+       WHERE a2.summary_status = 'pending'
+       ORDER BY a2.created_at DESC
+       FOR UPDATE SKIP LOCKED
+       LIMIT $1
+     ) picked
+     LEFT JOIN sources s ON s.id = a.source_id
+     WHERE a.id = picked.id
+     RETURNING a.id, a.title, a.raw_excerpt, a.raw_content, a.language,
+               s.name as source_name`,
+    [limit]
+  );
+
+  return result.rows;
 }
 
 // Tóm tắt 1 article — output có cấu trúc markdown
@@ -110,23 +132,12 @@ ${truncate(content, 12000)}
 export async function summarizePendingArticles(): Promise<{ processed: number; succeeded: number; failed: number }> {
   const maxCalls = parseInt(process.env.MAX_AI_CALLS_PER_RUN || '30');
 
-  const pendingArticles = await getMany<ArticleForSummary>(
-    `SELECT a.id, a.title, a.raw_excerpt, a.raw_content, a.language,
-            s.name as source_name
-     FROM articles a
-     LEFT JOIN sources s ON s.id = a.source_id
-     WHERE a.summary_status = 'pending'
-     ORDER BY a.created_at DESC
-     LIMIT $1`,
-    [maxCalls]
-  );
+  const pendingArticles = await claimPendingArticles(maxCalls);
 
   let succeeded = 0;
   let failed = 0;
 
   for (const article of pendingArticles) {
-    await query('UPDATE articles SET summary_status = $1 WHERE id = $2', ['processing', article.id]);
-
     try {
       const summary = await summarizeArticle(article);
       if (summary) {

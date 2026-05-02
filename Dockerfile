@@ -15,21 +15,20 @@ COPY tsconfig.json ./tsconfig.json
 COPY server/package.json server/package-lock.json* ./server/
 RUN cd server && npm install
 COPY server/ ./server/
+RUN cd server && npm run build
 
 # --- Production ---
 FROM node:22-alpine AS production
 WORKDIR /app
 
-# Copy server
-COPY --from=server-build /app/server/package.json /app/server/package-lock.json* ./server/
+COPY server/package.json server/package-lock.json* ./server/
 RUN cd server && npm install --omit=dev
-COPY --from=server-build /app/server/src ./server/src
-
-# Copy built client into server/public
+COPY --from=server-build /app/server/dist ./server/dist
+COPY --from=server-build /app/server/src/db/migrations ./server/dist/db/migrations
 COPY --from=client-build /app/client/dist ./server/public
 
 WORKDIR /app/server
 
 EXPOSE 3000
 
-CMD ["npx", "tsx", "src/index.ts"]
+CMD ["node", "dist/index.js"]

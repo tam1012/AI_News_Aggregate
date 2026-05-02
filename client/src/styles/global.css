@@ -227,6 +227,36 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   -webkit-box-orient: vertical; overflow: hidden;
 }
 
+/* Feed item with thumbnail */
+.feed-item-body {
+  display: flex; gap: 10px; align-items: flex-start;
+}
+.feed-item-text { flex: 1; min-width: 0; }
+.feed-item-thumb {
+  flex-shrink: 0; width: 64px; height: 64px;
+  border-radius: var(--radius-sm); object-fit: cover;
+  background: var(--color-bg-hover);
+}
+@media (max-width: 640px) {
+  .feed-item-thumb { width: 56px; height: 56px; }
+}
+
+/* Read state */
+.feed-item.is-read .feed-item-title {
+  color: var(--color-text-muted); font-weight: 500;
+}
+.feed-item.is-read .feed-item-source { opacity: 0.6; }
+
+/* Copy toast */
+.copy-toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--color-text); color: var(--color-bg-card);
+  padding: 10px 20px; border-radius: 20px;
+  font-size: 0.85rem; font-weight: 500; z-index: 9999;
+  animation: fadeIn 0.15s ease-out;
+  pointer-events: none;
+}
+
 .feed-item-skeleton {
   padding: 20px 0;
   border-bottom: 1px solid var(--color-border-light);

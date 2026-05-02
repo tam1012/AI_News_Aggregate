@@ -3,6 +3,8 @@ import ReactMarkdown from 'react-markdown';
 import { api } from '../services/api';
 import { useFetchRaw } from '../hooks/useApi';
 
+const READ_ARTICLES_STORAGE_KEY = 'read_articles';
+
 /* ── helpers ── */
 function formatTime(dateStr: string): string {
   const d = new Date(dateStr);
@@ -12,11 +14,6 @@ function formatTime(dateStr: string): string {
 function formatDateHeading(dateStr: string): string {
   const d = new Date(dateStr);
   return d.toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric', year: 'numeric' });
-}
-
-function getDateKey(dateStr: string): string {
-  const d = new Date(dateStr);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function extractSourceLabel(article: any): string {
@@ -32,10 +29,22 @@ function cleanTitle(title: string): string {
   return title.replace(/^\[r\/[^\]]+\]\s*/, '');
 }
 
-interface GroupedDay {
-  dateKey: string;
-  dateLabel: string;
-  articles: any[];
+function loadReadArticles(): string[] {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const raw = window.localStorage.getItem(READ_ARTICLES_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveReadArticles(ids: string[]) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(READ_ARTICLES_STORAGE_KEY, JSON.stringify(ids.slice(0, 500)));
 }
 
 /* ── main component ── */
@@ -72,6 +81,8 @@ export function Home() {
   const [tab, setTab] = useState<'news' | 'digest'>('news');
   const [filterSource, setFilterSource] = useState<string>('all');
   const [showFilter, setShowFilter] = useState(false);
+  const [readArticleIds, setReadArticleIds] = useState<string[]>(() => loadReadArticles());
+  const [copyToast, setCopyToast] = useState<string | null>(null);
   const splitLeftRef = useRef<HTMLDivElement>(null);
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -141,6 +152,31 @@ export function Home() {
     return () => { document.body.classList.remove('split-view-active'); };
   }, []);
 
+  useEffect(() => {
+    saveReadArticles(readArticleIds);
+  }, [readArticleIds]);
+
+  useEffect(() => {
+    if (!copyToast) return;
+    const timeoutId = window.setTimeout(() => setCopyToast(null), 1800);
+    return () => window.clearTimeout(timeoutId);
+  }, [copyToast]);
+
+  const handleSelectArticle = useCallback((article: any) => {
+    setSelected(article);
+    setReadArticleIds(prev => (prev.includes(article.id) ? prev : [article.id, ...prev]));
+    setTab('news');
+  }, []);
+
+  const handleCopyLink = useCallback(async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyToast('Đã copy link bài gốc');
+    } catch {
+      setCopyToast('Không thể copy link');
+    }
+  }, []);
+
   if (loading) {
     return (
       <div className="feed-container">
@@ -172,7 +208,7 @@ export function Home() {
       {tab === 'digest' && (
         <div className="feed-tabs visible-on-mobile-only">
           <button
-            className={`feed-tab ${tab === 'news' ? 'active' : ''}`}
+            className="feed-tab"
             onClick={() => setTab('news')}
           >
             News
@@ -226,7 +262,7 @@ export function Home() {
                   >
                     Tất cả nguồn
                   </button>
-                  {sources.map(s => (
+                  {sources.map((s: any) => (
                     <button
                       key={s.id}
                       className={`filter-option ${filterSource === s.id ? 'active' : ''}`}
@@ -242,7 +278,7 @@ export function Home() {
           {/* Active filter indicator */}
           {filterSource !== 'all' && (
             <div className="filter-active">
-              <span>Đang lọc: <strong>{sources.find(s => s.id === filterSource)?.name.replace(/ - .*$/, '')}</strong></span>
+              <span>Đang lọc: <strong>{sources.find((s: any) => s.id === filterSource)?.name.replace(/ - .*$/, '')}</strong></span>
               <button className="btn btn-sm" onClick={() => setFilterSource('all')}>✕ Bỏ lọc</button>
             </div>
           )}
@@ -285,10 +321,8 @@ export function Home() {
                     key={article.id}
                     article={article}
                     isActive={selected?.id === article.id}
-                    onClick={() => {
-                      setSelected(article);
-                      if (tab !== 'news') setTab('news');
-                    }}
+                    isRead={readArticleIds.includes(article.id)}
+                    onClick={() => handleSelectArticle(article)}
                   />
                 ))}
               </div>
@@ -307,6 +341,7 @@ export function Home() {
             <ArticleDetail
               article={selected}
               onClose={() => setSelected(null)}
+              onCopyLink={handleCopyLink}
             />
           ) : (
             <ReadmeWelcome />
@@ -314,43 +349,74 @@ export function Home() {
         </div>
       </div>
 
+      {copyToast && <div className="copy-toast">{copyToast}</div>}
+
     </>
   );
 }
 
 /* ── Feed Item (list row) ── */
-function FeedItem({ article, isActive, onClick }: { article: any; isActive?: boolean; onClick: () => void }) {
+function FeedItem({
+  article,
+  isActive,
+  isRead,
+  onClick,
+}: {
+  article: any;
+  isActive?: boolean;
+  isRead?: boolean;
+  onClick: () => void;
+}) {
   const sourceLabel = extractSourceLabel(article);
   const title = cleanTitle(article.title);
   const time = article.published_at ? formatTime(article.published_at) : '';
 
-  // First 2-3 lines of summary as preview
   const preview = useMemo(() => {
     const text = article.summary_text || article.raw_excerpt || '';
-    // Strip markdown formatting for preview
     const plain = text
       .replace(/\*\*[^*]+\*\*:?\s*/g, '') // remove bold labels
-      .replace(/^[-•]\s*/gm, '')           // remove bullet markers
-      .replace(/#{1,3}\s*/g, '')           // remove headings
+      .replace(/^[-•]\s*/gm, '')
+      .replace(/#{1,3}\s*/g, '')
       .replace(/\n+/g, ' ')
       .trim();
     return plain.substring(0, 200);
   }, [article]);
 
   return (
-    <article className={`feed-item ${isActive ? 'active' : ''}`} onClick={onClick}>
+    <article className={`feed-item ${isActive ? 'active' : ''} ${isRead ? 'is-read' : ''}`} onClick={onClick}>
       <div className="feed-item-meta">
         <span className="feed-item-source">{sourceLabel}</span>
         {time && <span className="feed-item-time">{time}</span>}
       </div>
-      <h3 className="feed-item-title">{title}</h3>
-      <p className="feed-item-preview">{preview}</p>
+      <div className="feed-item-body">
+        <div className="feed-item-text">
+          <h3 className="feed-item-title">{title}</h3>
+          <p className="feed-item-preview">{preview}</p>
+        </div>
+        {article.image_url && (
+          <img
+            src={article.image_url}
+            alt=""
+            className="feed-item-thumb"
+            loading="lazy"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        )}
+      </div>
     </article>
   );
 }
 
 /* ── Article Detail (fullscreen overlay) ── */
-function ArticleDetail({ article, onClose }: { article: any; onClose: () => void }) {
+function ArticleDetail({
+  article,
+  onClose,
+  onCopyLink,
+}: {
+  article: any;
+  onClose: () => void;
+  onCopyLink: (url: string) => void | Promise<void>;
+}) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [dragY, setDragY] = useState(0);
@@ -456,6 +522,9 @@ function ArticleDetail({ article, onClose }: { article: any; onClose: () => void
           </div>
 
           <div className="detail-actions">
+            <button className="btn btn-ghost" onClick={() => void onCopyLink(article.url)}>
+              Copy link
+            </button>
             <a
               href={article.url}
               target="_blank"

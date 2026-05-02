@@ -1,122 +1,622 @@
-# AI News Aggregator
+# NewsTamHV
 
-Hệ thống tổng hợp và tóm tắt tin tức tự động sử dụng AI. 
-Dự án được xây dựng với cấu trúc Monorepo gồm Client (React + Vite) và Server (Node.js + Hono + PostgreSQL).
+NewsTamHV là một hệ thống đọc tin cá nhân theo mô hình full-stack monorepo. Ứng dụng tự động lấy bài viết từ RSS, web và forum, lưu vào PostgreSQL, gọi AI để tóm tắt bằng tiếng Việt, rồi hiển thị dưới dạng giao diện đọc nhanh tối ưu cho desktop lẫn mobile.
 
-## 🚀 Tính năng chính
+Trọng tâm của project này không phải là một cổng tin tức công cộng quy mô lớn. Nó được thiết kế cho nhu cầu cá nhân: mở lên là đọc nhanh, lọc theo nguồn, xem lại theo ngày, và có một khu quản trị gọn để vận hành scraper, AI provider, cùng các job nền.
 
-- **Cào dữ liệu đa dạng:** Hỗ trợ cào tin tức qua RSS Feed và Web Scraping trực tiếp.
-- **Tự động tóm tắt bằng AI:** Tích hợp đa dạng AI Providers (Vertex AI, OpenAI, Gemini, Anthropic, DeepSeek, Mimo, Groq, xAI...) để tự động tạo tóm tắt tin tức mỗi khi có bài mới.
-- **Tự động hóa hoàn toàn:** Tích hợp Cron job chạy mỗi giờ để lấy tin, tự động tóm tắt bài mới, và tự động thử lại khi API AI có lỗi.
-- **Bản tin tổng hợp (Digest):** Hệ thống tạo bản tin định kỳ (daily/weekly).
-- **Giao diện hiện đại & Responsive:** Tối ưu hóa UI/UX cho cả màn hình lớn và thiết bị di động (Mobile-friendly với sticky nav).
-- **Trang Quản trị (Admin):** Quản lý Nguồn tin (Sources), Bài viết (Articles), và Cấu hình AI (Providers) được bảo vệ bằng Token. Toàn bộ thông tin nhạy cảm của API Keys được mã hóa và ẩn ở phía Frontend.
+## Mục lục
 
-## 🛠 Tech Stack
+- [Tính năng chính](#tính-năng-chính)
+- [Kiến trúc tổng thể](#kiến-trúc-tổng-thể)
+- [Tech stack](#tech-stack)
+- [Cấu trúc thư mục](#cấu-trúc-thư-mục)
+- [Luồng xử lý dữ liệu](#luồng-xử-lý-dữ-liệu)
+- [Frontend](#frontend)
+- [Backend API](#backend-api)
+- [Database](#database)
+- [AI providers được hỗ trợ](#ai-providers-được-hỗ-trợ)
+- [Cài đặt môi trường local](#cài-đặt-môi-trường-local)
+- [Chạy project ở chế độ development](#chạy-project-ở-chế-độ-development)
+- [Build production](#build-production)
+- [Deploy VPS với Docker Compose](#deploy-vps-với-docker-compose)
+- [Biến môi trường](#biến-môi-trường)
+- [Cron jobs và vận hành](#cron-jobs-và-vận-hành)
+- [Bảo mật và auth](#bảo-mật-và-auth)
+- [Ghi chú vận hành thực tế](#ghi-chú-vận-hành-thực-tế)
+- [Các cải tiến gần đây](#các-cải-tiến-gần-đây)
 
-- **Frontend:** React 18, Vite, React Router v6, TailwindCSS (Vanilla CSS customized), Lucide Icons.
-- **Backend:** Node.js, Hono.js (Web framework siêu nhẹ), pg (PostgreSQL client).
-- **Database:** PostgreSQL.
-- **Triển khai:** Docker & Docker Compose, Nginx.
+## Tính năng chính
 
-## 📁 Cấu trúc thư mục
+### 1. Tự động thu thập tin tức
+
+- Hỗ trợ nguồn **RSS** chuẩn.
+- Hỗ trợ **web scraping** với selector cấu hình theo từng nguồn.
+- Hỗ trợ **Reddit** theo hướng RSS + enrich thêm nội dung và bình luận qua JSON khi khả dụng.
+- Hỗ trợ **VOZ forum** theo hướng riêng: lấy thread từ RSS rồi vào trang thread thật để bóc tách bài gốc và bình luận thành viên.
+
+### 2. Tóm tắt bài viết bằng AI
+
+- Mỗi bài mới được đưa vào hàng đợi `pending`.
+- Backend chọn provider AI đang active và sinh tóm tắt tiếng Việt.
+- Có prompt riêng cho:
+  - tin báo thông thường,
+  - nội dung forum / cộng đồng như Reddit, VOZ.
+- Có retry cho bài lỗi hoặc bài bị kẹt ở trạng thái `processing`.
+
+### 3. Tạo bản tin tổng hợp
+
+- Gom các bài đã tóm tắt thành một digest định kỳ.
+- Digest được hiển thị ngay trong app ở tab **Bản tin**.
+
+### 4. Giao diện đọc nhanh
+
+- Split view trên desktop: list bên trái, nội dung bên phải.
+- Overlay chi tiết trên mobile, có gesture kéo xuống để đóng.
+- Lọc theo nguồn.
+- Điều hướng theo ngày.
+- Thumbnail trong feed.
+- Đánh dấu bài đã đọc bằng localStorage.
+- Copy link bài gốc ngay trong khung chi tiết.
+- Dark mode / light mode.
+
+### 5. Khu quản trị vận hành
+
+- Quản lý nguồn tin.
+- Quản lý bài viết.
+- Quản lý AI provider.
+- Kích hoạt thủ công các job scrape / summarize / digest / cleanup.
+
+## Kiến trúc tổng thể
+
+Project được tổ chức theo mô hình monorepo:
+
+- `client/`: ứng dụng React + Vite.
+- `server/`: API Hono + PostgreSQL + scheduler.
+- `docker-compose.yml`: khởi chạy app + database trên VPS.
+- `Dockerfile`: multi-stage build cho frontend và backend.
+
+Ở production, backend phục vụ luôn static frontend đã build sẵn từ thư mục `server/public`, đồng thời expose API dưới prefix `/api/*`.
+
+## Tech stack
+
+### Frontend
+
+- React 19
+- Vite 6
+- TypeScript
+- React Router 7
+- react-markdown
+- CSS thuần tùy biến trong `client/src/styles/global.css`
+
+### Backend
+
+- Node.js 22
+- Hono
+- PostgreSQL qua `pg`
+- `node-cron` cho background jobs
+- `rss-parser`
+- `cheerio`
+
+### DevOps / Deploy
+
+- Docker
+- Docker Compose
+- Nginx reverse proxy
+- Ubuntu VPS
+
+## Cấu trúc thư mục
 
 ```text
 .
-├── client/                 # Frontend React application
+├── client/
+│   ├── public/
 │   ├── src/
-│   │   ├── components/     # UI Components (Article Card, Feed, v.v.)
-│   │   ├── pages/          # Các trang chính (Home, Admin, Digests)
-│   │   ├── services/       # Giao tiếp API (axios/fetch wrapper)
-│   │   └── styles/         # Global styles & CSS utilities
-│   └── package.json
-├── server/                 # Backend Node.js API
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── pages/
+│   │   ├── services/
+│   │   ├── styles/
+│   │   ├── main.tsx
+│   │   └── router.tsx
+│   ├── package.json
+│   └── tsconfig.json
+├── server/
 │   ├── src/
-│   │   ├── db/             # Database connection & setup
-│   │   ├── jobs/           # Cron jobs (Scraper, Summarizer, Cleanup, Retry)
-│   │   ├── lib/            # Utilities & Auth Middleware
-│   │   ├── routes/         # API Controllers
-│   │   └── services/       # Logic cốt lõi (Scraper, AI Client)
-│   └── package.json
-├── docker-compose.yml      # Cấu hình Docker cho cả App (Build) và DB
-├── Dockerfile              # Dockerfile build production cho App
-└── nginx-newstamhv.conf    # Cấu hình Nginx Reverse Proxy
+│   │   ├── db/
+│   │   │   ├── migrations/
+│   │   │   ├── index.ts
+│   │   │   └── migrate.ts
+│   │   ├── jobs/
+│   │   ├── lib/
+│   │   ├── routes/
+│   │   ├── services/
+│   │   └── index.ts
+│   ├── package.json
+│   └── tsconfig.json
+├── .env.example
+├── .dockerignore
+├── docker-compose.yml
+├── Dockerfile
+├── nginx-newstamhv.conf
+├── package.json
+└── README.md
 ```
 
-## ⚙️ Cài đặt & Chạy Local
+## Luồng xử lý dữ liệu
+
+### Bước 1: Thu thập nguồn
+
+Scheduler chạy `runScrapeJob()` để quét tất cả source đang `is_enabled = true`.
+
+Tùy loại nguồn, hệ thống đi theo một trong các nhánh:
+
+- `scrapeRssSource()`
+- `scrapeWebSource()`
+- `scrapeRedditSource()`
+- `scrapeVozSource()`
+
+Mỗi bài sau khi lấy được sẽ được lưu vào bảng `articles` với:
+
+- `raw_excerpt`
+- `raw_content`
+- `image_url`
+- `content_hash`
+- `summary_status = 'pending'`
+
+### Bước 2: Tóm tắt bằng AI
+
+Scheduler hoặc manual trigger gọi `summarizePendingArticles()`.
+
+Cơ chế hiện tại đã được sửa để tránh race condition:
+
+- batch bài `pending` được claim theo kiểu atomic,
+- chuyển ngay sang `processing`,
+- dùng `FOR UPDATE SKIP LOCKED` để tránh 2 worker cùng lấy 1 bài.
+
+Sau đó:
+
+- thành công → `summary_status = 'done'`
+- không đủ dữ liệu → `summary_status = 'skipped'`
+- lỗi AI / timeout → `summary_status = 'failed'`
+
+### Bước 3: Tạo digest
+
+`generateDigest()` lấy các bài đã `done` trong khoảng thời gian gần nhất, ghép thành prompt lớn rồi yêu cầu AI sinh ra bản tin tổng hợp markdown. Kết quả được lưu vào bảng `digests` và map quan hệ qua `digest_items`.
+
+## Frontend ứng dụng
+
+### Các route chính
+
+- `/` → trang đọc tin chính
+- `/sources` → quản lý nguồn tin
+- `/admin` → dashboard quản trị
+
+### Home page
+
+Trang chủ là trung tâm trải nghiệm đọc:
+
+- tab **News**
+- tab **Bản tin**
+- lọc theo nguồn
+- đổi ngày
+- chọn bài từ feed
+- xem chi tiết bài với markdown render
+
+Một số hành vi UI đáng chú ý:
+
+- Desktop dùng split layout.
+- Mobile dùng overlay detail.
+- Feed item có thumbnail nếu bài có `image_url`.
+- Khi click bài, ID bài được lưu vào localStorage để đánh dấu đã đọc.
+- Trong chi tiết bài có nút **Copy link** và nút **Đọc bài gốc**.
+- Header công khai được giản lược: icon Admin/Sources chỉ hiện khi đã có `admin_token` trong localStorage hoặc đang ở route quản trị.
+
+### Sources page
+
+Trang này cho phép:
+
+- thêm nguồn mới,
+- auto-detect RSS / web source,
+- bật / tắt nguồn,
+- chỉnh sửa selector với web scraping,
+- xóa nguồn.
+
+### Admin page
+
+Trang quản trị tập trung vào vận hành:
+
+- xem health tổng quan,
+- trigger job thủ công,
+- reset summary của bài,
+- xóa bài,
+- quản lý AI provider active.
+
+## Backend API
+
+### Nhóm route chính
+
+- `/api/health`
+- `/api/sources`
+- `/api/articles`
+- `/api/digests`
+- `/api/ai-providers`
+
+### Health
+
+`GET /api/health`
+
+Trả về:
+
+- tình trạng DB,
+- số lượng sources,
+- số lượng articles theo trạng thái,
+- digest mới nhất,
+- scrape logs gần đây.
+
+Ngoài ra có các endpoint trigger thủ công:
+
+- `POST /api/health/trigger/scrape`
+- `POST /api/health/trigger/summarize`
+- `POST /api/health/trigger/digest`
+- `POST /api/health/trigger/cleanup`
+
+### Sources
+
+Chức năng chính:
+
+- CRUD nguồn tin,
+- detect feed / parser config,
+- bật tắt nguồn.
+
+### Articles
+
+Chức năng chính:
+
+- lấy danh sách bài theo ngày,
+- lấy danh sách ngày có bài,
+- lấy chi tiết bài,
+- reset summary,
+- xóa bài.
+
+### AI Providers
+
+Hỗ trợ:
+
+- tạo provider,
+- cập nhật provider,
+- xóa provider,
+- activate provider,
+- test provider.
+
+Thông tin nhạy cảm như `api_key` hoặc `service_account_json` không được trả nguyên văn cho frontend.
+
+## Database
+
+Database migrations hiện có trong:
+
+- `server/src/db/migrations/001_initial.sql`
+- `server/src/db/migrations/002_ai_providers.sql`
+
+Các nhóm bảng quan trọng:
+
+- `sources`
+- `articles`
+- `scrape_logs`
+- `digests`
+- `digest_items`
+- `ai_providers`
+
+### Trạng thái summary của bài
+
+Các trạng thái thường gặp:
+
+- `pending`
+- `processing`
+- `done`
+- `failed`
+- `skipped`
+
+## AI providers được hỗ trợ
+
+Theo backend hiện tại, project hỗ trợ các kiểu provider sau:
+
+- `vertex_ai`
+- `openai`
+- `gemini`
+- `xai`
+- `mimo`
+- `anthropic`
+- `deepseek`
+- `groq`
+- `custom`
+
+Mỗi provider có thể cấu hình:
+
+- model
+- endpoint
+- api key
+- project / region
+- temperature
+- max tokens
+- extra config
+
+Provider active sẽ được dùng cho mọi tác vụ tóm tắt / digest mới.
+
+## Cài đặt môi trường local
 
 ### Yêu cầu
-- Node.js v20+
-- PostgreSQL v14+
-- (Tùy chọn) Docker & Docker Compose để chạy DB nhanh chóng.
 
-### 1. Thiết lập Database Local
-Bạn có thể cài PostgreSQL trực tiếp hoặc dùng Docker:
+- Node.js 22+ được khuyến nghị
+- npm
+- PostgreSQL 16+ hoặc Docker
+
+### 1. Clone project
+
 ```bash
-docker run --name newstamhv-db -e POSTGRES_USER=newstamhv -e POSTGRES_PASSWORD=newstamhv -e POSTGRES_DB=newstamhv -p 5433:5432 -d postgres:14-alpine
+git clone <repo-url>
+cd newstamhv
 ```
 
-### 2. Cấu hình biến môi trường
-Tạo file `.env` tại thư mục gốc dựa trên `.env.example`:
+### 2. Cài dependencies
+
+Ở root:
+
+```bash
+npm install
+```
+
+Hoặc cài riêng từng workspace:
+
+```bash
+cd server && npm install
+cd ../client && npm install
+```
+
+### 3. Tạo file môi trường
+
+Tạo `.env` ở root cho môi trường Docker hoặc production style, và/hoặc `.env` trong `server/` cho môi trường dev backend.
+
+Có thể bắt đầu từ:
+
+- `.env.example`
+- `server/.env.example`
+
+Ví dụ `server/.env` cho local dev:
+
 ```env
-# Database URL
-DATABASE_URL=postgres://newstamhv:newstamhv@localhost:5433/newstamhv
-
-# Server Port
-PORT=3001
-
-# Admin Token (Bắt buộc phải có để truy cập trang quản trị)
-ADMIN_TOKEN=your_secure_admin_token_here
-
-# Chu kỳ cào tin (giờ)
-SCRAPE_INTERVAL_HOURS=1
+PORT=3000
+NODE_ENV=development
+DATABASE_URL=postgresql://newstamhv:newstamhv@localhost:5432/newstamhv
+ADMIN_TOKEN=change-me-to-a-random-string
+SCRAPE_INTERVAL_HOURS=3
+MAX_ARTICLES_PER_SOURCE=20
+MAX_AI_CALLS_PER_RUN=30
 ```
 
-### 3. Cài đặt dependencies
-```bash
-# Cài npm packages cho Backend
-cd server
-npm install
+### 4. Tạo database và migrate
 
-# Cài npm packages cho Frontend
-cd ../client
-npm install
+Nếu dùng PostgreSQL local, tạo DB trước rồi chạy:
+
+```bash
+npm run db:migrate
 ```
 
-### 4. Khởi chạy môi trường Dev
-Chạy Backend (Terminal 1):
+Nếu muốn chạy DB nhanh bằng Docker:
+
 ```bash
-cd server
+docker run --name newstamhv-db \
+  -e POSTGRES_USER=newstamhv \
+  -e POSTGRES_PASSWORD=newstamhv \
+  -e POSTGRES_DB=newstamhv \
+  -p 5433:5432 \
+  -d postgres:16-alpine
+```
+
+Khi đó `DATABASE_URL` cần trỏ tới cổng `5433`.
+
+## Chạy project ở chế độ development
+
+### Cách 1: chạy cả 2 workspace từ root
+
+```bash
 npm run dev
 ```
 
-Chạy Frontend (Terminal 2):
+### Cách 2: chạy riêng
+
+Backend:
+
 ```bash
-cd client
-npm run dev
+npm run dev --workspace=server
 ```
 
-Truy cập `http://localhost:5173` để xem ứng dụng.
+Frontend:
 
-## 🚢 Triển khai lên VPS (Production)
+```bash
+npm run dev --workspace=client
+```
 
-Toàn bộ ứng dụng được đóng gói sẵn để deploy dễ dàng với Docker Compose.
+Frontend thường chạy qua Vite dev server, backend chạy Hono trên cổng cấu hình trong `server/.env`.
 
-1. **Chuẩn bị file môi trường trên VPS:** Tạo file `.env` chứa `DATABASE_URL` (trỏ vào db container), `PORT=3001`, và `ADMIN_TOKEN`.
-2. **Khởi động Docker:**
+## Build production
+
+Build toàn bộ project:
+
+```bash
+npm run build
+```
+
+Hoặc build từng phần:
+
+```bash
+npm run build --workspace=client
+npm run build --workspace=server
+```
+
+### Lưu ý production runtime
+
+Dockerfile hiện tại đã được chỉnh để chạy backend theo kiểu compile trước:
+
+- build frontend ra `client/dist`
+- build backend TypeScript ra `server/dist`
+- production container chạy bằng:
+
+```bash
+node dist/index.js
+```
+
+Cách này ổn định hơn so với chạy `tsx` trực tiếp trong container production.
+
+## Deploy VPS với Docker Compose
+
+### 1. Chuẩn bị file `.env` ở thư mục project trên VPS
+
+Ví dụ:
+
+```env
+DB_PASSWORD=thay-bang-mat-khau-manh
+ADMIN_TOKEN=thay-bang-chuoi-ngau-nhien-dai
+SCRAPE_INTERVAL_HOURS=3
+MAX_ARTICLES_PER_SOURCE=20
+MAX_AI_CALLS_PER_RUN=30
+CORS_ORIGIN=https://newstamhv.duckdns.org
+```
+
+### 2. Build và chạy
+
 ```bash
 docker compose up -d --build
 ```
-3. **Cấu hình Nginx:** Sử dụng file `nginx-newstamhv.conf` làm mẫu để setup Reverse Proxy trỏ domain vào cổng `3001` (hoặc cổng mapping của docker).
 
-## 🔒 Bảo mật
+### 3. Kiểm tra container
 
-- Mọi thao tác thay đổi dữ liệu (POST, PUT, DELETE) và các thiết lập nhạy cảm (AI Providers) đều yêu cầu `ADMIN_TOKEN`.
-- Client sẽ yêu cầu nhập Token qua Prompt khi thao tác lỗi 401 Unauthorized và lưu vào `localStorage`.
-- Trên Client tuyệt đối KHÔNG bao giờ có thể đọc được `api_key` của AI Provider (Backend đã loại bỏ khỏi payload response khi list danh sách).
+```bash
+docker compose ps
+docker compose logs -f app
+```
 
-## 📝 Quy trình phát triển
+### 4. Reverse proxy bằng Nginx
 
-1. Toàn bộ mã nguồn nên được chỉnh sửa và test tại **Local**.
-2. Khi mọi thứ ổn định, sử dụng lệnh `git commit` & `git push` lên GitHub.
-3. Trên VPS, kéo mã nguồn mới nhất (`git pull`) và chạy `docker compose up -d --build` để tái tạo môi trường Production.
+Sử dụng `nginx-newstamhv.conf` làm mẫu để trỏ domain public vào app đang map cục bộ qua `127.0.0.1:3001`.
+
+## Biến môi trường
+
+### Root `.env.example`
+
+```env
+DB_PASSWORD=thay-bang-mat-khau-manh
+ADMIN_TOKEN=thay-bang-chuoi-ngau-nhien-dai
+SCRAPE_INTERVAL_HOURS=3
+MAX_ARTICLES_PER_SOURCE=20
+MAX_AI_CALLS_PER_RUN=30
+CORS_ORIGIN=https://newstamhv.duckdns.org
+```
+
+### `server/.env.example`
+
+```env
+PORT=3000
+NODE_ENV=development
+DATABASE_URL=postgresql://newstamhv:newstamhv@localhost:5432/newstamhv
+ADMIN_TOKEN=change-me-to-a-random-string
+SCRAPE_INTERVAL_HOURS=3
+MAX_ARTICLES_PER_SOURCE=20
+MAX_AI_CALLS_PER_RUN=30
+```
+
+### Ý nghĩa chính
+
+- `PORT`: cổng backend
+- `NODE_ENV`: môi trường chạy
+- `DATABASE_URL`: chuỗi kết nối PostgreSQL
+- `ADMIN_TOKEN`: token cho thao tác quản trị
+- `SCRAPE_INTERVAL_HOURS`: chu kỳ scrape / summarize / digest
+- `MAX_ARTICLES_PER_SOURCE`: số bài tối đa lấy từ mỗi nguồn mỗi đợt
+- `MAX_AI_CALLS_PER_RUN`: số bài tối đa được tóm tắt mỗi lần job chạy
+- `CORS_ORIGIN`: origin được phép gọi API
+
+## Cron jobs và vận hành
+
+Các job chính trong `server/src/jobs/scheduler.ts`:
+
+### Scrape & Summarize
+
+- Chạy mỗi `SCRAPE_INTERVAL_HOURS` tại phút `00`
+- Luồng:
+  - scrape source
+  - insert bài mới
+  - summarize ngay sau đó
+
+### Digest
+
+- Chạy mỗi `SCRAPE_INTERVAL_HOURS` tại phút `30`
+- Sinh bản tin tổng hợp từ các bài đã `done`
+
+### Retry job
+
+- Chạy mỗi 10 phút
+- Reset:
+  - bài `processing` bị kẹt quá lâu,
+  - bài `failed` đủ điều kiện retry
+
+### Cleanup job
+
+- Chạy hằng ngày lúc `02:43`
+- Xóa log cũ và làm gọn `raw_content` của bài quá cũ
+
+## Bảo mật và auth
+
+Middleware auth đang hoạt động theo nguyên tắc đơn giản:
+
+- phần lớn `GET` public để frontend đọc dữ liệu,
+- các thao tác thay đổi dữ liệu cần `Authorization: Bearer <ADMIN_TOKEN>`.
+
+Ở frontend:
+
+- khi gặp `401`, app có thể prompt yêu cầu nhập token admin,
+- token được lưu ở `localStorage` dưới key `admin_token`.
+
+Đây là mô hình phù hợp cho tool cá nhân nội bộ hoặc self-hosted nhỏ. Nếu muốn public rộng hơn, nên nâng cấp lên session auth hoặc một cơ chế xác thực chặt chẽ hơn.
+
+## Ghi chú vận hành thực tế
+
+### 1. VPS hiện tại có thể không phải git clone sạch
+
+Trong quá trình deploy thực tế, môi trường VPS từng có trạng thái không phải working tree git chuẩn. Khi đó deploy bằng cách copy file + rebuild Docker là phương án an toàn hơn so với giả định `git pull` luôn chạy được.
+
+### 2. Không nên để artifact build lẫn trong `src/`
+
+Trước đây từng phát sinh lỗi build khi có các file `.js`, `.map`, `.d.ts` nằm trong `client/src/`. Vite có thể resolve nhầm file build artifact thay vì file TypeScript gốc.
+
+### 3. VOZ cần scraper riêng
+
+Nếu chỉ đọc RSS của VOZ, hệ thống sẽ thiếu phần bình luận. Cách đúng hiện tại là:
+
+- lấy danh sách thread từ RSS,
+- fetch trang thread thật,
+- parse bài gốc + comment,
+- đưa vào `raw_content` để AI có đủ ngữ cảnh.
+
+## Các cải tiến gần đây
+
+### UI/UX
+
+- Thu gọn layout desktop để đỡ bị tràn ngang.
+- Giảm độ rộng list bài bên trái.
+- Feed item có thumbnail.
+- Bài đã đọc được làm dịu màu để quét nhanh hơn.
+- Thêm nút copy link bài gốc.
+- Ẩn icon Admin/Sources khỏi header public để giao diện sạch hơn.
+
+### Hạ tầng backend
+
+- Sửa race condition của summarizer bằng cơ chế claim atomic với `FOR UPDATE SKIP LOCKED`.
+- Dockerfile production chuyển sang runtime từ `dist/` thay vì chạy `tsx` trực tiếp.
+
+### Scraping
+
+- Đã có scraper riêng cho VOZ để lấy nội dung thread và bình luận thành viên tốt hơn so với RSS thuần.
+
+---
+
+Nếu dùng đúng theo mục tiêu ban đầu của project này, NewsTamHV hoạt động tốt nhất như một hệ thống đọc tin cá nhân self-hosted: ít thao tác, dễ vận hành, và tập trung vào tốc độ đọc hơn là bề mặt tính năng quá rộng.
