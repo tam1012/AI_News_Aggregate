@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.*
+*.log
+.DS_Store
+*.sql
+test-rss.js
+test-rss.mjs
+trigger-digest.mjs
+trigger-digest.ts

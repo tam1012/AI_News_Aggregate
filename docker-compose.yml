@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: newstamhv-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: newstamhv
+      POSTGRES_USER: newstamhv
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-newstamhv_secret}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U newstamhv"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  app:
+    build: .
+    container_name: newstamhv-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      DATABASE_URL: postgresql://newstamhv:${DB_PASSWORD:-newstamhv_secret}@db:5432/newstamhv
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-change-me}
+      SCRAPE_INTERVAL_HOURS: ${SCRAPE_INTERVAL_HOURS:-3}
+      MAX_ARTICLES_PER_SOURCE: ${MAX_ARTICLES_PER_SOURCE:-20}
+      MAX_AI_CALLS_PER_RUN: ${MAX_AI_CALLS_PER_RUN:-30}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+
+volumes:
+  pgdata:
