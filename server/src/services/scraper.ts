@@ -216,13 +216,25 @@ async function getBrowser(): Promise<any> {
   return browserInstance;
 }
 
-async function browserFetch(url: string, timeoutMs: number = 30000): Promise<string> {
+async function browserFetch(url: string, timeoutMs: number = 30000, rawText: boolean = false): Promise<string> {
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
     await page.setUserAgent(BROWSER_UA);
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8' });
     await page.goto(url, { waitUntil: 'networkidle2', timeout: timeoutMs });
+
+    // Try to dismiss Reddit cookie/consent wall if present
+    try {
+      const acceptBtn = await page.$('button[aria-label="Accept all cookies"], button:has-text("Accept")');
+      if (acceptBtn) await acceptBtn.click();
+      await new Promise(r => setTimeout(r, 500));
+    } catch {}
+
+    if (rawText) {
+      // For JSON endpoints: get raw text from body, not HTML wrapper
+      return await page.evaluate(() => document.body?.innerText || document.documentElement?.textContent || '');
+    }
     return await page.content();
   } finally {
     await page.close();
@@ -405,40 +417,83 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
           // Use headless browser to fetch Reddit JSON (bypasses Cloudflare)
           const commentsJsonUrl = `https://www.reddit.com${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
           try {
-            const html = await browserFetch(commentsJsonUrl, 25000);
-            // Reddit JSON returns as HTML page with JSON in body - extract it
-            const bodyText = await (async () => {
-              // If it's direct JSON
-              if (html.startsWith('[') || html.startsWith('{')) return html;
-              // If it's an HTML page, try to extract JSON from <pre> or page content
-              const $ = cheerio.load(html);
-              const pre = $('pre').first().text();
-              if (pre && (pre.startsWith('[') || pre.startsWith('{'))) return pre;
-              // Try to find JSON in script tags
-              const scripts = $('script').toArray();
-              for (const s of scripts) {
-                const text = $(s).html() || '';
-                if (text.includes('"kind"') && text.includes('"data"')) {
-                  const match = text.match(/(\[[\s\S]*\])/);
-                  if (match) return match[1];
-                }
-              }
-              return '';
-            })();
+            let parsed = false;
 
-            if (bodyText) {
-              const commentsData = JSON.parse(bodyText);
-              const postData = commentsData[0]?.data?.children?.[0]?.data;
-              if (postData?.selftext && postData.selftext.length > postContent.length) {
-                postContent = normalizeWhitespace(postData.selftext);
+            // Strategy 1: fetch .json endpoint and read raw text from browser body
+            try {
+              const rawBody = await browserFetch(commentsJsonUrl, 25000, true);
+              const jsonText = rawBody.trim();
+              if (jsonText && (jsonText.startsWith('[') || jsonText.startsWith('{'))) {
+                const commentsData = JSON.parse(jsonText);
+                const postData = commentsData[0]?.data?.children?.[0]?.data;
+                if (postData?.selftext && postData.selftext.length > postContent.length) {
+                  postContent = normalizeWhitespace(postData.selftext);
+                }
+                if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
+                  outboundUrl = String(postData.url);
+                }
+                const comments = commentsData[1]?.data?.children || [];
+                const flattened: ForumComment[] = [];
+                flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
+                discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
+                parsed = true;
+              } else {
+                console.log(`[reddit] .json endpoint did not return JSON for ${postPath}, body starts with: ${jsonText.substring(0, 100)}`);
               }
-              if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
-                outboundUrl = String(postData.url);
+            } catch (e: any) {
+              console.log(`[reddit] .json fetch failed for ${postPath}: ${e.message}`);
+            }
+
+            // Strategy 2: fetch the HTML page and extract embedded JSON from <script> tags
+            if (!parsed) {
+              try {
+                const pageHtml = await browserFetch(`https://www.reddit.com${postPath}`, 25000, false);
+                const $ = cheerio.load(pageHtml);
+                // Reddit embeds data in <script id="data"> or window.__r tags
+                let embeddedJson: any = null;
+                $('script').each((_, el) => {
+                  const text = $(el).html() || '';
+                  // Look for the data blob Reddit injects
+                  const match = text.match(/window\.__r\s*=\s*(\{[\s\S]*?\});?\s*<\/|window\.___r\s*=\s*(\{[\s\S]*?\});?\s*<\/|<script[^>]*id="data"[^>]*>([\s\S]*?)<\/script>/);
+                  if (match) {
+                    const jsonStr = match[1] || match[2] || match[3];
+                    if (jsonStr) {
+                      try { embeddedJson = JSON.parse(jsonStr); } catch {}
+                    }
+                  }
+                });
+                if (embeddedJson?.posts?.models) {
+                  // Extract selftext from the post model
+                  const models = Object.values(embeddedJson.posts.models) as any[];
+                  if (models[0]?.selftext && models[0].selftext.length > postContent.length) {
+                    postContent = normalizeWhitespace(models[0].selftext);
+                  }
+                }
+                // Also try to extract comments from embedded data
+                if (embeddedJson?.comments?.models) {
+                  const commentModels = Object.values(embeddedJson.comments.models) as any[];
+                  const pullpushComments: ForumComment[] = commentModels
+                    .filter((c: any) => c.body && c.body !== '[deleted]' && c.body !== '[removed]' && c.body.length > 20)
+                    .slice(0, REDDIT_COMMENT_LIMIT)
+                    .map((c: any, idx: number) => ({
+                      author: c.author || 'unknown',
+                      body: c.body.substring(0, 900),
+                      reactions: c.score || 0,
+                      page: 1,
+                      order: idx,
+                      score: scoreForumComment(c.body, c.score || 0, 1, idx),
+                    }));
+                  if (pullpushComments.length > 0) {
+                    discussionComments = selectForumComments(pullpushComments, REDDIT_COMMENT_LIMIT);
+                    parsed = true;
+                  }
+                }
+                if (!parsed) {
+                  console.log(`[reddit] HTML extraction found no embedded data for ${postPath}`);
+                }
+              } catch (e: any) {
+                console.log(`[reddit] HTML page fetch failed for ${postPath}: ${e.message}`);
               }
-              const comments = commentsData[1]?.data?.children || [];
-              const flattened: ForumComment[] = [];
-              flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
-              discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
             }
           } catch {
             // Browser fetch failed, try Pullpush as last resort
