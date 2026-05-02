@@ -25,6 +25,7 @@ const REDDIT_CLIENT_ID = process.env.REDDIT_CLIENT_ID || '';
 const REDDIT_CLIENT_SECRET = process.env.REDDIT_CLIENT_SECRET || '';
 const REDDIT_USERNAME = process.env.REDDIT_USERNAME || '';
 const REDDIT_PASSWORD = process.env.REDDIT_PASSWORD || '';
+const REDDIT_PROXY_URL = process.env.REDDIT_PROXY_URL || '';
 let redditToken: { access_token: string; expires_at: number } | null = null;
 
 function hasRedditOAuth(): boolean {
@@ -211,7 +212,11 @@ async function getBrowser(): Promise<any> {
   browserInstance = await puppeteer.launch({
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    args: [
+      '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu',
+      '--disable-blink-features=AutomationControlled',
+      '--window-size=1920,1080',
+    ],
   });
   return browserInstance;
 }
@@ -220,8 +225,16 @@ async function browserFetch(url: string, timeoutMs: number = 30000, rawText: boo
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
+    // Anti-detection: remove webdriver flag, set realistic properties
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+      (window as any).chrome = { runtime: {} };
+    });
     await page.setUserAgent(BROWSER_UA);
-    await page.setExtraHTTPHeaders({ 'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8' });
+    await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
+    await page.setViewport({ width: 1920, height: 1080 });
     await page.goto(url, { waitUntil: 'networkidle2', timeout: timeoutMs });
 
     // Try to dismiss Reddit cookie/consent wall if present
@@ -380,6 +393,9 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
     const items = feed.items.slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 15));
     result.itemsFound = items.length;
 
+    let enrichedCount = 0;
+    const MAX_ENRICH_PER_RUN = 8;
+
     for (const item of items) {
       if (!item.link || !item.title) continue;
 
@@ -413,92 +429,42 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
             flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
             discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
           }
-        } else {
-          // Use headless browser to fetch Reddit JSON (bypasses Cloudflare)
-          const commentsJsonUrl = `https://www.reddit.com${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
-          try {
-            let parsed = false;
+        } else if (enrichedCount < MAX_ENRICH_PER_RUN) {
+          enrichedCount++;
 
-            // Strategy 1: fetch .json endpoint and read raw text from browser body
+          // Strategy 1: Cloudflare Worker proxy (real-time Reddit API access)
+          if (REDDIT_PROXY_URL) {
             try {
-              const rawBody = await browserFetch(commentsJsonUrl, 25000, true);
-              const jsonText = rawBody.trim();
-              if (jsonText && (jsonText.startsWith('[') || jsonText.startsWith('{'))) {
-                const commentsData = JSON.parse(jsonText);
-                const postData = commentsData[0]?.data?.children?.[0]?.data;
-                if (postData?.selftext && postData.selftext.length > postContent.length) {
-                  postContent = normalizeWhitespace(postData.selftext);
+              const proxyUrl = `${REDDIT_PROXY_URL}?path=${encodeURIComponent(postPath + '.json')}&limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
+              const proxyRes = await curlFetch(proxyUrl, 'application/json', 15);
+              if (proxyRes.ok) {
+                const commentsData = await proxyRes.json();
+                if (Array.isArray(commentsData)) {
+                  const postData = commentsData[0]?.data?.children?.[0]?.data;
+                  if (postData?.selftext && postData.selftext.length > postContent.length) {
+                    postContent = normalizeWhitespace(postData.selftext);
+                  }
+                  if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
+                    outboundUrl = String(postData.url);
+                  }
+                  const comments = commentsData[1]?.data?.children || [];
+                  const flattened: ForumComment[] = [];
+                  flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
+                  discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
+                  if (discussionComments.length > 0) {
+                    console.log(`[reddit] Proxy: got ${discussionComments.length} comments for ${postPath}`);
+                  }
                 }
-                if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
-                  outboundUrl = String(postData.url);
-                }
-                const comments = commentsData[1]?.data?.children || [];
-                const flattened: ForumComment[] = [];
-                flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
-                discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
-                parsed = true;
-              } else {
-                console.log(`[reddit] .json endpoint did not return JSON for ${postPath}, body starts with: ${jsonText.substring(0, 100)}`);
               }
             } catch (e: any) {
-              console.log(`[reddit] .json fetch failed for ${postPath}: ${e.message}`);
+              console.log(`[reddit] Proxy failed for ${postPath}: ${e.message}`);
             }
+          }
 
-            // Strategy 2: fetch the HTML page and extract embedded JSON from <script> tags
-            if (!parsed) {
-              try {
-                const pageHtml = await browserFetch(`https://www.reddit.com${postPath}`, 25000, false);
-                const $ = cheerio.load(pageHtml);
-                // Reddit embeds data in <script id="data"> or window.__r tags
-                let embeddedJson: any = null;
-                $('script').each((_, el) => {
-                  const text = $(el).html() || '';
-                  // Look for the data blob Reddit injects
-                  const match = text.match(/window\.__r\s*=\s*(\{[\s\S]*?\});?\s*<\/|window\.___r\s*=\s*(\{[\s\S]*?\});?\s*<\/|<script[^>]*id="data"[^>]*>([\s\S]*?)<\/script>/);
-                  if (match) {
-                    const jsonStr = match[1] || match[2] || match[3];
-                    if (jsonStr) {
-                      try { embeddedJson = JSON.parse(jsonStr); } catch {}
-                    }
-                  }
-                });
-                if (embeddedJson?.posts?.models) {
-                  // Extract selftext from the post model
-                  const models = Object.values(embeddedJson.posts.models) as any[];
-                  if (models[0]?.selftext && models[0].selftext.length > postContent.length) {
-                    postContent = normalizeWhitespace(models[0].selftext);
-                  }
-                }
-                // Also try to extract comments from embedded data
-                if (embeddedJson?.comments?.models) {
-                  const commentModels = Object.values(embeddedJson.comments.models) as any[];
-                  const pullpushComments: ForumComment[] = commentModels
-                    .filter((c: any) => c.body && c.body !== '[deleted]' && c.body !== '[removed]' && c.body.length > 20)
-                    .slice(0, REDDIT_COMMENT_LIMIT)
-                    .map((c: any, idx: number) => ({
-                      author: c.author || 'unknown',
-                      body: c.body.substring(0, 900),
-                      reactions: c.score || 0,
-                      page: 1,
-                      order: idx,
-                      score: scoreForumComment(c.body, c.score || 0, 1, idx),
-                    }));
-                  if (pullpushComments.length > 0) {
-                    discussionComments = selectForumComments(pullpushComments, REDDIT_COMMENT_LIMIT);
-                    parsed = true;
-                  }
-                }
-                if (!parsed) {
-                  console.log(`[reddit] HTML extraction found no embedded data for ${postPath}`);
-                }
-              } catch (e: any) {
-                console.log(`[reddit] HTML page fetch failed for ${postPath}: ${e.message}`);
-              }
-            }
-          } catch {
-            // Browser fetch failed, try Pullpush as last resort
-            if (postId) {
-              const pullpushUrl = `https://api.pullpush.io/reddit/comment/search?link_id=t3_${postId}&size=${REDDIT_COMMENT_LIMIT}&sort=score&sort_type=score`;
+          // Strategy 2: Pullpush archive API (fallback, data may be stale)
+          if (discussionComments.length === 0 && postId) {
+            try {
+              const pullpushUrl = `https://api.pullpush.io/reddit/comment/search?link_id=${postId}&size=${REDDIT_COMMENT_LIMIT}&sort=score&sort_type=score`;
               const pullpushRes = await curlFetch(pullpushUrl, 'application/json', 10);
               if (pullpushRes.ok) {
                 const pullpushData = await pullpushRes.json();
@@ -513,7 +479,12 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
                     score: scoreForumComment(c.body, c.score || 0, 1, idx),
                   }));
                 discussionComments = selectForumComments(pullpushComments, REDDIT_COMMENT_LIMIT);
+                if (pullpushComments.length > 0) {
+                  console.log(`[reddit] Pullpush: got ${pullpushComments.length} comments for ${postPath}`);
+                }
               }
+            } catch (e: any) {
+              console.log(`[reddit] Pullpush failed for ${postPath}: ${e.message}`);
             }
           }
         }
