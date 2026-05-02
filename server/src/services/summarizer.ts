@@ -71,25 +71,27 @@ ${truncate(content, 10000)}
 }
 
 function buildForumPrompt(article: ArticleForSummary, content: string): string {
-  return `Biên tập viên chuyên tổng hợp thảo luận cộng đồng (Reddit, VOZ, Forum). Tóm tắt CHÍNH XÁC dựa trên <raw_data>.
+  return `Biên tập viên tổng hợp nội dung từ Reddit/VOZ/Forum, viết cho app đọc tin tiếng Việt. Tóm tắt CHÍNH XÁC dựa trên <raw_data>.
 
 NGUYÊN TẮC:
-- CHỈ dùng thông tin trong <raw_data>. KHÔNG suy đoán, KHÔNG bổ sung.
+- CHỈ dùng thông tin trong <raw_data>. KHÔNG suy đoán, KHÔNG bổ sung, KHÔNG khái quát nếu dữ liệu không đủ.
 - Tổng hợp CẢ nội dung gốc VÀ bình luận thảo luận.
-- Ưu tiên bình luận đa chiều, có insight hoặc tranh luận sắc bén.
-- Thể hiện các góc nhìn khác nhau nếu có ý kiến trái chiều.
+- Mỗi ý kiến phải phản ánh nội dung thực sự trong bình luận (có thể diễn đạt lại, không thay đổi ý nghĩa).
+- Ưu tiên bình luận có nhiều upvote hoặc được nhắc lại nhiều lần.
+- Nếu có tranh luận → thể hiện rõ các phía, không gộp sai lệch.
 - Luôn output tiếng Việt. Giữ nguyên tên riêng gốc.
 
 ĐỊNH DẠNG (chỉ trả về nội dung, không giải thích):
 
-**Chủ đề:** 1-2 câu mô tả nội dung bài viết/chủ đề gốc.
+**Chủ đề:** 1-2 câu tóm tắt nội dung bài viết gốc. Không thêm thông tin ngoài bài.
 
 **Ý kiến cộng đồng:**
-- #1: [Quan điểm nổi bật, được đồng tình nhiều hoặc phân tích sâu]
-- #2: [Quan điểm khác, không trùng ý #1]
-- (Tối đa 5. Chỉ ghi ý có thật. Không lặp ý.)
+- #1: [Ý kiến thực tế từ bình luận, viết lại ngắn gọn]
+- #2: [Ý kiến khác biệt hoặc bổ sung]
+- #3: [Ý kiến khác nếu có]
+- (Tối đa 5. Nếu không đủ 3 ý → chỉ ghi những ý có thật, không tự thêm.)
 
-**Tóm lại:** 1 câu kết luận xu hướng ý kiến chung. Bỏ qua nếu không rõ xu hướng.
+**Tóm lại:** 1 câu tổng kết xu hướng ý kiến. Nếu ý kiến phân tán → ghi "Ý kiến cộng đồng chưa thống nhất".
 
 QUY TẮC VIẾT:
 - Viết tự nhiên, dùng thuật ngữ phù hợp cộng đồng.
