@@ -356,6 +356,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
 
       try {
         await sleep(1200);
+        const postId = postPath.match(/\/comments\/([a-z0-9]+)/)?.[1];
 
         if (hasRedditOAuth()) {
           // Use OAuth API for full comment access
@@ -368,31 +369,28 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
             if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
               outboundUrl = String(postData.url);
             }
-
             const comments = commentsData[1]?.data?.children || [];
             const flattened: ForumComment[] = [];
             flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
             discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
           }
-        } else {
-          // No OAuth: try curl JSON API (may be blocked)
-          const commentsUrl = `https://www.reddit.com${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
-          const commentsRes = await curlFetch(commentsUrl, 'application/json', 10);
-
-          if (commentsRes.ok) {
-            const commentsData = await commentsRes.json();
-            const postData = commentsData[0]?.data?.children?.[0]?.data;
-            if (postData?.selftext && postData.selftext.length > postContent.length) {
-              postContent = normalizeWhitespace(postData.selftext);
-            }
-            if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
-              outboundUrl = String(postData.url);
-            }
-
-            const comments = commentsData[1]?.data?.children || [];
-            const flattened: ForumComment[] = [];
-            flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
-            discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
+        } else if (postId) {
+          // Fallback: Pullpush API (Reddit archive, works from cloud VPS)
+          const pullpushUrl = `https://api.pullpush.io/reddit/comment/search?link_id=t3_${postId}&size=${REDDIT_COMMENT_LIMIT}&sort=score&sort_type=score`;
+          const pullpushRes = await curlFetch(pullpushUrl, 'application/json', 10);
+          if (pullpushRes.ok) {
+            const pullpushData = await pullpushRes.json();
+            const pullpushComments: ForumComment[] = (pullpushData.data || [])
+              .filter((c: any) => c.body && c.body !== '[deleted]' && c.body !== '[removed]' && c.body.length > 20)
+              .map((c: any, idx: number) => ({
+                author: c.author || 'unknown',
+                body: c.body.substring(0, 900),
+                reactions: c.score || 0,
+                page: 1,
+                order: idx,
+                score: scoreForumComment(c.body, c.score || 0, 1, idx),
+              }));
+            discussionComments = selectForumComments(pullpushComments, REDDIT_COMMENT_LIMIT);
           }
         }
       } catch {
