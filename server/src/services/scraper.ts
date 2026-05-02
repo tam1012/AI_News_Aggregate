@@ -1,5 +1,6 @@
 import RssParser from 'rss-parser';
 import * as cheerio from 'cheerio';
+import { exec } from 'child_process';
 import { query, getOne } from '../db/index.js';
 import { generateId, createContentHash, normalizeUrl, truncate, sleep } from '../lib/utils.js';
 
@@ -124,14 +125,23 @@ function selectForumComments(comments: ForumComment[], maxComments: number): For
     });
 }
 
-async function fetchText(url: string, accept: string, timeoutMs: number) {
-  return fetch(url, {
-    headers: {
-      'User-Agent': BROWSER_UA,
-      Accept: accept,
-      'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
-    },
-    signal: AbortSignal.timeout(timeoutMs),
+// Use curl to bypass Cloudflare TLS fingerprinting that blocks Node.js fetch()
+function curlFetch(url: string, accept: string, timeoutSec: number): Promise<{ ok: boolean; status: number; text: () => Promise<string>; json: () => Promise<any> }> {
+  return new Promise((resolve, reject) => {
+    const cmd = `curl -s -L --max-time ${timeoutSec} -H "User-Agent: ${BROWSER_UA}" -H "Accept: ${accept}" -H "Accept-Language: vi-VN,vi;q=0.9,en;q=0.8" "${url}"`;
+    exec(cmd, { timeout: (timeoutSec + 2) * 1000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      const body = stdout || '';
+      resolve({
+        ok: true,
+        status: 200,
+        text: async () => body,
+        json: async () => JSON.parse(body),
+      });
+    });
   });
 }
 
@@ -290,10 +300,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
       try {
         await sleep(1200);
         const commentsUrl = `https://www.reddit.com${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
-        const commentsRes = await fetch(commentsUrl, {
-          headers: { 'User-Agent': BROWSER_UA, Accept: 'application/json' },
-          signal: AbortSignal.timeout(10000),
-        });
+        const commentsRes = await curlFetch(commentsUrl, 'application/json', 10);
 
         if (commentsRes.ok) {
           const commentsData = await commentsRes.json();
@@ -398,7 +405,7 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
           visited.add(pageUrl);
 
           await sleep(800);
-          const threadRes = await fetchText(pageUrl, 'text/html,application/xhtml+xml', 15000);
+          const threadRes = await curlFetch(pageUrl, 'text/html,application/xhtml+xml', 15);
           if (!threadRes.ok) throw new Error(`VOZ thread status ${threadRes.status}`);
 
           const threadHtml = await threadRes.text();
