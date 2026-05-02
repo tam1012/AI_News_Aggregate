@@ -20,6 +20,13 @@ function isRedditUrl(url: string): boolean {
   } catch { return false; }
 }
 
+function isVozUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return hostname === 'voz.vn' || hostname === 'www.voz.vn';
+  } catch { return false; }
+}
+
 function extractSubreddit(url: string): string | null {
   try {
     const match = new URL(url).pathname.match(/^\/r\/([^/]+)/i);
@@ -162,6 +169,164 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
           item.creator || null, publishedAt,
           source.language, excerpt,
           truncate(fullContent || item.title, 30000), contentHash, imageUrl,
+        ]
+      );
+      result.itemsInserted++;
+    }
+  } catch (err: any) {
+    result.errors.push(err.message);
+  }
+
+  return result;
+}
+
+// ==========================================
+// VOZ FORUM SCRAPER (RSS + fetch comments from thread page)
+// ==========================================
+export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> {
+  const result: ScrapeResult = { itemsFound: 0, itemsInserted: 0, errors: [] };
+
+  try {
+    // Step 1: Get thread list from RSS (same as normal RSS)
+    const response = await fetch(source.url, {
+      headers: {
+        'User-Agent': BROWSER_UA,
+        Accept: 'application/rss+xml, application/xml, text/xml, application/atom+xml;q=0.9, */*;q=0.8',
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!response.ok) throw new Error(`Status code ${response.status}`);
+
+    const xml = await response.text();
+    const feed = await rssParser.parseString(xml);
+    const items = feed.items.slice(0, parseInt(process.env.MAX_ARTICLES_PER_SOURCE || '15'));
+    result.itemsFound = items.length;
+
+    for (const item of items) {
+      if (!item.link || !item.title) continue;
+
+      const url = normalizeUrl(item.link);
+      const existing = await getOne('SELECT id FROM articles WHERE url = $1', [url]);
+      if (existing) continue;
+
+      const rawExcerpt = item.contentSnippet || item.content || '';
+      const contentHash = createContentHash(item.title + rawExcerpt.substring(0, 200));
+
+      const hashExists = await getOne('SELECT id FROM articles WHERE content_hash = $1', [contentHash]);
+      if (hashExists) continue;
+
+      // Step 2: Fetch the actual thread page to get comments
+      let fullContent = '';
+      let imageUrl: string | null = null;
+
+      try {
+        await sleep(800); // Rate limit VOZ
+        const threadRes = await fetch(item.link, {
+          headers: {
+            'User-Agent': BROWSER_UA,
+            'Accept': 'text/html,application/xhtml+xml',
+            'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
+          },
+          signal: AbortSignal.timeout(15000),
+        });
+
+        if (threadRes.ok) {
+          const threadHtml = await threadRes.text();
+          const $ = cheerio.load(threadHtml);
+
+          // Extract all posts (OP + comments) using XenForo structure
+          const posts: { author: string; body: string; reactions: number; isOp: boolean }[] = [];
+
+          $('article.message--post').each((idx, el) => {
+            const author = $(el).find('.message-name .username, .message-name a').first().text().trim();
+            const bodyEl = $(el).find('.message-body .bbWrapper').first();
+
+            // Remove quoted content to avoid duplication
+            bodyEl.find('.bbCodeBlock--quote').remove();
+            // Remove embedded media/iframes
+            bodyEl.find('iframe, video, .bbMediaWrapper').remove();
+
+            const body = bodyEl.text().replace(/\s+/g, ' ').trim();
+
+            // Try to get reaction count
+            let reactions = 0;
+            const reactText = $(el).find('.reactionsBar-link').text().trim();
+            if (reactText) {
+              // Extract number from text like "5 người" or just the count
+              const numMatch = reactText.match(/(\d+)/);
+              if (numMatch) reactions = parseInt(numMatch[1]);
+            }
+
+            if (body && body.length > 10) {
+              posts.push({ author, body: body.substring(0, 800), reactions, isOp: idx === 0 });
+            }
+          });
+
+          // Build structured content for AI
+          if (posts.length > 0) {
+            const opPost = posts[0];
+            fullContent += `[Nội dung bài viết gốc - bởi ${opPost.author}]\n${opPost.body}\n\n`;
+
+            const comments = posts.slice(1);
+            if (comments.length > 0) {
+              // Sort by reactions (descending), take top 10
+              const topComments = comments
+                .sort((a, b) => b.reactions - a.reactions)
+                .slice(0, 10);
+
+              fullContent += `[Bình luận thành viên - ${comments.length} bình luận trên trang 1]\n`;
+              for (const c of topComments) {
+                const reactionLabel = c.reactions > 0 ? ` (${c.reactions} reactions)` : '';
+                fullContent += `- ${c.author}${reactionLabel}: ${c.body}\n`;
+              }
+            } else {
+              fullContent += '[Chưa có bình luận nào trên trang 1]\n';
+            }
+          }
+
+          // Extract thread image (OG image or first image in OP)
+          imageUrl = $('meta[property="og:image"]').attr('content') || null;
+          if (!imageUrl) {
+            const firstImg = $('article.message--post').first().find('.message-body img').first().attr('src');
+            if (firstImg) {
+              try { imageUrl = new URL(firstImg, item.link).toString(); } catch {}
+            }
+          }
+        }
+      } catch (err: any) {
+        // Failed to fetch thread page, fall back to RSS content only
+        result.errors.push(`Failed to fetch VOZ thread ${item.link}: ${err.message}`);
+      }
+
+      // Fall back to RSS content if thread fetch failed
+      if (!fullContent) {
+        fullContent = stripHtml(rawExcerpt) || item.title;
+      }
+
+      const id = generateId('art');
+      const publishedAt = item.pubDate ? new Date(item.pubDate).toISOString() : null;
+
+      // Extract image from RSS if not found from thread
+      if (!imageUrl) {
+        const rawHtmlContent = item.content || '';
+        if (rawHtmlContent) {
+          const $ = cheerio.load(rawHtmlContent);
+          imageUrl = $('img').first().attr('src') || null;
+        }
+      }
+
+      await query(
+        `INSERT INTO articles (id, source_id, external_id, url, title, author, published_at,
+                               content_type, language, raw_excerpt, raw_content, content_hash,
+                               image_url, summary_status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'article', $8, $9, $10, $11, $12, 'pending')
+         ON CONFLICT (url) DO NOTHING`,
+        [
+          id, source.id, item.guid || null, url, item.title.trim(),
+          item.creator || item.author || null, publishedAt,
+          source.language, truncate(stripHtml(rawExcerpt), 500),
+          truncate(fullContent, 30000), contentHash, imageUrl,
         ]
       );
       result.itemsInserted++;
@@ -347,6 +512,11 @@ export async function scrapeSource(source: SourceRow): Promise<ScrapeResult> {
   // Reddit: always use JSON API scraper
   if (isRedditUrl(source.url)) {
     return scrapeRedditSource(source);
+  }
+
+  // VOZ Forum: RSS + fetch comments from thread page
+  if (isVozUrl(source.url)) {
+    return scrapeVozSource(source);
   }
 
   switch (source.type) {
