@@ -13,20 +13,24 @@ interface ArticleForSummary {
 
 async function claimPendingArticles(limit: number): Promise<ArticleForSummary[]> {
   const result = await query<ArticleForSummary>(
-    `UPDATE articles a
-     SET summary_status = 'processing'
-     FROM (
-       SELECT a2.id
-       FROM articles a2
-       WHERE a2.summary_status = 'pending'
-       ORDER BY a2.created_at DESC
+    `WITH picked AS (
+       SELECT a.id, a.source_id
+       FROM articles a
+       WHERE a.summary_status = 'pending'
+       ORDER BY a.created_at DESC
        FOR UPDATE SKIP LOCKED
        LIMIT $1
-     ) picked
-     LEFT JOIN sources s ON s.id = a.source_id
-     WHERE a.id = picked.id
-     RETURNING a.id, a.title, a.raw_excerpt, a.raw_content, a.language,
-               s.name as source_name`,
+     ), claimed AS (
+       UPDATE articles a
+       SET summary_status = 'processing'
+       FROM picked
+       WHERE a.id = picked.id
+       RETURNING a.id, a.title, a.raw_excerpt, a.raw_content, a.language, picked.source_id
+     )
+     SELECT c.id, c.title, c.raw_excerpt, c.raw_content, c.language,
+            s.name as source_name
+     FROM claimed c
+     LEFT JOIN sources s ON s.id = c.source_id`,
     [limit]
   );
 
