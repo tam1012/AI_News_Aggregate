@@ -1,6 +1,6 @@
 import RssParser from 'rss-parser';
 import * as cheerio from 'cheerio';
-import { query, getOne, getMany } from '../db/index.js';
+import { query, getOne } from '../db/index.js';
 import { generateId, createContentHash, normalizeUrl, truncate, sleep } from '../lib/utils.js';
 
 const rssParser = new RssParser({
@@ -12,26 +12,37 @@ const rssParser = new RssParser({
 });
 
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+const FORUM_RAW_CONTENT_MAX_LENGTH = parseInt(process.env.FORUM_RAW_CONTENT_MAX_LENGTH || '60000');
+const FORUM_MAX_COMMENTS = parseInt(process.env.FORUM_MAX_COMMENTS || '40');
+const VOZ_MAX_THREAD_PAGES = parseInt(process.env.VOZ_MAX_THREAD_PAGES || '4');
+const REDDIT_COMMENT_LIMIT = parseInt(process.env.REDDIT_COMMENT_LIMIT || '30');
+const REDDIT_COMMENT_DEPTH = parseInt(process.env.REDDIT_COMMENT_DEPTH || '3');
 
 function isRedditUrl(url: string): boolean {
   try {
     const hostname = new URL(url).hostname.toLowerCase();
     return hostname === 'reddit.com' || hostname === 'www.reddit.com';
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 function isVozUrl(url: string): boolean {
   try {
     const hostname = new URL(url).hostname.toLowerCase();
     return hostname === 'voz.vn' || hostname === 'www.voz.vn';
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 function extractSubreddit(url: string): string | null {
   try {
     const match = new URL(url).pathname.match(/^\/r\/([^/]+)/i);
     return match ? match[1] : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 interface SourceRow {
@@ -51,9 +62,191 @@ interface ScrapeResult {
   errors: string[];
 }
 
-// ==========================================
-// REDDIT JSON SCRAPER (full content + comments)
-// ==========================================
+interface ForumComment {
+  author: string;
+  body: string;
+  reactions: number;
+  page: number;
+  order: number;
+  score: number;
+}
+
+interface VozPost {
+  author: string;
+  body: string;
+  reactions: number;
+  isOp: boolean;
+  page: number;
+  order: number;
+}
+
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = parseInt(value || '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizeWhitespace(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function dedupeTextKey(text: string): string {
+  return normalizeWhitespace(text).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').trim();
+}
+
+function scoreForumComment(body: string, reactions: number, page: number, order: number): number {
+  const lengthBonus = Math.min(body.length / 140, 4);
+  const reactionBonus = Math.min(reactions, 50) * 0.35;
+  const earlyThreadBonus = page === 1 ? 1.2 : 0;
+  const earlyReplyBonus = order < 8 ? 0.6 : 0;
+  return reactionBonus + lengthBonus + earlyThreadBonus + earlyReplyBonus;
+}
+
+function selectForumComments(comments: ForumComment[], maxComments: number): ForumComment[] {
+  const seen = new Set<string>();
+  const unique = comments.filter((comment) => {
+    const key = dedupeTextKey(comment.body);
+    if (!key || key.length < 12 || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return unique
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (b.reactions !== a.reactions) return b.reactions - a.reactions;
+      if (a.page !== b.page) return a.page - b.page;
+      return a.order - b.order;
+    })
+    .slice(0, maxComments)
+    .sort((a, b) => {
+      if (a.page !== b.page) return a.page - b.page;
+      return a.order - b.order;
+    });
+}
+
+async function fetchText(url: string, accept: string, timeoutMs: number) {
+  return fetch(url, {
+    headers: {
+      'User-Agent': BROWSER_UA,
+      Accept: accept,
+      'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
+    },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+}
+
+function parseVozPosts(html: string, page: number): VozPost[] {
+  const $ = cheerio.load(html);
+  const posts: VozPost[] = [];
+
+  $('article.message--post').each((idx, el) => {
+    const author = $(el).find('.message-name .username, .message-name a').first().text().trim() || 'unknown';
+    const bodyEl = $(el).find('.message-body .bbWrapper').first().clone();
+    bodyEl.find('.bbCodeBlock--quote, .toggleTriggerAnchor').remove();
+    bodyEl.find('iframe, video, .bbMediaWrapper, script, style').remove();
+
+    const body = normalizeWhitespace(bodyEl.text());
+    let reactions = 0;
+    const reactText = $(el).find('.reactionsBar-link').text().trim();
+    const numMatch = reactText.match(/(\d+)/);
+    if (numMatch) reactions = parseInt(numMatch[1], 10);
+
+    if (body && body.length > 10) {
+      posts.push({
+        author,
+        body: body.substring(0, 1200),
+        reactions,
+        isOp: idx === 0 && page === 1,
+        page,
+        order: idx,
+      });
+    }
+  });
+
+  return posts;
+}
+
+function extractVozPagination(html: string, threadUrl: string): string[] {
+  const $ = cheerio.load(html);
+  const urls = new Set<string>();
+
+  $('.pageNav-page').each((_, el) => {
+    const href = $(el).attr('href');
+    if (!href) return;
+    try {
+      urls.add(normalizeUrl(new URL(href, threadUrl).toString()));
+    } catch {}
+  });
+
+  return [...urls];
+}
+
+function buildVozRawContent(posts: VozPost[], selectedComments: ForumComment[], pagesFetched: number, totalCommentsSeen: number): string {
+  if (posts.length === 0) return '';
+
+  const opPost = posts.find((post) => post.isOp) || posts[0];
+  let fullContent = `[Nội dung bài viết gốc - bởi ${opPost.author}]\n${opPost.body}\n\n`;
+  fullContent += `[Dữ liệu thread VOZ]\n- Đã đọc ${pagesFetched} trang thread\n- Đã trích ${totalCommentsSeen} bình luận thành viên\n- Đã chọn ${selectedComments.length} bình luận tiêu biểu cho AI\n\n`;
+
+  if (selectedComments.length > 0) {
+    fullContent += '[Bình luận thành viên nổi bật nhiều trang]\n';
+    for (const comment of selectedComments) {
+      const reactionLabel = comment.reactions > 0 ? ` | ${comment.reactions} reactions` : '';
+      fullContent += `- Trang ${comment.page}${reactionLabel} | ${comment.author}: ${comment.body}\n`;
+    }
+  } else {
+    fullContent += '[Chưa có bình luận thành viên đủ dữ liệu để tổng hợp]\n';
+  }
+
+  return fullContent;
+}
+
+function flattenRedditComments(nodes: any[], depth: number, maxDepth: number, bucket: ForumComment[]) {
+  if (!Array.isArray(nodes) || depth > maxDepth) return;
+
+  for (const node of nodes) {
+    if (node?.kind !== 't1' || !node.data?.body) continue;
+    const body = normalizeWhitespace(node.data.body || '');
+    if (!body || body === '[deleted]' || body === '[removed]') continue;
+
+    const score = node.data.score || 0;
+    const comment: ForumComment = {
+      author: node.data.author || 'unknown',
+      body: body.substring(0, 900),
+      reactions: score,
+      page: depth,
+      order: bucket.length,
+      score: scoreForumComment(body, score, depth, bucket.length + 1) + (depth === 1 ? 0.8 : 0.2),
+    };
+    bucket.push(comment);
+
+    const replies = node.data.replies?.data?.children;
+    if (Array.isArray(replies)) {
+      flattenRedditComments(replies, depth + 1, maxDepth, bucket);
+    }
+  }
+}
+
+function buildRedditRawContent(postContent: string, linkUrl: string | null, selectedComments: ForumComment[], totalCommentsSeen: number): string {
+  let fullContent = `[Nội dung bài viết]\n${postContent}\n\n`;
+  if (linkUrl) {
+    fullContent += `[Link chia sẻ]: ${linkUrl}\n\n`;
+  }
+
+  fullContent += `[Dữ liệu thảo luận Reddit]\n- Đã trích ${totalCommentsSeen} comment/reply\n- Đã chọn ${selectedComments.length} comment tiêu biểu cho AI\n\n`;
+
+  if (selectedComments.length > 0) {
+    fullContent += '[Bình luận cộng đồng]\n';
+    for (const comment of selectedComments) {
+      const scoreLabel = comment.reactions > 0 ? `(${comment.reactions} điểm)` : '(0 điểm)';
+      const depthLabel = comment.page > 1 ? ` [reply depth ${comment.page}]` : '';
+      fullContent += `- ${scoreLabel}${depthLabel} ${comment.author}: ${comment.body}\n`;
+    }
+  }
+
+  return fullContent;
+}
+
 export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResult> {
   const result: ScrapeResult = { itemsFound: 0, itemsInserted: 0, errors: [] };
   const subreddit = extractSubreddit(source.url);
@@ -63,12 +256,11 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
   }
 
   try {
-    // Use RSS for listing (JSON API blocked on many server IPs)
     const rssUrl = `https://www.reddit.com/r/${subreddit}/hot/.rss`;
     const rssRes = await fetch(rssUrl, {
       headers: {
         'User-Agent': BROWSER_UA,
-        'Accept': 'application/rss+xml, application/xml, text/xml',
+        Accept: 'application/rss+xml, application/xml, text/xml',
       },
       signal: AbortSignal.timeout(15000),
     });
@@ -79,7 +271,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
 
     const xml = await rssRes.text();
     const feed = await rssParser.parseString(xml);
-    const items = feed.items.slice(0, parseInt(process.env.MAX_ARTICLES_PER_SOURCE || '15'));
+    const items = feed.items.slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 15));
     result.itemsFound = items.length;
 
     for (const item of items) {
@@ -89,63 +281,44 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
       const existing = await getOne('SELECT id FROM articles WHERE url = $1', [url]);
       if (existing) continue;
 
-      // Extract Reddit post path for JSON comments fetch
       const postPath = new URL(item.link).pathname;
-
-      // Build content from RSS + try to get comments via JSON
       const rssContent = item.contentSnippet || item.content || '';
-      let fullContent = '';
+      let postContent = stripHtmlBasic(rssContent) || item.title;
+      let outboundUrl: string | null = null;
+      let discussionComments: ForumComment[] = [];
 
-      if (rssContent) {
-        fullContent += `[Nội dung bài viết]\n${stripHtmlBasic(rssContent)}\n\n`;
-      }
-
-      // Try fetching comments JSON (may 403)
       try {
         await sleep(1200);
-        const commentsUrl = `https://www.reddit.com${postPath}.json?limit=8&sort=best&depth=1`;
+        const commentsUrl = `https://www.reddit.com${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
         const commentsRes = await fetch(commentsUrl, {
-          headers: { 'User-Agent': BROWSER_UA, 'Accept': 'application/json' },
+          headers: { 'User-Agent': BROWSER_UA, Accept: 'application/json' },
           signal: AbortSignal.timeout(10000),
         });
 
         if (commentsRes.ok) {
           const commentsData = await commentsRes.json();
-          // Extract selftext from post data (richer than RSS)
           const postData = commentsData[0]?.data?.children?.[0]?.data;
-          if (postData?.selftext && postData.selftext.length > rssContent.length) {
-            fullContent = `[Nội dung bài viết]\n${postData.selftext}\n\n`;
-            if (postData.url && !postData.is_self && !postData.url.includes('reddit.com')) {
-              fullContent += `[Link chia sẻ]: ${postData.url}\n\n`;
-            }
+          if (postData?.selftext && postData.selftext.length > postContent.length) {
+            postContent = normalizeWhitespace(postData.selftext);
+          }
+          if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
+            outboundUrl = String(postData.url);
           }
 
-          // Extract top comments
           const comments = commentsData[1]?.data?.children || [];
-          const topComments = comments
-            .filter((c: any) => c.kind === 't1' && c.data?.body)
-            .slice(0, 8);
-
-          if (topComments.length > 0) {
-            fullContent += '[Bình luận nổi bật]\n';
-            for (const c of topComments) {
-              const score = c.data.score || 0;
-              const body = c.data.body.substring(0, 500);
-              fullContent += `- (${score} điểm) ${body}\n`;
-            }
-          }
+          const flattened: ForumComment[] = [];
+          flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
+          discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
         }
       } catch {
-        // JSON blocked, continue with RSS content only
       }
 
-      const contentHash = createContentHash(item.title + fullContent.substring(0, 200));
+      const fullContent = buildRedditRawContent(postContent, outboundUrl, discussionComments, discussionComments.length);
+      const contentHash = createContentHash(item.title + fullContent.substring(0, 300));
       const hashExists = await getOne('SELECT id FROM articles WHERE content_hash = $1', [contentHash]);
       if (hashExists) continue;
 
       const excerpt = truncate(stripHtmlBasic(rssContent) || item.title, 500);
-
-      // Extract image from RSS content HTML
       let imageUrl: string | null = null;
       const rawHtml = item.content || '';
       if (rawHtml) {
@@ -168,7 +341,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
           `[r/${subreddit}] ${item.title.trim()}`,
           item.creator || null, publishedAt,
           source.language, excerpt,
-          truncate(fullContent || item.title, 30000), contentHash, imageUrl,
+          truncate(fullContent || item.title, FORUM_RAW_CONTENT_MAX_LENGTH), contentHash, imageUrl,
         ]
       );
       result.itemsInserted++;
@@ -180,14 +353,10 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
   return result;
 }
 
-// ==========================================
-// VOZ FORUM SCRAPER (RSS + fetch comments from thread page)
-// ==========================================
 export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> {
   const result: ScrapeResult = { itemsFound: 0, itemsInserted: 0, errors: [] };
 
   try {
-    // Step 1: Get thread list from RSS (same as normal RSS)
     const response = await fetch(source.url, {
       headers: {
         'User-Agent': BROWSER_UA,
@@ -200,7 +369,7 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
 
     const xml = await response.text();
     const feed = await rssParser.parseString(xml);
-    const items = feed.items.slice(0, parseInt(process.env.MAX_ARTICLES_PER_SOURCE || '15'));
+    const items = feed.items.slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 15));
     result.itemsFound = items.length;
 
     for (const item of items) {
@@ -212,94 +381,67 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
 
       const rawExcerpt = item.contentSnippet || item.content || '';
       const contentHash = createContentHash(item.title + rawExcerpt.substring(0, 200));
-
       const hashExists = await getOne('SELECT id FROM articles WHERE content_hash = $1', [contentHash]);
       if (hashExists) continue;
 
-      // Step 2: Fetch the actual thread page to get comments
       let fullContent = '';
       let imageUrl: string | null = null;
 
       try {
-        await sleep(800); // Rate limit VOZ
-        const threadRes = await fetch(item.link, {
-          headers: {
-            'User-Agent': BROWSER_UA,
-            'Accept': 'text/html,application/xhtml+xml',
-            'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
-          },
-          signal: AbortSignal.timeout(15000),
-        });
+        const pagesToVisit: string[] = [item.link];
+        const visited = new Set<string>();
+        const allPosts: VozPost[] = [];
 
-        if (threadRes.ok) {
+        for (let pageIndex = 0; pageIndex < pagesToVisit.length && pageIndex < VOZ_MAX_THREAD_PAGES; pageIndex++) {
+          const pageUrl = normalizeUrl(pagesToVisit[pageIndex]);
+          if (visited.has(pageUrl)) continue;
+          visited.add(pageUrl);
+
+          await sleep(800);
+          const threadRes = await fetchText(pageUrl, 'text/html,application/xhtml+xml', 15000);
+          if (!threadRes.ok) throw new Error(`VOZ thread status ${threadRes.status}`);
+
           const threadHtml = await threadRes.text();
-          const $ = cheerio.load(threadHtml);
+          allPosts.push(...parseVozPosts(threadHtml, pageIndex + 1));
 
-          // Extract all posts (OP + comments) using XenForo structure
-          const posts: { author: string; body: string; reactions: number; isOp: boolean }[] = [];
-
-          $('article.message--post').each((idx, el) => {
-            const author = $(el).find('.message-name .username, .message-name a').first().text().trim();
-            const bodyEl = $(el).find('.message-body .bbWrapper').first();
-
-            // Remove quoted content to avoid duplication
-            bodyEl.find('.bbCodeBlock--quote').remove();
-            // Remove embedded media/iframes
-            bodyEl.find('iframe, video, .bbMediaWrapper').remove();
-
-            const body = bodyEl.text().replace(/\s+/g, ' ').trim();
-
-            // Try to get reaction count
-            let reactions = 0;
-            const reactText = $(el).find('.reactionsBar-link').text().trim();
-            if (reactText) {
-              // Extract number from text like "5 người" or just the count
-              const numMatch = reactText.match(/(\d+)/);
-              if (numMatch) reactions = parseInt(numMatch[1]);
+          if (pageIndex === 0) {
+            const pageLinks = extractVozPagination(threadHtml, item.link).slice(0, Math.max(0, VOZ_MAX_THREAD_PAGES - 1));
+            for (const nextPage of pageLinks) {
+              if (!pagesToVisit.includes(nextPage)) pagesToVisit.push(nextPage);
             }
 
-            if (body && body.length > 10) {
-              posts.push({ author, body: body.substring(0, 800), reactions, isOp: idx === 0 });
-            }
-          });
-
-          // Build structured content for AI
-          if (posts.length > 0) {
-            const opPost = posts[0];
-            fullContent += `[Nội dung bài viết gốc - bởi ${opPost.author}]\n${opPost.body}\n\n`;
-
-            const comments = posts.slice(1);
-            if (comments.length > 0) {
-              // Sort by reactions (descending), take top 10
-              const topComments = comments
-                .sort((a, b) => b.reactions - a.reactions)
-                .slice(0, 10);
-
-              fullContent += `[Bình luận thành viên - ${comments.length} bình luận trên trang 1]\n`;
-              for (const c of topComments) {
-                const reactionLabel = c.reactions > 0 ? ` (${c.reactions} reactions)` : '';
-                fullContent += `- ${c.author}${reactionLabel}: ${c.body}\n`;
+            const $ = cheerio.load(threadHtml);
+            imageUrl = $('meta[property="og:image"]').attr('content') || null;
+            if (!imageUrl) {
+              const firstImg = $('article.message--post').first().find('.message-body img').first().attr('src');
+              if (firstImg) {
+                try {
+                  imageUrl = new URL(firstImg, item.link).toString();
+                } catch {}
               }
-            } else {
-              fullContent += '[Chưa có bình luận nào trên trang 1]\n';
-            }
-          }
-
-          // Extract thread image (OG image or first image in OP)
-          imageUrl = $('meta[property="og:image"]').attr('content') || null;
-          if (!imageUrl) {
-            const firstImg = $('article.message--post').first().find('.message-body img').first().attr('src');
-            if (firstImg) {
-              try { imageUrl = new URL(firstImg, item.link).toString(); } catch {}
             }
           }
         }
+
+        if (allPosts.length > 0) {
+          const comments = allPosts
+            .filter((post) => !post.isOp)
+            .map((post) => ({
+              author: post.author,
+              body: post.body,
+              reactions: post.reactions,
+              page: post.page,
+              order: post.order,
+              score: scoreForumComment(post.body, post.reactions, post.page, post.order),
+            }));
+
+          const selectedComments = selectForumComments(comments, FORUM_MAX_COMMENTS);
+          fullContent = buildVozRawContent(allPosts, selectedComments, visited.size, comments.length);
+        }
       } catch (err: any) {
-        // Failed to fetch thread page, fall back to RSS content only
         result.errors.push(`Failed to fetch VOZ thread ${item.link}: ${err.message}`);
       }
 
-      // Fall back to RSS content if thread fetch failed
       if (!fullContent) {
         fullContent = stripHtml(rawExcerpt) || item.title;
       }
@@ -307,7 +449,6 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
       const id = generateId('art');
       const publishedAt = item.pubDate ? new Date(item.pubDate).toISOString() : null;
 
-      // Extract image from RSS if not found from thread
       if (!imageUrl) {
         const rawHtmlContent = item.content || '';
         if (rawHtmlContent) {
@@ -326,7 +467,7 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
           id, source.id, item.guid || null, url, item.title.trim(),
           item.creator || item.author || null, publishedAt,
           source.language, truncate(stripHtml(rawExcerpt), 500),
-          truncate(fullContent, 30000), contentHash, imageUrl,
+          truncate(fullContent, FORUM_RAW_CONTENT_MAX_LENGTH), contentHash, imageUrl,
         ]
       );
       result.itemsInserted++;
@@ -338,9 +479,6 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
   return result;
 }
 
-// ==========================================
-// RSS Scraper
-// ==========================================
 export async function scrapeRssSource(source: SourceRow): Promise<ScrapeResult> {
   const result: ScrapeResult = { itemsFound: 0, itemsInserted: 0, errors: [] };
 
@@ -357,7 +495,7 @@ export async function scrapeRssSource(source: SourceRow): Promise<ScrapeResult> 
 
     const xml = await response.text();
     const feed = await rssParser.parseString(xml);
-    const items = feed.items.slice(0, parseInt(process.env.MAX_ARTICLES_PER_SOURCE || '20'));
+    const items = feed.items.slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 20));
     result.itemsFound = items.length;
 
     for (const item of items) {
@@ -407,9 +545,6 @@ export async function scrapeRssSource(source: SourceRow): Promise<ScrapeResult> 
   return result;
 }
 
-// ==========================================
-// Web Scraper
-// ==========================================
 export async function scrapeWebSource(source: SourceRow): Promise<ScrapeResult> {
   const result: ScrapeResult = { itemsFound: 0, itemsInserted: 0, errors: [] };
   const config = source.parser_config;
@@ -434,11 +569,11 @@ export async function scrapeWebSource(source: SourceRow): Promise<ScrapeResult> 
         try {
           const absoluteUrl = new URL(href, source.url).toString();
           links.push(normalizeUrl(absoluteUrl));
-        } catch { /* skip invalid */ }
+        } catch {}
       }
     });
 
-    const maxArticles = parseInt(process.env.MAX_ARTICLES_PER_SOURCE || '20');
+    const maxArticles = parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 20);
     const uniqueLinks = [...new Set(links)].slice(0, maxArticles);
     result.itemsFound = uniqueLinks.length;
 
@@ -472,15 +607,19 @@ export async function scrapeWebSource(source: SourceRow): Promise<ScrapeResult> 
         let imageUrl: string | null = null;
         const imgSrc = $article(config.imageSelector || 'article img, .article img, .content img').first().attr('src');
         if (imgSrc) {
-          try { imageUrl = new URL(imgSrc, articleUrl).toString(); } catch {}
+          try {
+            imageUrl = new URL(imgSrc, articleUrl).toString();
+          } catch {}
         }
 
         let publishedAt: string | null = null;
         if (config.publishedAtSelector) {
           const dateText = $article(config.publishedAtSelector).attr('datetime') ||
-                          $article(config.publishedAtSelector).text().trim();
+            $article(config.publishedAtSelector).text().trim();
           if (dateText) {
-            try { publishedAt = new Date(dateText).toISOString(); } catch {}
+            try {
+              publishedAt = new Date(dateText).toISOString();
+            } catch {}
           }
         }
 
@@ -491,7 +630,7 @@ export async function scrapeWebSource(source: SourceRow): Promise<ScrapeResult> 
            VALUES ($1, $2, $3, $4, $5, 'article', $6, $7, $8, $9, $10, 'pending')
            ON CONFLICT (url) DO NOTHING`,
           [id, source.id, articleUrl, title, publishedAt, source.language,
-           excerpt, truncate(content, 30000), contentHash, imageUrl]
+            excerpt, truncate(content, 30000), contentHash, imageUrl]
         );
         result.itemsInserted++;
       } catch (err: any) {
@@ -505,16 +644,11 @@ export async function scrapeWebSource(source: SourceRow): Promise<ScrapeResult> 
   return result;
 }
 
-// ==========================================
-// Dispatcher
-// ==========================================
 export async function scrapeSource(source: SourceRow): Promise<ScrapeResult> {
-  // Reddit: always use JSON API scraper
   if (isRedditUrl(source.url)) {
     return scrapeRedditSource(source);
   }
 
-  // VOZ Forum: RSS + fetch comments from thread page
   if (isVozUrl(source.url)) {
     return scrapeVozSource(source);
   }
@@ -529,9 +663,6 @@ export async function scrapeSource(source: SourceRow): Promise<ScrapeResult> {
   }
 }
 
-// ==========================================
-// Helper
-// ==========================================
 function stripHtml(html: string): string {
   return cheerio.load(html).text().replace(/\s+/g, ' ').trim();
 }

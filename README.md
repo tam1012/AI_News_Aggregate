@@ -31,8 +31,8 @@ Trọng tâm của project này không phải là một cổng tin tức công c
 
 - Hỗ trợ nguồn **RSS** chuẩn.
 - Hỗ trợ **web scraping** với selector cấu hình theo từng nguồn.
-- Hỗ trợ **Reddit** theo hướng RSS + enrich thêm nội dung và bình luận qua JSON khi khả dụng.
-- Hỗ trợ **VOZ forum** theo hướng riêng: lấy thread từ RSS rồi vào trang thread thật để bóc tách bài gốc và bình luận thành viên.
+- Hỗ trợ **Reddit** theo hướng RSS + enrich thêm nội dung, comment top-level và reply nổi bật qua JSON khi khả dụng.
+- Hỗ trợ **VOZ forum** theo hướng riêng: lấy thread từ RSS rồi vào trang thread thật để bóc tách bài gốc và bình luận thành viên trên nhiều page đầu.
 
 ### 2. Tóm tắt bài viết bằng AI
 
@@ -391,6 +391,11 @@ ADMIN_TOKEN=change-me-to-a-random-string
 SCRAPE_INTERVAL_HOURS=3
 MAX_ARTICLES_PER_SOURCE=20
 MAX_AI_CALLS_PER_RUN=30
+VOZ_MAX_THREAD_PAGES=4
+FORUM_MAX_COMMENTS=40
+FORUM_RAW_CONTENT_MAX_LENGTH=60000
+REDDIT_COMMENT_LIMIT=30
+REDDIT_COMMENT_DEPTH=3
 ```
 
 ### 4. Tạo database và migrate
@@ -479,6 +484,11 @@ ADMIN_TOKEN=thay-bang-chuoi-ngau-nhien-dai
 SCRAPE_INTERVAL_HOURS=3
 MAX_ARTICLES_PER_SOURCE=20
 MAX_AI_CALLS_PER_RUN=30
+VOZ_MAX_THREAD_PAGES=4
+FORUM_MAX_COMMENTS=40
+FORUM_RAW_CONTENT_MAX_LENGTH=60000
+REDDIT_COMMENT_LIMIT=30
+REDDIT_COMMENT_DEPTH=3
 CORS_ORIGIN=https://newstamhv.duckdns.org
 ```
 
@@ -522,6 +532,11 @@ ADMIN_TOKEN=change-me-to-a-random-string
 SCRAPE_INTERVAL_HOURS=3
 MAX_ARTICLES_PER_SOURCE=20
 MAX_AI_CALLS_PER_RUN=30
+VOZ_MAX_THREAD_PAGES=4
+FORUM_MAX_COMMENTS=40
+FORUM_RAW_CONTENT_MAX_LENGTH=60000
+REDDIT_COMMENT_LIMIT=30
+REDDIT_COMMENT_DEPTH=3
 ```
 
 ### Ý nghĩa chính
@@ -533,6 +548,11 @@ MAX_AI_CALLS_PER_RUN=30
 - `SCRAPE_INTERVAL_HOURS`: chu kỳ scrape / summarize / digest
 - `MAX_ARTICLES_PER_SOURCE`: số bài tối đa lấy từ mỗi nguồn mỗi đợt
 - `MAX_AI_CALLS_PER_RUN`: số bài tối đa được tóm tắt mỗi lần job chạy
+- `VOZ_MAX_THREAD_PAGES`: số page VOZ tối đa được đọc cho mỗi thread
+- `FORUM_MAX_COMMENTS`: số comment/reply forum tối đa được chọn đưa vào `raw_content`
+- `FORUM_RAW_CONTENT_MAX_LENGTH`: trần độ dài `raw_content` cho Reddit/VOZ sau khi enrich discussion
+- `REDDIT_COMMENT_LIMIT`: số comment/reply Reddit tối đa được giữ lại sau khi chọn lọc
+- `REDDIT_COMMENT_DEPTH`: độ sâu reply tree Reddit tối đa được flatten
 - `CORS_ORIGIN`: origin được phép gọi API
 
 ## Cron jobs và vận hành

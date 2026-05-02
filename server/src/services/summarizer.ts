@@ -128,7 +128,7 @@ Tiêu đề: ${article.title}
 Nguồn: ${article.source_name}
 
 <raw_data>
-${truncate(content, 12000)}
+${truncate(content, 28000)}
 </raw_data>`;
 }
 
