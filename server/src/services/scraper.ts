@@ -1,6 +1,7 @@
 import RssParser from 'rss-parser';
 import * as cheerio from 'cheerio';
 import { exec } from 'child_process';
+import puppeteer from 'puppeteer-core';
 import { query, getOne } from '../db/index.js';
 import { generateId, createContentHash, normalizeUrl, truncate, sleep } from '../lib/utils.js';
 
@@ -202,6 +203,32 @@ function curlFetch(url: string, accept: string, timeoutSec: number): Promise<{ o
   });
 }
 
+// Headless browser for sites that block curl/fetch (Reddit)
+let browserInstance: any = null;
+
+async function getBrowser(): Promise<any> {
+  if (browserInstance && browserInstance.connected) return browserInstance;
+  browserInstance = await puppeteer.launch({
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+  });
+  return browserInstance;
+}
+
+async function browserFetch(url: string, timeoutMs: number = 30000): Promise<string> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setUserAgent(BROWSER_UA);
+    await page.setExtraHTTPHeaders({ 'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8' });
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: timeoutMs });
+    return await page.content();
+  } finally {
+    await page.close();
+  }
+}
+
 function parseVozPosts(html: string, page: number): VozPost[] {
   const $ = cheerio.load(html);
   const posts: VozPost[] = [];
@@ -374,23 +401,65 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
             flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
             discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
           }
-        } else if (postId) {
-          // Fallback: Pullpush API (Reddit archive, works from cloud VPS)
-          const pullpushUrl = `https://api.pullpush.io/reddit/comment/search?link_id=t3_${postId}&size=${REDDIT_COMMENT_LIMIT}&sort=score&sort_type=score`;
-          const pullpushRes = await curlFetch(pullpushUrl, 'application/json', 10);
-          if (pullpushRes.ok) {
-            const pullpushData = await pullpushRes.json();
-            const pullpushComments: ForumComment[] = (pullpushData.data || [])
-              .filter((c: any) => c.body && c.body !== '[deleted]' && c.body !== '[removed]' && c.body.length > 20)
-              .map((c: any, idx: number) => ({
-                author: c.author || 'unknown',
-                body: c.body.substring(0, 900),
-                reactions: c.score || 0,
-                page: 1,
-                order: idx,
-                score: scoreForumComment(c.body, c.score || 0, 1, idx),
-              }));
-            discussionComments = selectForumComments(pullpushComments, REDDIT_COMMENT_LIMIT);
+        } else {
+          // Use headless browser to fetch Reddit JSON (bypasses Cloudflare)
+          const commentsJsonUrl = `https://www.reddit.com${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
+          try {
+            const html = await browserFetch(commentsJsonUrl, 25000);
+            // Reddit JSON returns as HTML page with JSON in body - extract it
+            const bodyText = await (async () => {
+              // If it's direct JSON
+              if (html.startsWith('[') || html.startsWith('{')) return html;
+              // If it's an HTML page, try to extract JSON from <pre> or page content
+              const $ = cheerio.load(html);
+              const pre = $('pre').first().text();
+              if (pre && (pre.startsWith('[') || pre.startsWith('{'))) return pre;
+              // Try to find JSON in script tags
+              const scripts = $('script').toArray();
+              for (const s of scripts) {
+                const text = $(s).html() || '';
+                if (text.includes('"kind"') && text.includes('"data"')) {
+                  const match = text.match(/(\[[\s\S]*\])/);
+                  if (match) return match[1];
+                }
+              }
+              return '';
+            })();
+
+            if (bodyText) {
+              const commentsData = JSON.parse(bodyText);
+              const postData = commentsData[0]?.data?.children?.[0]?.data;
+              if (postData?.selftext && postData.selftext.length > postContent.length) {
+                postContent = normalizeWhitespace(postData.selftext);
+              }
+              if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
+                outboundUrl = String(postData.url);
+              }
+              const comments = commentsData[1]?.data?.children || [];
+              const flattened: ForumComment[] = [];
+              flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
+              discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
+            }
+          } catch {
+            // Browser fetch failed, try Pullpush as last resort
+            if (postId) {
+              const pullpushUrl = `https://api.pullpush.io/reddit/comment/search?link_id=t3_${postId}&size=${REDDIT_COMMENT_LIMIT}&sort=score&sort_type=score`;
+              const pullpushRes = await curlFetch(pullpushUrl, 'application/json', 10);
+              if (pullpushRes.ok) {
+                const pullpushData = await pullpushRes.json();
+                const pullpushComments: ForumComment[] = (pullpushData.data || [])
+                  .filter((c: any) => c.body && c.body !== '[deleted]' && c.body !== '[removed]' && c.body.length > 20)
+                  .map((c: any, idx: number) => ({
+                    author: c.author || 'unknown',
+                    body: c.body.substring(0, 900),
+                    reactions: c.score || 0,
+                    page: 1,
+                    order: idx,
+                    score: scoreForumComment(c.body, c.score || 0, 1, idx),
+                  }));
+                discussionComments = selectForumComments(pullpushComments, REDDIT_COMMENT_LIMIT);
+              }
+            }
           }
         }
       } catch {
