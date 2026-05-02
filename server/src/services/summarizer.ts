@@ -36,65 +36,72 @@ export async function summarizeArticle(article: ArticleForSummary): Promise<stri
 }
 
 function buildNewsPrompt(article: ArticleForSummary, content: string): string {
-  return `Bạn là biên tập viên tin tức cấp cao, viết tóm tắt có cấu trúc cho app đọc tin.
+  return `Biên tập viên tin tức cấp cao. Tóm tắt CHÍNH XÁC, NGẮN GỌN dựa hoàn toàn trên <raw_data>.
 
-NHIỆM VỤ: Tóm tắt bài viết sau bằng tiếng Việt, format markdown.
+NGUYÊN TẮC:
+- CHỈ dùng thông tin trong <raw_data>. KHÔNG suy đoán, KHÔNG bổ sung.
+- Nếu thiếu dữ kiện → bỏ qua, KHÔNG tự điền.
+- KHÔNG dùng từ suy diễn ("đáng chú ý", "gây tranh cãi", "quan trọng") nếu không có trong bài.
+- Ưu tiên số liệu, tên riêng, mốc thời gian cụ thể.
+- Luôn output tiếng Việt. Giữ nguyên tên riêng gốc.
 
-ĐỊNH DẠNG BẮT BUỘC (chỉ trả về đúng nội dung, không thêm bất kỳ lời giải thích nào):
+ĐỊNH DẠNG (chỉ trả về nội dung, không giải thích):
 
-**Tổng quan:** 1-2 câu nêu ngay sự kiện chính, kết luận hoặc phát hiện quan trọng nhất.
+**Tổng quan:** 1-2 câu tóm sự kiện chính.
 
 **Điểm nổi bật:**
-- Chi tiết quan trọng #1 (kèm số liệu/tên/ngày cụ thể nếu có)
-- Chi tiết quan trọng #2
-- Chi tiết quan trọng #3
-- (thêm nếu cần, tối đa 5 điểm)
+- #1: [Chi tiết cụ thể, ưu tiên số liệu/tên/ngày]
+- #2: [Chi tiết khác, không trùng ý #1]
+- (Tối đa 5. Chỉ ghi ý có thật. Không lặp ý.)
 
-**Bối cảnh:** 1 câu về ý nghĩa hoặc tác động rộng hơn (nếu phù hợp).
+**Bối cảnh:** 1 câu nếu bài có đề cập rõ. Bỏ qua mục này nếu không có.
 
-QUY TẮC:
-- Giữ nguyên tên riêng, con số, phát biểu quan trọng.
-- Không dùng "bài viết nói về", "theo nguồn tin", "nội dung đề cập".
-- Không bịa thêm thông tin ngoài nội dung nguồn.
-- Viết tự nhiên, súc tích, giàu thông tin.
+QUY TẮC VIẾT:
+- Không dùng: "bài viết nói về", "theo nguồn tin", "nội dung đề cập".
+- Mỗi bullet tối đa 1 câu. Toàn bộ output tối đa 200 từ.
+- Verify: mọi chi tiết phải tồn tại trong <raw_data>. Loại bullet trùng ý.
 
 Tiêu đề: ${article.title}
 Nguồn: ${article.source_name}
 Ngôn ngữ gốc: ${article.language || 'không rõ'}
 
-Nội dung:
-${truncate(content, 10000)}`;
+<raw_data>
+${truncate(content, 10000)}
+</raw_data>`;
 }
 
 function buildForumPrompt(article: ArticleForSummary, content: string): string {
-  return `Bạn là biên tập viên chuyên tổng hợp thảo luận từ cộng đồng mạng (Reddit, VOZ, Forum), viết cho app đọc tin tiếng Việt.
+  return `Biên tập viên chuyên tổng hợp thảo luận cộng đồng (Reddit, VOZ, Forum). Tóm tắt CHÍNH XÁC dựa trên <raw_data>.
 
-NHIỆM VỤ: Tổng hợp nội dung bài viết và các bình luận nổi bật sau bằng tiếng Việt, format markdown.
+NGUYÊN TẮC:
+- CHỈ dùng thông tin trong <raw_data>. KHÔNG suy đoán, KHÔNG bổ sung.
+- Tổng hợp CẢ nội dung gốc VÀ bình luận thảo luận.
+- Ưu tiên bình luận đa chiều, có insight hoặc tranh luận sắc bén.
+- Thể hiện các góc nhìn khác nhau nếu có ý kiến trái chiều.
+- Luôn output tiếng Việt. Giữ nguyên tên riêng gốc.
 
-ĐỊNH DẠNG BẮT BUỘC:
+ĐỊNH DẠNG (chỉ trả về nội dung, không giải thích):
 
 **Chủ đề:** 1-2 câu mô tả nội dung bài viết/chủ đề gốc.
 
 **Ý kiến cộng đồng:**
-- Quan điểm/ý kiến nổi bật #1 (phân tích sâu hoặc được đồng tình nhiều)
-- Quan điểm/ý kiến nổi bật #2
-- Quan điểm/ý kiến nổi bật #3
-- (thêm nếu có tranh luận thú vị)
+- #1: [Quan điểm nổi bật, được đồng tình nhiều hoặc phân tích sâu]
+- #2: [Quan điểm khác, không trùng ý #1]
+- (Tối đa 5. Chỉ ghi ý có thật. Không lặp ý.)
 
-**Tóm lại:** 1 câu kết luận tổng quan về xu hướng ý kiến hoặc insight đáng chú ý nhất.
+**Tóm lại:** 1 câu kết luận xu hướng ý kiến chung. Bỏ qua nếu không rõ xu hướng.
 
-QUY TẮC:
-- Tổng hợp CẢ nội dung gốc VÀ bình luận thảo luận.
-- Ưu tiên bình luận đa chiều, có insight thú vị hoặc tranh luận sắc bén.
-- Thể hiện các góc nhìn khác nhau nếu có ý kiến trái chiều.
+QUY TẮC VIẾT:
 - Viết tự nhiên, dùng thuật ngữ phù hợp cộng đồng.
-- Không bịa thêm thông tin, không suy diễn quá xa nội dung.
+- Mỗi bullet tối đa 1 câu. Toàn bộ output tối đa 200 từ.
+- Verify: mọi chi tiết phải tồn tại trong <raw_data>. Loại bullet trùng ý.
 
 Tiêu đề: ${article.title}
 Nguồn: ${article.source_name}
 
-Nội dung + Bình luận:
-${truncate(content, 12000)}`;
+<raw_data>
+${truncate(content, 12000)}
+</raw_data>`;
 }
 
 // Tóm tắt hàng loạt articles chưa có summary
