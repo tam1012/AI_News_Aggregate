@@ -15,14 +15,15 @@ interface ArticleForSummary {
 export async function summarizeArticle(article: ArticleForSummary): Promise<string | null> {
   const content = article.raw_content || article.raw_excerpt || '';
   
-  const isReddit = article.source_name?.toLowerCase().includes('reddit') ||
-                   article.title?.startsWith('[r/');
+  const isForum = article.source_name?.toLowerCase().includes('reddit') ||
+                  article.source_name?.toLowerCase().includes('voz') ||
+                  article.title?.startsWith('[r/');
 
-  // For normal news, skip if too short. For Reddit, titles alone might be worth showing.
-  if (!isReddit && content.length < 80) return null;
+  // For normal news, skip if too short. For forums, titles alone might be worth showing.
+  if (!isForum && content.length < 80) return null;
 
-  const prompt = isReddit
-    ? buildRedditPrompt(article, content)
+  const prompt = isForum
+    ? buildForumPrompt(article, content)
     : buildNewsPrompt(article, content);
 
   try {
@@ -65,28 +66,29 @@ Nội dung:
 ${truncate(content, 10000)}`;
 }
 
-function buildRedditPrompt(article: ArticleForSummary, content: string): string {
-  return `Bạn là biên tập viên chuyên tổng hợp thảo luận từ Reddit, viết cho app đọc tin tiếng Việt.
+function buildForumPrompt(article: ArticleForSummary, content: string): string {
+  return `Bạn là biên tập viên chuyên tổng hợp thảo luận từ cộng đồng mạng (Reddit, VOZ, Forum), viết cho app đọc tin tiếng Việt.
 
-NHIỆM VỤ: Tổng hợp bài viết và các bình luận Reddit sau bằng tiếng Việt, format markdown.
+NHIỆM VỤ: Tổng hợp nội dung bài viết và các bình luận nổi bật sau bằng tiếng Việt, format markdown.
 
 ĐỊNH DẠNG BẮT BUỘC:
 
-**Chủ đề:** 1-2 câu mô tả nội dung bài viết gốc.
+**Chủ đề:** 1-2 câu mô tả nội dung bài viết/chủ đề gốc.
 
 **Ý kiến cộng đồng:**
-- Quan điểm/ý kiến nổi bật #1 (được upvote cao)
+- Quan điểm/ý kiến nổi bật #1 (phân tích sâu hoặc được đồng tình nhiều)
 - Quan điểm/ý kiến nổi bật #2
 - Quan điểm/ý kiến nổi bật #3
+- (thêm nếu có tranh luận thú vị)
 
 **Tóm lại:** 1 câu kết luận tổng quan về xu hướng ý kiến hoặc insight đáng chú ý nhất.
 
 QUY TẮC:
-- Tổng hợp CẢ nội dung bài viết VÀ bình luận, không chỉ tiêu đề.
-- Ưu tiên bình luận có nhiều upvote, có insight thú vị.
-- Nếu có tranh luận, thể hiện cả hai phía.
+- Tổng hợp CẢ nội dung gốc VÀ bình luận thảo luận.
+- Ưu tiên bình luận đa chiều, có insight thú vị hoặc tranh luận sắc bén.
+- Thể hiện các góc nhìn khác nhau nếu có ý kiến trái chiều.
 - Viết tự nhiên, dùng thuật ngữ phù hợp cộng đồng.
-- Không bịa thêm, không suy diễn quá xa.
+- Không bịa thêm thông tin, không suy diễn quá xa nội dung.
 
 Tiêu đề: ${article.title}
 Nguồn: ${article.source_name}
