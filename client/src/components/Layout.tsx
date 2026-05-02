@@ -12,7 +12,7 @@ export function Layout() {
   return (
     <>
       <header className="header">
-        <div className={(location.pathname === '/' ? 'container-fluid' : 'container') + ' header-inner'}>
+        <div className={(location.pathname === '/' || location.pathname.startsWith('/admin') || location.pathname.startsWith('/sources') ? 'container-fluid' : 'container') + ' header-inner'}>
           <div className="header-left">
             <NavLink to="/" className="header-logo">NewsTamHV</NavLink>
             <span className="header-date">{todayStr}</span>
@@ -47,7 +47,7 @@ export function Layout() {
         </div>
       </header>
 
-      <main className={location.pathname === '/' ? 'container-fluid' : 'container'}>
+      <main className={location.pathname === '/' || location.pathname.startsWith('/admin') || location.pathname.startsWith('/sources') ? 'container-fluid' : 'container'}>
         <Outlet />
       </main>
     </>

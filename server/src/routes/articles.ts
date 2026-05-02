@@ -98,6 +98,9 @@ articles.post('/:id/reset-summary', async (c) => {
     [id]
   );
 
+  // Trigger summarize job ngay lập tức (background, không chờ)
+  import('../jobs/scheduler.js').then(m => m.runSummarizeJob()).catch(console.error);
+
   const row = await getOne(
     `SELECT a.*, s.name as source_name, s.type as source_type
      FROM articles a
