@@ -19,6 +19,61 @@ const VOZ_MAX_THREAD_PAGES = parseInt(process.env.VOZ_MAX_THREAD_PAGES || '4');
 const REDDIT_COMMENT_LIMIT = parseInt(process.env.REDDIT_COMMENT_LIMIT || '30');
 const REDDIT_COMMENT_DEPTH = parseInt(process.env.REDDIT_COMMENT_DEPTH || '3');
 
+// Reddit OAuth
+const REDDIT_CLIENT_ID = process.env.REDDIT_CLIENT_ID || '';
+const REDDIT_CLIENT_SECRET = process.env.REDDIT_CLIENT_SECRET || '';
+const REDDIT_USERNAME = process.env.REDDIT_USERNAME || '';
+const REDDIT_PASSWORD = process.env.REDDIT_PASSWORD || '';
+let redditToken: { access_token: string; expires_at: number } | null = null;
+
+function hasRedditOAuth(): boolean {
+  return !!(REDDIT_CLIENT_ID && REDDIT_CLIENT_SECRET && REDDIT_USERNAME && REDDIT_PASSWORD);
+}
+
+async function getRedditToken(): Promise<string | null> {
+  if (!hasRedditOAuth()) return null;
+  if (redditToken && Date.now() < redditToken.expires_at) return redditToken.access_token;
+
+  return new Promise((resolve) => {
+    const cmd = `curl -s -X POST -H "User-Agent: newstamhv/1.0" -u "${REDDIT_CLIENT_ID}:${REDDIT_CLIENT_SECRET}" -d "grant_type=password&username=${encodeURIComponent(REDDIT_USERNAME)}&password=${encodeURIComponent(REDDIT_PASSWORD)}" "https://www.reddit.com/api/v1/access_token"`;
+    exec(cmd, { timeout: 15000 }, (err, stdout) => {
+      if (err) { console.error('Reddit OAuth error:', err.message); resolve(null); return; }
+      try {
+        const data = JSON.parse(stdout);
+        if (data.access_token) {
+          redditToken = { access_token: data.access_token, expires_at: Date.now() + (data.expires_in - 60) * 1000 };
+          resolve(data.access_token);
+        } else {
+          console.error('Reddit OAuth: no token in response', stdout.substring(0, 200));
+          resolve(null);
+        }
+      } catch (e) {
+        console.error('Reddit OAuth parse error:', stdout.substring(0, 200));
+        resolve(null);
+      }
+    });
+  });
+}
+
+async function redditApiFetch(path: string): Promise<any | null> {
+  const token = await getRedditToken();
+  if (!token) return null;
+
+  return new Promise((resolve) => {
+    const url = `https://oauth.reddit.com${path}`;
+    const cmd = `curl -s -L --max-time 15 -H "User-Agent: newstamhv/1.0" -H "Authorization: Bearer ${token}" "${url}"`;
+    exec(cmd, { timeout: 20000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+      if (err) { console.error('Reddit API error:', err.message); resolve(null); return; }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch {
+        console.error('Reddit API: invalid JSON', stdout.substring(0, 200));
+        resolve(null);
+      }
+    });
+  });
+}
+
 function isRedditUrl(url: string): boolean {
   try {
     const hostname = new URL(url).hostname.toLowerCase();
@@ -301,48 +356,43 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
 
       try {
         await sleep(1200);
-        // Try JSON API first
-        const commentsUrl = `https://www.reddit.com${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
-        const commentsRes = await curlFetch(commentsUrl, 'application/json', 10);
 
-        if (commentsRes.ok) {
-          const commentsData = await commentsRes.json();
-          const postData = commentsData[0]?.data?.children?.[0]?.data;
-          if (postData?.selftext && postData.selftext.length > postContent.length) {
-            postContent = normalizeWhitespace(postData.selftext);
-          }
-          if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
-            outboundUrl = String(postData.url);
-          }
-
-          const comments = commentsData[1]?.data?.children || [];
-          const flattened: ForumComment[] = [];
-          flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
-          discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
-        } else {
-          // Fallback: use comments RSS feed (Atom format)
-          const rssCommentsUrl = `https://www.reddit.com${postPath}.rss`;
-          const rssCommentsRes = await curlFetch(rssCommentsUrl, 'application/atom+xml', 10);
-          if (rssCommentsRes.ok) {
-            const rssXml = await rssCommentsRes.text();
-            if (!rssXml.includes('page not found')) {
-              const rssFeed = await rssParser.parseString(rssXml);
-              const rssComments: ForumComment[] = rssFeed.items
-                .filter((entry) => entry.content || entry.contentSnippet)
-                .map((entry, idx) => {
-                  const body = stripHtmlBasic(entry.content || entry.contentSnippet || '');
-                  return {
-                    author: entry.creator || entry.author || 'unknown',
-                    body: body.substring(0, 900),
-                    reactions: 0,
-                    page: 1,
-                    order: idx,
-                    score: scoreForumComment(body, 0, 1, idx),
-                  };
-                })
-                .filter((c) => c.body.length > 20);
-              discussionComments = selectForumComments(rssComments, REDDIT_COMMENT_LIMIT);
+        if (hasRedditOAuth()) {
+          // Use OAuth API for full comment access
+          const commentsData = await redditApiFetch(`${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`);
+          if (commentsData) {
+            const postData = commentsData[0]?.data?.children?.[0]?.data;
+            if (postData?.selftext && postData.selftext.length > postContent.length) {
+              postContent = normalizeWhitespace(postData.selftext);
             }
+            if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
+              outboundUrl = String(postData.url);
+            }
+
+            const comments = commentsData[1]?.data?.children || [];
+            const flattened: ForumComment[] = [];
+            flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
+            discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
+          }
+        } else {
+          // No OAuth: try curl JSON API (may be blocked)
+          const commentsUrl = `https://www.reddit.com${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
+          const commentsRes = await curlFetch(commentsUrl, 'application/json', 10);
+
+          if (commentsRes.ok) {
+            const commentsData = await commentsRes.json();
+            const postData = commentsData[0]?.data?.children?.[0]?.data;
+            if (postData?.selftext && postData.selftext.length > postContent.length) {
+              postContent = normalizeWhitespace(postData.selftext);
+            }
+            if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
+              outboundUrl = String(postData.url);
+            }
+
+            const comments = commentsData[1]?.data?.children || [];
+            const flattened: ForumComment[] = [];
+            flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
+            discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
           }
         }
       } catch {
