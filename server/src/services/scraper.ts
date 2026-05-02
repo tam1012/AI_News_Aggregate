@@ -135,9 +135,11 @@ function curlFetch(url: string, accept: string, timeoutSec: number): Promise<{ o
         return;
       }
       const body = stdout || '';
+      // Detect Cloudflare challenge or blocked pages
+      const isBlocked = body.includes('Just a moment...') || body.includes('<title>Blocked</title>');
       resolve({
-        ok: true,
-        status: 200,
+        ok: !isBlocked && body.length > 100,
+        status: isBlocked ? 403 : 200,
         text: async () => body,
         json: async () => JSON.parse(body),
       });
@@ -299,6 +301,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
 
       try {
         await sleep(1200);
+        // Try JSON API first
         const commentsUrl = `https://www.reddit.com${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
         const commentsRes = await curlFetch(commentsUrl, 'application/json', 10);
 
@@ -316,6 +319,31 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
           const flattened: ForumComment[] = [];
           flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
           discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
+        } else {
+          // Fallback: use comments RSS feed (Atom format)
+          const rssCommentsUrl = `https://www.reddit.com${postPath}.rss`;
+          const rssCommentsRes = await curlFetch(rssCommentsUrl, 'application/atom+xml', 10);
+          if (rssCommentsRes.ok) {
+            const rssXml = await rssCommentsRes.text();
+            if (!rssXml.includes('page not found')) {
+              const rssFeed = await rssParser.parseString(rssXml);
+              const rssComments: ForumComment[] = rssFeed.items
+                .filter((entry) => entry.content || entry.contentSnippet)
+                .map((entry, idx) => {
+                  const body = stripHtmlBasic(entry.content || entry.contentSnippet || '');
+                  return {
+                    author: entry.creator || entry.author || 'unknown',
+                    body: body.substring(0, 900),
+                    reactions: 0,
+                    page: 1,
+                    order: idx,
+                    score: scoreForumComment(body, 0, 1, idx),
+                  };
+                })
+                .filter((c) => c.body.length > 20);
+              discussionComments = selectForumComments(rssComments, REDDIT_COMMENT_LIMIT);
+            }
+          }
         }
       } catch {
       }

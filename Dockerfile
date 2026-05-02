@@ -19,6 +19,7 @@ RUN cd server && npm run build
 
 # --- Production ---
 FROM node:22-alpine AS production
+RUN apk add --no-cache curl
 WORKDIR /app
 
 COPY server/package.json server/package-lock.json* ./server/
