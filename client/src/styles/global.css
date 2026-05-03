@@ -4,22 +4,22 @@
   --font-heading: 'Newsreader', Georgia, serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 
-  /* Light theme — warm paper tones like newsdigest */
-  --color-bg: #f8f5f0;
-  --color-bg-card: #ffffff;
-  --color-bg-hover: #f3efe8;
+  /* Light theme — premium newsdigest colors */
+  --color-bg: #f9f9f6;
+  --color-bg-card: #fdfcf8;
+  --color-bg-hover: #f1f1ee;
   --color-bg-overlay: rgba(0, 0, 0, 0.45);
-  --color-text: #1a1a1a;
-  --color-text-secondary: #4a4540;
-  --color-text-muted: #9c948a;
+  --color-text: #111111;
+  --color-text-secondary: #444444;
+  --color-text-muted: #888888;
   --color-accent: #b8860b;
   --color-accent-hover: #996f09;
   --color-success: #16a34a;
   --color-warning: #d97706;
   --color-error: #dc2626;
-  --color-border: #e8e2d9;
-  --color-border-light: #f0ebe3;
-  --color-shadow: rgba(0, 0, 0, 0.06);
+  --color-border: #eaeae5;
+  --color-border-light: #f3f3f0;
+  --color-shadow: rgba(0, 0, 0, 0.04);
   --radius: 12px;
   --radius-sm: 8px;
   --max-width: 680px;
@@ -27,9 +27,9 @@
 }
 
 [data-theme="dark"] {
-  --color-bg: #0f1419;
-  --color-bg-card: #1a1f26;
-  --color-bg-hover: #252d38;
+  --color-bg: #0d0d0c;
+  --color-bg-card: #141413;
+  --color-bg-hover: #1c1c1b;
   --color-bg-overlay: rgba(0, 0, 0, 0.6);
   --color-text: #e7e9ea;
   --color-text-secondary: #a0a8b4;
@@ -39,13 +39,29 @@
   --color-success: #4ade80;
   --color-warning: #fbbf24;
   --color-error: #f87171;
-  --color-border: #2d3640;
-  --color-border-light: #1f2937;
-  --color-shadow: rgba(0, 0, 0, 0.2);
+  --color-border: #222221;
+  --color-border-light: #191918;
+  --color-shadow: rgba(0, 0, 0, 0.4);
 }
 
 /* ===== Reset ===== */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* Custom Scrollbar (macOS style) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 100, 100, 0.2);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 100, 100, 0.4);
+}
 
 body {
   font-family: var(--font-body);
@@ -188,12 +204,22 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   padding: 14px 0;
   border-bottom: 1px solid var(--color-border-light);
   cursor: pointer;
-  transition: background 0.12s, border-left-color 0.15s;
+  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
   border-left: 3px solid transparent;
   margin-left: -3px;
+  position: relative;
 }
-.feed-item:hover { background: var(--color-bg-hover); padding: 14px 16px 14px 13px; margin: 0 -16px 0 -3px; }
-.feed-item:active { background: var(--color-bg-hover); }
+.feed-item:hover { 
+  background: var(--color-bg-card); 
+  padding: 14px 16px 14px 13px; 
+  margin: 0 -16px 0 -3px; 
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--color-shadow);
+  border-radius: var(--radius-sm);
+  z-index: 2;
+  border-bottom-color: transparent;
+}
+.feed-item:active { background: var(--color-bg-hover); transform: translateY(0); }
 .feed-item.active {
   background: var(--color-bg-hover);
   border-left-color: var(--color-accent);
@@ -205,10 +231,20 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   margin-bottom: 6px;
 }
 .feed-item-source {
-  font-size: 0.78rem; font-weight: 700;
-  color: var(--color-text-muted);
-  text-transform: uppercase; letter-spacing: 0.04em;
+  font-size: 0.72rem; font-weight: 700;
+  color: var(--color-text-secondary);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: var(--color-border-light);
 }
+/* Specific source colors */
+.source-reddit { background: rgba(255, 69, 0, 0.1); color: #d93a00; }
+.source-voz { background: rgba(245, 130, 32, 0.1); color: #c4691c; }
+.source-hackernews { background: rgba(255, 102, 0, 0.1); color: #cc5200; }
+[data-theme="dark"] .source-reddit { color: #ff6a33; }
+[data-theme="dark"] .source-voz { color: #ff9940; }
+[data-theme="dark"] .source-hackernews { color: #ff8533; }
 .feed-item-time {
   font-size: 0.78rem; color: var(--color-text-muted);
   font-weight: 400;
@@ -326,12 +362,60 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   margin-bottom: 10px;
 }
 
+.detail-meta-centered {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; margin-bottom: 24px; text-align: center;
+}
+
 .detail-title {
   font-family: var(--font-heading);
   font-size: 1.45rem; font-weight: 700; line-height: 1.35;
   margin-bottom: 16px; color: var(--color-text);
 }
+
+.detail-title-editorial {
+  font-family: var(--font-heading);
+  font-size: 2.2rem; font-weight: 700; line-height: 1.25;
+  margin-bottom: 32px; color: var(--color-text);
+  text-align: center;
+}
+
 @media (max-width: 640px) {
+  .detail-title-editorial { font-size: 1.7rem; }
+}
+
+.ai-tldr-box {
+  margin: 0 0 24px;
+  padding: 16px 20px;
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02);
+  position: relative;
+}
+.ai-tldr-header {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-accent);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ai-tldr-box p {
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 0 !important;
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.article-main-content {
+  font-size: 1.05rem;
+  line-height: 1.8;
+}
   .detail-title { font-size: 1.25rem; }
 }
 
@@ -544,6 +628,15 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
     padding: 0 20px;
     border-right: 1px solid var(--color-border);
     background: var(--color-bg);
+    transition: opacity 0.3s ease;
+  }
+  
+  /* Zen Mode: Dim left pane when interacting with right pane */
+  body.split-view-active:has(.split-right:hover) .split-left {
+    opacity: 0.4;
+  }
+  body.split-view-active:has(.split-right:hover) .split-left:hover {
+    opacity: 1; /* Restore if they move mouse back over it quickly */
   }
   
   .split-left .feed-tabs {

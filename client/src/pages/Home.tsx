@@ -394,7 +394,9 @@ function FeedItem({
   return (
     <article className={`feed-item ${isActive ? 'active' : ''} ${isRead ? 'is-read' : ''}`} onClick={onClick}>
       <div className="feed-item-meta">
-        <span className="feed-item-source">{sourceLabel}</span>
+        <span className={`feed-item-source source-${sourceLabel.toLowerCase().replace(/[^a-z0-9]/g, '')}`}>
+          {sourceLabel}
+        </span>
         {time && <span className="feed-item-time">{time}</span>}
       </div>
       <div className="feed-item-body">
@@ -435,6 +437,20 @@ function ArticleDetail({
 
   const sourceLabel = extractSourceLabel(article);
   const title = cleanTitle(article.title);
+
+  // Split summary into TL;DR and Body
+  const summaryParts = useMemo(() => {
+    if (!article.summary_text) return { tldr: '', rest: '' };
+    const text = article.summary_text;
+    const overviewMatch = text.match(/## Tổng quan[^\n]*\n+([^#]+)/i);
+    let tldr = '';
+    let rest = text;
+    if (overviewMatch) {
+      tldr = overviewMatch[1].trim();
+      rest = text.replace(overviewMatch[0], '').trim();
+    }
+    return { tldr, rest };
+  }, [article.summary_text]);
 
   // Pull-to-close gesture
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -499,8 +515,10 @@ function ArticleDetail({
 
         {/* Content */}
         <div className="detail-content">
-          <div className="detail-meta">
-            <span className="feed-item-source">{sourceLabel}</span>
+          <div className="detail-meta-centered">
+            <span className={`feed-item-source source-${sourceLabel.toLowerCase().replace(/[^a-z0-9]/g, '')}`}>
+              {sourceLabel}
+            </span>
             {article.published_at && (
               <span className="feed-item-time">
                 {new Date(article.published_at).toLocaleString('vi-VN', {
@@ -511,7 +529,7 @@ function ArticleDetail({
             )}
           </div>
 
-          <h1 className="detail-title">{title}</h1>
+          <h1 className="detail-title-editorial">{title}</h1>
 
           {article.image_url && (
             <img
@@ -524,7 +542,19 @@ function ArticleDetail({
 
           <div className="detail-body">
             {article.summary_text ? (
-              <ReactMarkdown>{article.summary_text}</ReactMarkdown>
+              <>
+                {summaryParts.tldr && (
+                  <div className="ai-tldr-box">
+                    <div className="ai-tldr-header">✨ AI Tóm tắt nhanh</div>
+                    <ReactMarkdown>{summaryParts.tldr}</ReactMarkdown>
+                  </div>
+                )}
+                <div className="article-main-content">
+                  <ReactMarkdown>{
+                    summaryParts.rest.replace(/^##\s*(Các )?điểm chính[^\n]*/mi, '')
+                  }</ReactMarkdown>
+                </div>
+              </>
             ) : (
               <p>{article.raw_excerpt || 'Chưa có tóm tắt.'}</p>
             )}
