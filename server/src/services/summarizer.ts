@@ -91,18 +91,18 @@ NGUYÊN TẮC CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
 3. Giữ lại chi tiết đắt giá: Ưu tiên giữ lại các con số, số liệu thống kê, tên riêng, ngày tháng và dữ liệu quan trọng.
 4. Xử lý tên riêng: Giữ nguyên tên riêng tiếng Anh, tên sản phẩm, thuật ngữ kỹ thuật.
 
-ĐỊNH DẠNG OUTPUT (Sử dụng Markdown, chỉ trả về nội dung, không giải thích):
+ĐỊNH DẠNG OUTPUT (Sử dụng Markdown, chỉ trả về nội dung, không giải thích, KHÔNG sử dụng emoji):
 
-## 📌 Key Takeaways
+## Key Takeaways
 [Trình bày 3-5 gạch đầu dòng ngắn gọn (bullet points) nêu bật những thông tin quan trọng nhất, kết luận cốt lõi, hoặc giá trị thiết thực nhất từ bài viết. Giúp người đọc nắm bắt toàn bộ tinh thần bài viết chỉ trong 10 giây.]
 
-## 📖 Nội dung chi tiết
+## Nội dung chi tiết
 [Phân chia nội dung bài viết thành các mục nhỏ với heading cấp 3 (###). Linh hoạt đặt tên heading theo chủ đề.]
 - **Sử dụng in đậm (bold)** cho các thuật ngữ và từ khóa quan trọng.
 - Sử dụng bảng (Markdown table) nếu bài viết có chứa dữ liệu so sánh, thông số kỹ thuật hoặc danh sách số liệu.
-- Giữ bố cục thoáng, dễ quét thông tin.
+- Giữ bố cục thoáng, dễ quét thôngquan.
 
-## 🌍 Bối cảnh & Tác động (Nếu có)
+## Bối cảnh & Tác động (Nếu có)
 [Viết 1-3 câu nêu rõ nguyên nhân, hệ quả, hoặc bối cảnh rộng hơn của sự kiện nếu bài gốc có đề cập. Bỏ qua mục này hoàn toàn nếu không có thông tin.]
 
 Tiêu đề: ${article.title}
@@ -122,20 +122,20 @@ NGUYÊN TẮC CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
 2. Phân tách rõ ràng: Phân biệt rõ đâu là thông tin từ bài đăng gốc (OP), đâu là phản ứng từ cộng đồng (Comments).
 3. Lọc nhiễu (Signal-to-noise): Bỏ qua các bình luận vô nghĩa, cợt nhả. Ưu tiên các bình luận có hàm lượng thông tin cao, kinh nghiệm thực tế, tranh luận logic hoặc được upvote/nhắc lại nhiều.
 
-ĐỊNH DẠNG OUTPUT (Sử dụng Markdown, kết hợp emoji cho sinh động, chỉ trả về nội dung):
+ĐỊNH DẠNG OUTPUT (Sử dụng Markdown chuyên nghiệp, KHÔNG sử dụng emoji, chỉ trả về nội dung):
 
-## 📌 Key Takeaways
+## Key Takeaways
 [3-5 gạch đầu dòng (bullet points) tóm tắt nhanh nhất cốt lõi bài đăng và phản ứng chung của cộng đồng. Đọc xong phần này là hiểu thread nói về cái gì.]
 
-## 📝 Nội dung bài đăng gốc
+## Nội dung bài đăng gốc
 [Tóm tắt ngắn gọn bối cảnh, câu hỏi hoặc chia sẻ của người đăng bài. Nêu rõ tên công cụ/sản phẩm đang được thảo luận.]
 
-## 🗣️ Phản hồi từ cộng đồng
+## Phản hồi từ cộng đồng
 [Gom nhóm các bình luận nổi bật thành các nhóm chủ đề/quan điểm (sử dụng heading cấp 3 - ###). Không ép buộc vào các danh mục cố định, hãy linh hoạt chia nhóm dựa trên nội dung thực tế (ví dụ: ### Cách giải quyết thay thế, ### Kinh nghiệm đau thương, ### Cảnh báo rủi ro).]
 - In đậm (**bold**) các luận điểm chính.
 - Thể hiện đa chiều các quan điểm đối lập nếu có tranh cãi. Không thiên vị.
 
-## 🎯 Tổng kết xu hướng
+## Tổng kết xu hướng
 [1-2 câu kết luận tổng thể về thái độ của cộng đồng (ví dụ: phần lớn đồng tình, tranh cãi gay gắt, hay chưa có hồi kết).]
 
 Tiêu đề: ${article.title}

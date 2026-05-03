@@ -201,20 +201,16 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 
 /* ===== Feed Item (list row) ===== */
 .feed-item {
-  padding: 14px 0;
+  padding: 18px 0;
   border-bottom: 1px solid var(--color-border-light);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
-  border-left: 3px solid transparent;
-  margin-left: -3px;
   position: relative;
 }
 .feed-item:hover { 
   background: var(--color-bg-card); 
-  padding: 14px 16px 14px 13px; 
-  margin: 0 -16px 0 -3px; 
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px var(--color-shadow);
+  padding: 18px 16px 18px 16px; 
+  margin: 0 -16px 0 -16px; 
   border-radius: var(--radius-sm);
   z-index: 2;
   border-bottom-color: transparent;
@@ -222,31 +218,22 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .feed-item:active { background: var(--color-bg-hover); transform: translateY(0); }
 .feed-item.active {
   background: var(--color-bg-hover);
-  border-left-color: var(--color-accent);
-  padding-left: 12px;
+  padding: 18px 16px 18px 16px; 
+  margin: 0 -16px 0 -16px; 
+  border-radius: var(--radius-sm);
 }
 
 .feed-item-meta {
   display: flex; align-items: center; gap: 10px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 .feed-item-source {
-  font-size: 0.72rem; font-weight: 700;
-  color: var(--color-text-secondary);
-  text-transform: uppercase; letter-spacing: 0.05em;
-  padding: 3px 8px;
-  border-radius: 12px;
-  background: var(--color-border-light);
+  font-size: 0.65rem; font-weight: 500;
+  color: var(--color-text-muted);
+  text-transform: uppercase; letter-spacing: 0.08em;
 }
-/* Specific source colors */
-.source-reddit { background: rgba(255, 69, 0, 0.1); color: #d93a00; }
-.source-voz { background: rgba(245, 130, 32, 0.1); color: #c4691c; }
-.source-hackernews { background: rgba(255, 102, 0, 0.1); color: #cc5200; }
-[data-theme="dark"] .source-reddit { color: #ff6a33; }
-[data-theme="dark"] .source-voz { color: #ff9940; }
-[data-theme="dark"] .source-hackernews { color: #ff8533; }
 .feed-item-time {
-  font-size: 0.78rem; color: var(--color-text-muted);
+  font-size: 0.7rem; color: var(--color-text-muted);
   font-weight: 400;
 }
 
@@ -375,8 +362,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 
 .detail-title-editorial {
   font-family: var(--font-heading);
-  font-size: 2.2rem; font-weight: 700; line-height: 1.25;
-  margin-bottom: 32px; color: var(--color-text);
+  font-size: 2rem; font-weight: 700; line-height: 1.25;
+  margin-bottom: 40px; color: var(--color-text);
   text-align: center;
 }
 
@@ -429,17 +416,18 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 
 .detail-body {
-  font-size: 0.95rem; line-height: 1.85;
+  font-size: 1rem; line-height: 1.8;
   color: var(--color-text-secondary);
   margin-bottom: 24px;
 }
 .detail-body strong { color: var(--color-text); font-weight: 600; }
-.detail-body ul, .detail-body ol { padding-left: 20px; margin: 8px 0; }
-.detail-body li { margin-bottom: 6px; }
-.detail-body p { margin-bottom: 10px; }
+.detail-body ul, .detail-body ol { padding-left: 20px; margin: 12px 0 24px; }
+.detail-body li { margin-bottom: 8px; padding-left: 4px; }
+.detail-body li::marker { color: var(--color-border); }
+.detail-body p { margin-bottom: 16px; }
 .detail-body h2, .detail-body h3 {
   color: var(--color-text); font-weight: 600;
-  margin: 16px 0 6px; font-size: 1rem;
+  margin: 32px 0 16px; font-size: 1.15rem;
 }
 
 .detail-actions {
