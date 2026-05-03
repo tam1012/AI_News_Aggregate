@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { api } from '../services/api';
 import { useFetch, useFetchRaw } from '../hooks/useApi';
 
@@ -572,7 +572,7 @@ function AiProvidersTab() {
 
 function ArticlesTab() {
   const { data: raw, loading, reload } = useFetchRaw(
-    () => api.getArticles({ page: 1, limit: 30 }), []
+    () => api.getArticles({ page: 1, limit: 500 }), []
   );
   const articles: any[] = raw?.data || [];
 
@@ -593,11 +593,11 @@ function ArticlesTab() {
       if (res.success) {
         alert(res.message || 'ÄĂ£ láº¥y láº¡i comment vĂ  gá»i yĂªu cáº§u tĂ³m táº¯t');
       } else {
-        alert(res.message || 'KhĂ´ng cĂ³ gĂ¬ Ä‘á»ƒ cáº­p nháº­t');
+        alert(res.message || 'Không có gì để cập nhật');
       }
       reload();
     } catch (err: any) {
-      alert('Lá»—i: ' + err.message);
+      alert('Lỗi: ' + err.message);
     }
   };
 
@@ -606,7 +606,7 @@ function ArticlesTab() {
   return (
     <div style={{ display: 'grid', gap: 8 }}>
       <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
-        Hiá»ƒn thá»‹ {articles.length} bĂ i má»›i nháº¥t
+        Hiển thị {articles.length} bài mới nhất
       </div>
       {articles.map((a: any) => (
         <div key={a.id} className="card" style={{ padding: 12 }}>
