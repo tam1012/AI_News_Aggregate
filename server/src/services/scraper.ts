@@ -2,7 +2,7 @@ import RssParser from 'rss-parser';
 import * as cheerio from 'cheerio';
 import { exec } from 'child_process';
 import puppeteer from 'puppeteer-core';
-import { query, getOne } from '../db/index.js';
+import { query, getOne, getMany } from '../db/index.js';
 import { generateId, createContentHash, normalizeUrl, truncate, sleep } from '../lib/utils.js';
 
 const rssParser = new RssParser({
