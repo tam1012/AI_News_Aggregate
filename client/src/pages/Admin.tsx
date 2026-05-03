@@ -624,7 +624,7 @@ function ArticlesTab() {
             </div>
             <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
               {['voz', 'reddit'].includes(a.source_type) && (
-                <button className="btn btn-sm" onClick={() => handleRescrape(a.id)} title="Làm mới bình luận">⬇️</button>
+                <button className="btn btn-sm" style={{ background: '#2563eb', color: '#fff', fontSize: '0.72rem' }} onClick={() => handleRescrape(a.id)} title="Cào lại bình luận mới nhất">Cào lại</button>
               )}
               <button className="btn btn-sm" onClick={() => handleReset(a.id)} title="Tóm tắt lại">🔄</button>
               <button className="btn btn-sm btn-danger" onClick={() => handleDelete(a.id)} title="Xóa">🗑</button>
