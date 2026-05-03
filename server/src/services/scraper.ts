@@ -432,8 +432,35 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
         } else if (enrichedCount < MAX_ENRICH_PER_RUN) {
           enrichedCount++;
 
-          // Strategy 1: Cloudflare Worker proxy (real-time Reddit API access)
-          if (REDDIT_PROXY_URL) {
+          // Strategy 1: old.reddit.com (Bypasses Cloudflare block without OAuth)
+          try {
+            const oldUrl = `https://old.reddit.com${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
+            const oldRes = await curlFetch(oldUrl, 'application/json', 15);
+            if (oldRes.ok) {
+              const commentsData = await oldRes.json();
+              if (Array.isArray(commentsData)) {
+                const postData = commentsData[0]?.data?.children?.[0]?.data;
+                if (postData?.selftext && postData.selftext.length > postContent.length) {
+                  postContent = normalizeWhitespace(postData.selftext);
+                }
+                if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
+                  outboundUrl = String(postData.url);
+                }
+                const comments = commentsData[1]?.data?.children || [];
+                const flattened: ForumComment[] = [];
+                flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
+                discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
+                if (discussionComments.length > 0) {
+                  console.log(`[reddit] old.reddit.com: got ${discussionComments.length} comments for ${postPath}`);
+                }
+              }
+            }
+          } catch (e: any) {
+            console.log(`[reddit] old.reddit.com failed for ${postPath}: ${e.message}`);
+          }
+
+          // Strategy 2: Cloudflare Worker proxy (real-time Reddit API access)
+          if (discussionComments.length === 0 && REDDIT_PROXY_URL) {
             try {
               const proxyUrl = `${REDDIT_PROXY_URL}?path=${encodeURIComponent(postPath + '.json')}&limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
               const proxyRes = await curlFetch(proxyUrl, 'application/json', 15);
