@@ -117,6 +117,40 @@ export async function rescrapeArticle(articleId: string, force: boolean = false)
           discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
         }
       }
+
+      if (discussionComments.length === 0) {
+        try {
+          const RssParser = (await import('rss-parser')).default;
+          const rssParser = new RssParser({ timeout: 10000 });
+          const rssRes = await fetch(`https://www.reddit.com${postPath}.rss`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            signal: AbortSignal.timeout(15000),
+          });
+          if (rssRes.ok) {
+             const xml = await rssRes.text();
+             const feed = await rssParser.parseString(xml);
+             const comments: ForumComment[] = [];
+             for (let i = 1; i < feed.items.length; i++) {
+                const item = feed.items[i];
+                const body = (item.contentSnippet || item.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                if (body && body.length > 20) {
+                  comments.push({
+                    author: item.author || 'unknown',
+                    body: body.substring(0, 900),
+                    reactions: 0,
+                    page: 1,
+                    order: i,
+                    score: scoreForumComment(body, 0, 1, i)
+                  });
+                }
+             }
+             discussionComments = selectForumComments(comments, REDDIT_COMMENT_LIMIT);
+             console.log(`[rescrape] RSS Backdoor fetched ${discussionComments.length} comments for ${postPath}`);
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
       
       if (discussionComments.length > 0) {
         newRawContent = buildRedditRawContent(postContent, outboundUrl, discussionComments, discussionComments.length);

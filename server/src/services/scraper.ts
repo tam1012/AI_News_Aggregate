@@ -155,7 +155,7 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function normalizeWhitespace(text: string): string {
+export function normalizeWhitespace(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
@@ -964,7 +964,7 @@ function stripHtml(html: string): string {
   return cheerio.load(html).text().replace(/\s+/g, ' ').trim();
 }
 
-function stripHtmlBasic(html: string): string {
+export function stripHtmlBasic(html: string): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
