@@ -38,6 +38,27 @@ async function claimPendingArticles(limit: number): Promise<ArticleForSummary[]>
 }
 
 // Tóm tắt 1 article — output có cấu trúc markdown
+
+/** Extract a 1-2 sentence tldr from Key Takeaways bullets in the AI summary */
+function extractTldr(summaryText: string): string {
+  // Match the Key Takeaways section (new prompt format)
+  const match = summaryText.match(/##[^\n]*Key Takeaways[^\n]*\n([\s\S]*?)(?=\n##|$)/i);
+  if (!match) return '';
+
+  const bullets = match[1]
+    .split('\n')
+    .filter(line => /^\s*[-*•]/.test(line))
+    .slice(0, 2)
+    .map(line => line
+      .replace(/^\s*[-*•]\s*/, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .trim()
+    )
+    .filter(Boolean);
+
+  return bullets.join(' · ');
+}
+
 export async function summarizeArticle(article: ArticleForSummary): Promise<string | null> {
   const content = article.raw_content || article.raw_excerpt || '';
   
@@ -138,9 +159,10 @@ export async function summarizePendingArticles(): Promise<{ processed: number; s
     try {
       const summary = await summarizeArticle(article);
       if (summary) {
+        const tldr = extractTldr(summary);
         await query(
-          'UPDATE articles SET summary_text = $1, summary_status = $2 WHERE id = $3',
-          [summary, 'done', article.id]
+          'UPDATE articles SET summary_text = $1, summary_status = $2, tldr = $3 WHERE id = $4',
+          [summary, 'done', tldr || null, article.id]
         );
         succeeded++;
       } else {

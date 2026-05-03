@@ -372,21 +372,24 @@ function FeedItem({
   const time = article.published_at ? formatTime(article.published_at) : '';
 
   const preview = useMemo(() => {
-    // Use raw_excerpt (scraped meta description / first paragraph) as primary source
-    // This is independent of the AI summary shown in the detail panel
+    // 1. Use AI-generated tldr (short Key Takeaways bullets, generated with the main summary)
+    const tldr = (article.tldr || '').trim();
+    if (tldr.length > 10) return tldr;
+
+    // 2. Fallback: raw_excerpt (scraped meta description)
     const excerpt = (article.raw_excerpt || '').trim();
     if (excerpt.length > 20) {
       return excerpt.length > 200 ? excerpt.slice(0, 200) + '…' : excerpt;
     }
 
-    // Fallback: pull first ~200 chars from raw_content, strip markdown/html
+    // 3. Last resort: strip from raw_content
     const raw = (article.raw_content || '').trim();
     if (raw) {
       return raw
-        .replace(/<[^>]+>/g, '')          // strip HTML tags
-        .replace(/^#+\s.+$/gm, '')        // strip markdown headings
-        .replace(/\*\*(.*?)\*\*/g, '$1')  // strip bold
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // strip links
+        .replace(/<[^>]+>/g, '')
+        .replace(/^#+\s.+$/gm, '')
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
         .replace(/\n+/g, ' ')
         .trim()
         .slice(0, 200) + '…';

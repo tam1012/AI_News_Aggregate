@@ -65,7 +65,7 @@ articles.get('/', async (c) => {
   params.push(limit, offset);
   const rows = await getMany(
     `SELECT a.id, a.source_id, a.url, a.title, a.author, a.published_at,
-            a.content_type, a.language, a.raw_excerpt, a.summary_text,
+            a.content_type, a.language, a.raw_excerpt, a.summary_text, a.tldr,
             a.summary_status, a.image_url, a.created_at,
             s.name as source_name, s.type as source_type,
             ${LOCAL_DATE_SQL} as local_date
