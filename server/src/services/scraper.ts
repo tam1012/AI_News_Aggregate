@@ -432,12 +432,12 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
         } else if (enrichedCount < MAX_ENRICH_PER_RUN) {
           enrichedCount++;
 
-          // Strategy 1: old.reddit.com (Bypasses Cloudflare block without OAuth)
+          // Strategy 1: Puppeteer Headless Browser (Mimics real user to bypass blocks)
           try {
             const oldUrl = `https://old.reddit.com${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
-            const oldRes = await curlFetch(oldUrl, 'application/json', 15);
-            if (oldRes.ok) {
-              const commentsData = await oldRes.json();
+            const rawJsonText = await browserFetch(oldUrl, 25000, true);
+            if (rawJsonText && (rawJsonText.trim().startsWith('[') || rawJsonText.trim().startsWith('{'))) {
+              const commentsData = JSON.parse(rawJsonText);
               if (Array.isArray(commentsData)) {
                 const postData = commentsData[0]?.data?.children?.[0]?.data;
                 if (postData?.selftext && postData.selftext.length > postContent.length) {
@@ -451,7 +451,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
                 flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
                 discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
                 if (discussionComments.length > 0) {
-                  console.log(`[reddit] old.reddit.com: got ${discussionComments.length} comments for ${postPath}`);
+                  console.log(`[reddit] Puppeteer (old.reddit.com): got ${discussionComments.length} comments for ${postPath}`);
                 }
               }
             }
