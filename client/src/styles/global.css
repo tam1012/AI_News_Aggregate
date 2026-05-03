@@ -1,7 +1,7 @@
 /* ===== Design Tokens ===== */
 :root {
   --font-size: 16px;
-  --font-heading: 'Noto Serif Display', Georgia, serif;
+  --font-heading: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* Light theme — premium newsdigest colors */
