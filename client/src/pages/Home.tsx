@@ -372,14 +372,16 @@ function FeedItem({
   const time = article.published_at ? formatTime(article.published_at) : '';
 
   const preview = useMemo(() => {
-    // 1. Use AI-generated tldr (short Key Takeaways bullets, generated with the main summary)
+    // 1. Use AI-generated tldr (short summary, generated with the main summary)
     const tldr = (article.tldr || '').trim();
-    if (tldr.length > 10) return tldr;
+    if (tldr.length > 10) {
+      return tldr.length > 300 ? tldr.slice(0, 300) + '…' : tldr;
+    }
 
     // 2. Fallback: raw_excerpt (scraped meta description)
     const excerpt = (article.raw_excerpt || '').trim();
     if (excerpt.length > 20) {
-      return excerpt.length > 200 ? excerpt.slice(0, 200) + '…' : excerpt;
+      return excerpt.length > 300 ? excerpt.slice(0, 300) + '…' : excerpt;
     }
 
     // 3. Last resort: strip from raw_content
@@ -392,7 +394,7 @@ function FeedItem({
         .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
         .replace(/\n+/g, ' ')
         .trim()
-        .slice(0, 200) + '…';
+        .slice(0, 300) + '…';
     }
 
     return '';
@@ -447,17 +449,10 @@ function ArticleDetail({
 
   // Split summary into TL;DR and Body
   const summaryParts = useMemo(() => {
-    if (!article.summary_text) return { tldr: '', rest: '' };
-    const text = article.summary_text;
-    const overviewMatch = text.match(/## Tổng quan[^\n]*\n+([^#]+)/i);
-    let tldr = '';
-    let rest = text;
-    if (overviewMatch) {
-      tldr = overviewMatch[1].trim();
-      rest = text.replace(overviewMatch[0], '').trim();
-    }
+    const tldr = (article.tldr || '').trim();
+    const rest = (article.summary_text || '').trim();
     return { tldr, rest };
-  }, [article.summary_text]);
+  }, [article.tldr, article.summary_text]);
 
   // Pull-to-close gesture
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -557,9 +552,7 @@ function ArticleDetail({
                   </div>
                 )}
                 <div className="article-main-content">
-                  <ReactMarkdown>{
-                    summaryParts.rest.replace(/^##\s*(Các )?điểm chính[^\n]*/mi, '')
-                  }</ReactMarkdown>
+                  <ReactMarkdown>{summaryParts.rest}</ReactMarkdown>
                 </div>
               </>
             ) : (

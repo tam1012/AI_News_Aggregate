@@ -39,24 +39,11 @@ async function claimPendingArticles(limit: number): Promise<ArticleForSummary[]>
 
 // Tóm tắt 1 article — output có cấu trúc markdown
 
-/** Extract a 1-2 sentence tldr from Key Takeaways bullets in the AI summary */
+/** Extract a 1-2 sentence tldr from TLDR: prefix in the AI summary */
 function extractTldr(summaryText: string): string {
-  // Match the Key Takeaways section (new prompt format)
-  const match = summaryText.match(/##[^\n]*Key Takeaways[^\n]*\n([\s\S]*?)(?=\n##|$)/i);
+  const match = summaryText.match(/TLDR:\s*([\s\S]*?)(?=\n##|$)/i);
   if (!match) return '';
-
-  const bullets = match[1]
-    .split('\n')
-    .filter(line => /^\s*[-*•]/.test(line))
-    .slice(0, 2)
-    .map(line => line
-      .replace(/^\s*[-*•]\s*/, '')
-      .replace(/\*\*(.*?)\*\*/g, '$1')
-      .trim()
-    )
-    .filter(Boolean);
-
-  return bullets.join(' · ');
+  return match[1].trim();
 }
 
 export async function summarizeArticle(article: ArticleForSummary): Promise<string | null> {
@@ -83,27 +70,37 @@ export async function summarizeArticle(article: ArticleForSummary): Promise<stri
 }
 
 function buildNewsPrompt(article: ArticleForSummary, content: string): string {
-  return `Bạn là một biên tập viên tin tức khách quan và chuyên nghiệp. Nhiệm vụ của bạn là phân tích và tóm tắt CHI TIẾT bài báo dựa hoàn toàn trên <raw_data>.
+  return `Bạn là một biên tập viên tin tức chuyên nghiệp, có khả năng viết tóm tắt vừa đủ chi tiết vừa hấp dẫn như một bài phân tích ngắn. Nhiệm vụ: phân tích <raw_data> và tạo bản tóm tắt CÓ CHIỀU SÂU, giàu thông tin, giúp người đọc hiểu trọn vẹn sự việc mà không cần đọc bài gốc.
 
-NGUYÊN TẮC CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
-1. Không bịa đặt: CHỈ dùng thông tin có thật trong <raw_data>. KHÔNG suy đoán, KHÔNG bổ sung ý kiến cá nhân.
-2. Khách quan: Duy trì sự trung lập. KHÔNG dùng các từ suy diễn cảm xúc ("đáng chú ý", "gây sốc") trừ khi có trong bài gốc.
-3. Giữ lại chi tiết đắt giá: Ưu tiên giữ lại các con số, số liệu thống kê, tên riêng, ngày tháng và dữ liệu quan trọng.
-4. Xử lý tên riêng: Giữ nguyên tên riêng tiếng Anh, tên sản phẩm, thuật ngữ kỹ thuật.
+NGUYÊN TẮC BẮT BUỘC:
+1. KHÔNG bịa đặt — chỉ dùng thông tin có trong <raw_data>.
+2. Giữ nguyên số liệu, tên riêng, ngày tháng, thuật ngữ kỹ thuật (không dịch).
+3. Viết bằng tiếng Việt tự nhiên, mạch lạc, không sáo rỗng. Tránh các cụm từ mở đầu nhàm chán như "Theo đó", "Được biết".
+4. Mỗi section phải có NỘI DUNG THỰC, không được viết chung chung hay lặp lại tiêu đề.
 
-ĐỊNH DẠNG OUTPUT (Sử dụng Markdown, chỉ trả về nội dung, không giải thích, KHÔNG sử dụng emoji):
+YÊU CẦU VỀ CHIỀU SÂU:
+- TLDR phải tóm tắt được BỐI CẢNH + KẾT QUẢ/Ý NGHĨA, không chỉ nêu sự kiện.
+- Mỗi heading section phải có ít nhất 3-4 câu phân tích/điểm tin, không được viết 1 câu rồi chuyển heading.
+- Nếu bài viết có số liệu, con số — PHẢI trích dẫn cụ thể.
+- Nếu có nhiều bên liên quan — nêu rõ quan điểm/tư thế của từng bên.
+- Nếu có bối cảnh lịch sử hoặc so sánh — trình bày để người đọc hiểu tại sao sự kiện này quan trọng.
 
-## Key Takeaways
-[Trình bày 3-5 gạch đầu dòng ngắn gọn (bullet points) nêu bật những thông tin quan trọng nhất, kết luận cốt lõi, hoặc giá trị thiết thực nhất từ bài viết. Giúp người đọc nắm bắt toàn bộ tinh thần bài viết chỉ trong 10 giây.]
+ĐỊNH DẠNG OUTPUT (Markdown, KHÔNG emoji):
 
-## Nội dung chi tiết
-[Phân chia nội dung bài viết thành các mục nhỏ với heading cấp 3 (###). Linh hoạt đặt tên heading theo chủ đề.]
-- **Sử dụng in đậm (bold)** cho các thuật ngữ và từ khóa quan trọng.
-- Sử dụng bảng (Markdown table) nếu bài viết có chứa dữ liệu so sánh, thông số kỹ thuật hoặc danh sách số liệu.
-- Giữ bố cục thoáng, dễ quét thôngquan.
+TLDR:
+[Viết 1 đoạn văn 3-4 câu. Không dùng gạch đầu dòng. Phải bao gồm: (1) Sự việc chính là gì, (2) Bối cảnh/tại sao quan trọng, (3) Kết quả hoặc hệ quả. Bắt đầu bằng "TLDR:"]
 
-## Bối cảnh & Tác động (Nếu có)
-[Viết 1-3 câu nêu rõ nguyên nhân, hệ quả, hoặc bối cảnh rộng hơn của sự kiện nếu bài gốc có đề cập. Bỏ qua mục này hoàn toàn nếu không có thông tin.]
+## [Tiêu đề mô tả trực diện sự kiện]
+[Đoạn mở bài: trình bày sự việc chính, ai, ở đâu, khi nào. Viết như mở đầu một bài phân tích — lôi cuốn nhưng chính xác. Tối thiểu 4-5 câu.]
+
+## [Tiêu đề về bối cảnh hoặc nguyên nhân]
+[Giải thích tại sao chuyện này xảy ra, tiền sử sự việc, hoặc các yếu tố dẫn đến. Nếu không có bối cảnh rõ ràng thì dùng section này cho diễn biến chi tiết hơn. Tối thiểu 3-4 câu.]
+
+## [Tiêu đề về phản ứng, hệ quả hoặc ý kiến]
+[Trình bày phản ứng từ các bên liên quan, hệ quả dự kiến, hoặc các góc nhìn khác nhau. Trích dẫn cụ thể nếu có. Tối thiểu 3-4 câu.]
+
+## [Tiêu đề về tác động hoặc tương lai]
+[Nếu phù hợp: hệ quả rộng hơn, tác động đến ngành/cộng đồng, hoặc những gì sẽ xảy ra tiếp theo. Nếu không có đủ thông tin, bỏ qua section này.]
 
 Tiêu đề: ${article.title}
 Nguồn: ${article.source_name}
@@ -115,28 +112,37 @@ ${truncate(content, 20000)}
 }
 
 function buildForumPrompt(article: ArticleForSummary, content: string): string {
-  return `Bạn là chuyên gia tổng hợp thông tin từ các diễn đàn công nghệ (Reddit, VOZ...). Nhiệm vụ của bạn là tổng hợp bài đăng gốc và các luồng thảo luận của cộng đồng một cách khách quan dựa trên <raw_data>.
+  return `Bạn là chuyên gia tổng hợp thông tin từ diễn đàn (Reddit, VOZ...). Nhiệm vụ: tổng hợp bài đăng gốc và thảo luận cộng đồng thành bản phân tích có cấu trúc, giàu thông tin, giúp người đọc nắm bắt toàn bộ cuộc thảo luận mà không cần đọc từng comment.
 
-NGUYÊN TẮC CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
-1. Không bịa đặt: CHỈ dùng thông tin và bình luận có trong <raw_data>. KHÔNG bịa ra ý kiến ảo.
-2. Phân tách rõ ràng: Phân biệt rõ đâu là thông tin từ bài đăng gốc (OP), đâu là phản ứng từ cộng đồng (Comments).
-3. Lọc nhiễu (Signal-to-noise): Bỏ qua các bình luận vô nghĩa, cợt nhả. Ưu tiên các bình luận có hàm lượng thông tin cao, kinh nghiệm thực tế, tranh luận logic hoặc được upvote/nhắc lại nhiều.
+NGUYÊN TẮC BẮT BUỘC:
+1. KHÔNG bịa đặt — chỉ dùng nội dung có trong <raw_data>.
+2. Phân biệt rõ OP (bài gốc) vs Comments (phản hồi cộng đồng).
+3. Lọc nhiễu: bỏ comment vô nghĩa, troll, meme. Ưu tiên comment có thông tin thực, kinh nghiệm dùng, tranh luận logic, hoặc upvote cao.
+4. Khi trích dẫn ý kiến cộng đồng, ghi rõ đặc điểm người viết (ví dụ: "một người dùng tự nhận là dev 10 năm kinh nghiệm", "nhiều người dùng khác đồng tình").
+5. Viết bằng tiếng Việt tự nhiên, không sáo rỗng.
 
-ĐỊNH DẠNG OUTPUT (Sử dụng Markdown chuyên nghiệp, KHÔNG sử dụng emoji, chỉ trả về nội dung):
+YÊU CẦU VỀ CHIỀU SÂU:
+- TLDR phải nêu: (1) Chủ đề thảo luận là gì, (2) Xu hướng phản hồi chính của cộng đồng (đồng tình, phản đối, hay chia rẽ?).
+- Mỗi section phải có ít nhất 3-4 câu nội dung thực, không được viết 1 câu rồi chuyển section.
+- Nếu có số liệu, benchmark, ví dụ cụ thể từ comment — PHẢI trích dẫn.
+- Nếu có tranh luận/disagreement — trình bày CẢ HAI phía với luận điểm cụ thể.
 
-## Key Takeaways
-[3-5 gạch đầu dòng (bullet points) tóm tắt nhanh nhất cốt lõi bài đăng và phản ứng chung của cộng đồng. Đọc xong phần này là hiểu thread nói về cái gì.]
+ĐỊNH DẠNG OUTPUT (Markdown, KHÔNG emoji):
 
-## Nội dung bài đăng gốc
-[Tóm tắt ngắn gọn bối cảnh, câu hỏi hoặc chia sẻ của người đăng bài. Nêu rõ tên công cụ/sản phẩm đang được thảo luận.]
+TLDR:
+[1 đoạn văn 3-4 câu: chủ đề chính + xu hướng phản hồi cộng đồng + kết luận/ý nghĩa. Bắt đầu bằng "TLDR:"]
 
-## Phản hồi từ cộng đồng
-[Gom nhóm các bình luận nổi bật thành các nhóm chủ đề/quan điểm (sử dụng heading cấp 3 - ###). Không ép buộc vào các danh mục cố định, hãy linh hoạt chia nhóm dựa trên nội dung thực tế (ví dụ: ### Cách giải quyết thay thế, ### Kinh nghiệm đau thương, ### Cảnh báo rủi ro).]
-- In đậm (**bold**) các luận điểm chính.
-- Thể hiện đa chiều các quan điểm đối lập nếu có tranh cãi. Không thiên vị.
+## [Tiêu đề mô tả bài gốc / câu hỏi của OP]
+[Tóm tắt bài gốc: OP hỏi gì/chia sẻ gì, bối cảnh, link nếu có. Tối thiểu 3-4 câu.]
 
-## Tổng kết xu hướng
-[1-2 câu kết luận tổng thể về thái độ của cộng đồng (ví dụ: phần lớn đồng tình, tranh cãi gay gắt, hay chưa có hồi kết).]
+## [Tiêu đề mô tả luồng ý kiến ủng hộ/chính]
+[Tổng hợp các bình luận đồng tình, ủng hộ, hoặc chia sẻ kinh nghiệm tương tự. Trích dẫn cụ thể luận điểm. Tối thiểu 3-4 câu.]
+
+## [Tiêu đề mô tả luồng ý kiến phản đối/khác biệt]
+[Tổng hợp các bình luận phản đối, đặt câu hỏi, hoặc cung cấp góc nhìn khác. Trích dẫn cụ thể. Tối thiểu 3-4 câu.]
+
+## [Tiêu đề về kết luận hoặc điểm đáng chú ý]
+[Nếu có: câu trả lời được upvote nhiều nhất, insight bất ngờ, hoặc kết luận ngầm của cộng đồng. Nếu không đủ thông tin, bỏ qua section này.]
 
 Tiêu đề: ${article.title}
 Nguồn: ${article.source_name}
@@ -160,9 +166,11 @@ export async function summarizePendingArticles(): Promise<{ processed: number; s
       const summary = await summarizeArticle(article);
       if (summary) {
         const tldr = extractTldr(summary);
+        const cleanSummary = summary.replace(/TLDR:[\s\S]*?(?=\n##)/i, '').trim();
+
         await query(
           'UPDATE articles SET summary_text = $1, summary_status = $2, tldr = $3 WHERE id = $4',
-          [summary, 'done', tldr || null, article.id]
+          [cleanSummary, 'done', tldr || null, article.id]
         );
         succeeded++;
       } else {
@@ -210,15 +218,22 @@ export async function generateDigest(): Promise<string | null> {
     .join('\n\n');
 
   const digestDateStr = now.toISOString().split('T')[0];
-  const prompt = `Bạn là biên tập viên tin tức. Hãy tổng hợp các tin tức dưới đây thành 1 bản tin hằng ngày bằng tiếng Việt.
-Nhóm theo chủ đề (Công nghệ, Kinh tế, Xã hội, Thế giới, ...).
-Tránh lặp lại thông tin.
-Viết ngắn gọn, dễ đọc.
-Định dạng: Markdown với headings (##) và bullet points.
+  const prompt = `Bạn là tổng biên tập bản tin hằng ngày. Nhiệm vụ: tổng hợp các bài viết dưới đây thành một bản tin chuyên nghiệp, có cấu trúc rõ ràng, dễ đọc, và đủ thông tin.
 
-QUAN TRỌNG: 
-1. TUYỆT ĐỐI KHÔNG tự viết thêm tiêu đề chính (H1 hoặc # Tiêu đề).
-2. Tên các chuyên mục dùng ## (ví dụ: ## Công nghệ).
+QUY TẮC:
+1. Nhóm tin theo chủ đề: Công nghệ, Kinh tế, Xã hội, Thế giới, Giải trí, Thể thao, v.v.
+2. Mỗi mục chủ đề phải có TIÊU ĐỀ MÔ TẢ ngắn gọn (không chỉ "Công nghệ" mà phải là "## Công nghệ — Apple ra mắt chip M5, Google cập nhật AI" chẳng hạn).
+3. Dưới mỗi mục: viết 1-2 câu TỔNG QUAN chủ đề, rồi liệt kê các tin bằng bullet points.
+4. Mỗi bullet point phải tóm tắt ĐỦ Ý: sự việc + bối cảnh ngắn + hệ quả. Không chỉ nêu tiêu đề.
+5. Nếu các tin liên quan đến nhau — gom lại và viết mối liên hệ giữa chúng.
+6. Tránh lặp thông tin giữa các mục.
+7. Viết bằng tiếng Việt tự nhiên, dễ đọc.
+
+ĐỊNH DẠNG (Markdown):
+- KHÔNG dùng H1 (#) cho tiêu đề chính.
+- Mục chủ đề dùng ##.
+- Mỗi tin dùng bullet point (-).
+- In đậm (**bold**) cho tên riêng, con số quan trọng, từ khóa.
 
 Các bài viết hôm nay (${digestDateStr}):
 ${articleSummaries}`;
