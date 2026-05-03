@@ -20,9 +20,10 @@ export function normalizeTldr(tldr: string, maxChars = 180): string {
   const sentence = cleaned.match(new RegExp(`^(.{${minSentenceChars},${maxChars}}?[.!?])\\s`))?.[1];
   if (sentence) return sentence.trim();
 
-  const cut = cleaned.slice(0, maxChars);
+  const cutLimit = Math.max(1, maxChars - ELLIPSIS.length);
+  const cut = cleaned.slice(0, cutLimit);
   const lastSpace = cut.lastIndexOf(' ');
-  return `${cut.slice(0, lastSpace > 80 ? lastSpace : maxChars).trim()}${ELLIPSIS}`;
+  return `${cut.slice(0, lastSpace > 80 ? lastSpace : cutLimit).trim()}${ELLIPSIS}`;
 }
 
 export function makeTldrFromSummary(summaryText: string, maxChars = 180): string {
