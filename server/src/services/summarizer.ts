@@ -39,11 +39,15 @@ async function claimPendingArticles(limit: number): Promise<ArticleForSummary[]>
 
 // Tóm tắt 1 article — output có cấu trúc markdown
 
-/** Extract a 1-2 sentence tldr from TLDR: prefix in the AI summary */
+/** Extract tldr from <tldr>...</tldr> XML tag in AI summary */
 function extractTldr(summaryText: string): string {
-  const match = summaryText.match(/TLDR:\s*([\s\S]*?)(?=\n##|$)/i);
-  if (!match) return '';
-  return match[1].trim();
+  const match = summaryText.match(/<tldr>([\s\S]*?)<\/tldr>/i);
+  return match ? match[1].trim() : '';
+}
+
+/** Remove the <tldr> block from summary, leaving only the main content */
+function cleanSummaryText(summaryText: string): string {
+  return summaryText.replace(/<tldr>[\s\S]*?<\/tldr>/i, '').trim();
 }
 
 export async function summarizeArticle(article: ArticleForSummary): Promise<string | null> {
@@ -70,43 +74,42 @@ export async function summarizeArticle(article: ArticleForSummary): Promise<stri
 }
 
 function buildNewsPrompt(article: ArticleForSummary, content: string): string {
-  return `Bạn là biên tập viên tin tức chuyên nghiệp. Nhiệm vụ: đọc toàn bộ <raw_data> và viết bản tóm tắt CHI TIẾT, ĐẦY ĐỦ thông tin, giúp người đọc hiểu toàn diện sự việc mà không cần đọc bài gốc.
+  return `Bạn là biên tập viên tin tức chuyên nghiệp. Đọc toàn bộ <raw_data> và viết bản phân tích CHI TIẾT giúp người đọc hiểu toàn diện sự việc mà không cần đọc bài gốc.
 
-NGUYÊN TẮC:
+NGUYÊN TẮC CỐT LÕI:
 1. KHÔNG bịa đặt — chỉ dùng thông tin trong <raw_data>.
-2. Giữ nguyên tên riêng, số liệu, thuật ngữ kỹ thuật.
-3. Tránh sáo rỗng ("Theo đó", "Được biết").
+2. Giữ nguyên tên riêng, số liệu, thuật ngữ kỹ thuật gốc (kể cả tiếng Anh).
+3. Viết bằng tiếng Việt tự nhiên. Giữ nguyên tiếng Anh cho thuật ngữ chuyên ngành, tên sản phẩm, tên công ty.
+4. Tránh sáo rỗng ("Theo đó", "Được biết", "Nhìn chung").
+5. Thuật ngữ kỹ thuật, tên file, lệnh → dùng \`code\` inline.
 
-YÊU CẦU CHIỀU SÂU (BẮT BUỘC):
-- TLDR phải viết 3-4 câu, bao gồm: (1) sự việc chính, (2) bối cảnh/tại sao quan trọng, (3) kết quả hoặc hệ quả.
-- Mỗi section PHẢI có nội dung thực tế, KHÔNG được viết 1 câu rồi chuyển section.
-- Nếu bài viết có số liệu, con số — PHẢI trích dẫn cụ thể.
-- Nếu có nhiều bên liên quan — nêu rõ quan điểm của từng bên.
+CẤU TRÚC (linh hoạt, KHÔNG template cố định):
+- Bắt đầu bằng tag <tldr>: 2-3 câu tóm tắt sự việc chính + tại sao quan trọng + hệ quả.
+- Chia thành 2-5 sections (##) tùy độ phức tạp.
+- Heading phải MÔ TẢ nội dung cụ thể, KHÔNG generic.
+  ✗ "## Bối cảnh"  ✗ "## Phân tích"
+  ✓ "## Thách thức về niềm tin vào Agentic AI"
+- Mỗi section mở đầu bằng 1-2 câu dẫn dắt, rồi mới vào chi tiết.
+- Mix đoạn văn + bullet + numbered list tùy nội dung — đọc như bài viết, không như checklist.
+- Nếu bài có số liệu → PHẢI trích dẫn cụ thể.
+- Nếu có nhiều bên liên quan → nêu rõ quan điểm từng bên.
 
-NGUYÊN TẮC ĐỊNH DẠNG (linh hoạt theo nội dung):
-- **Bullet points (-)** khi liệt kê nhiều điểm. Mỗi bullet PHẢI có bold label ở đầu: "- **Label:** nội dung chi tiết".
-- **Numbered list (1. 2. 3.)** khi có thứ tự hoặc quy trình.
-- **Đoạn văn ngắn** khi cần giải thích bối cảnh hoặc phân tích sâu.
-- **KHÔNG dùng ngoặc vuông [ ] trong tiêu đề sections.**
-- LINH HOẠT: chọn cách trình bày phù hợp nhất với nội dung bài viết.
+CÁCH DÙNG BOLD VÀ BULLET:
+- **Bold inline**: in đậm tên riêng, con số, thuật ngữ quan trọng TRONG CÂU.
+- **Bold label** (- **Label:** value): chỉ dùng khi liệt kê nhiều mục song song dạng key-value.
+- KHÔNG ép bold label cho MỌI bullet — chỉ dùng khi nội dung có dạng key-value.
 
-ĐỊNH DẠNG OUTPUT (Markdown, KHÔNG emoji):
+ĐỊNH DẠNG OUTPUT (Markdown, KHÔNG emoji, KHÔNG ngoặc vuông trong heading):
 
-TLDR:
-[3-4 câu tóm tắt toàn diện sự việc. Bắt đầu bằng "TLDR:"]
+<tldr>
+[2-3 câu tóm tắt tự nhiên, không prefix]
+</tldr>
 
-## [Tiêu đề section 1 — sự kiện chính]
-- **Sự việc:** mô tả cụ thể, ai làm gì, ở đâu, khi nào
-- **Chi tiết đáng chú ý:** số liệu, thống kê, tên riêng quan trọng
-- **Phản ứng ban đầu:** từ các bên liên quan
+## [Heading mô tả cụ thể]
+[Đoạn dẫn dắt + chi tiết]
 
-## [Tiêu đề section 2 — bối cảnh hoặc phân tích]
-- **Tại sao quan trọng:** bối cảnh lịch sử, so sánh, xu hướng
-- **Phân tích:** góc nhìn chuyên gia, dữ liệu hỗ trợ
-
-## [Tiêu đề section 3 — hệ quả hoặc tương lai]
-- **Hệ quả dự kiến:** tác động đến ngành, người dùng, thị trường
-- **Bước tiếp theo:** những gì sẽ xảy ra tiếp theo
+## [Heading mô tả cụ thể]
+[Nội dung phù hợp]
 
 Tiêu đề: ${article.title}
 Nguồn: ${article.source_name}
@@ -118,35 +121,39 @@ ${truncate(content, 20000)}
 }
 
 function buildForumPrompt(article: ArticleForSummary, content: string): string {
-  return `Bạn là chuyên gia tổng hợp thông tin từ diễn đàn (Reddit, VOZ...). Tổng hợp bài gốc và thảo luận thành bản tóm tắt dễ đọc.
+  return `Bạn là chuyên gia tổng hợp thảo luận từ diễn đàn (Reddit, VOZ...). Đọc toàn bộ <raw_data> và viết bản tổng hợp dễ đọc.
 
 NGUYÊN TẮC:
 1. KHÔNG bịa đặt — chỉ dùng nội dung trong <raw_data>.
-2. Phân biệt OP (bài gốc) vs Comments (cộng đồng).
-3. Lọc bỏ troll, meme, comment vô nghĩa. Ưu tiên comment có kinh nghiệm thực, tranh luận logic, upvote cao.
+2. Phân biệt rõ: bài gốc (OP) vs ý kiến cộng đồng (comments).
+3. Lọc bỏ troll, meme, comment vô nghĩa. Ưu tiên comment có kinh nghiệm thực tế, upvote cao.
+4. Viết bằng tiếng Việt. Giữ nguyên thuật ngữ tiếng Anh khi cần.
+5. Thuật ngữ kỹ thuật → dùng \`code\` inline.
 
-NGUYÊN TẮC ĐỊNH DẠNG (linh hoạt theo nội dung):
-- **Tiêu đề sections ngắn gọn, rõ ràng** — mỗi section mở đầu bằng ## và tên mô tả trực diện.
-- **Bullet points (-)** khi liệt kê nhiều ý kiến, tính năng, hoặc so sánh.
-- **Bold label + mô tả** ở đầu mỗi bullet nếu bullet có dạng "Điểm A: giải thích".
-- **Đoạn văn ngắn** khi cần tóm tắt bối cảnh bài gốc.
-- **KHÔNG dùng ngoặc vuông [ ] trong tiêu đề sections.**
-- LINH HOẠT: chọn cách trình bày phù hợp với loại thảo luận. Bài có nhiều ý kiến trái chiều → bullet bold label + mô tả. Bài hỏi kinh nghiệm → bullet liệt kê kinh nghiệm thực tế. Bài thảo luận kỹ thuật → numbered list + bullet chi tiết.
-- BẮT BUỘC có TLDR ở đầu: 1-2 câu tóm tắt chủ đề + xu hướng phản hồi. Bắt đầu bằng "TLDR:".
+CẤU TRÚC (linh hoạt):
+- Bắt đầu bằng tag <tldr>: 2-3 câu — chủ đề + tình huống + xu hướng phản hồi chính.
+- Chia thành 2-5 sections (##) phù hợp với loại thảo luận:
+  + Bài hỏi kinh nghiệm → tóm tắt câu hỏi + các lời khuyên nổi bật
+  + Bài tranh luận → các luồng ý kiến chính + đối lập
+  + Bài chia sẻ → nội dung OP + phản hồi cộng đồng
+- Heading MÔ TẢ nội dung cụ thể:
+  ✗ "## Ý kiến nổi bật"
+  ✓ "## Lời khuyên từ cộng đồng về chiến lược marketing"
+- Mỗi section mở đầu bằng 1-2 câu dẫn dắt, rồi bullet chi tiết.
+- KHÔNG dùng ngoặc vuông [ ] trong heading.
+- Mix đoạn văn + bullet tùy nội dung — đọc như bài viết, không như checklist.
 
 ĐỊNH DẠNG OUTPUT (Markdown, KHÔNG emoji):
 
-TLDR:
-[1-2 câu: chủ đề + xu hướng phản hồi. Bắt đầu bằng "TLDR:"]
+<tldr>
+[2-3 câu tóm tắt tự nhiên, không prefix]
+</tldr>
 
-## [Tiêu đề section 1 — bài gốc hoặc vấn đề]
-[Chọn format phù hợp: đoạn ngắn tóm tắt, bullet, hoặc mix.]
+## [Heading cụ thể cho bài gốc]
+[Tóm tắt nội dung OP]
 
-## [Tiêu đề section 2 — ý kiến nổi bật]
-[Chọn format phù hợp: bullet bold label + mô tả, hoặc đoạn ngắn.]
-
-## [Tiêu đề section 3 — ý kiến khác hoặc tranh luận]
-[Section này có thể bỏ qua nếu không có nhiều ý kiến trái chiều.]
+## [Heading cụ thể cho ý kiến cộng đồng]
+[Các ý kiến nổi bật]
 
 Tiêu đề: ${article.title}
 Nguồn: ${article.source_name}
@@ -170,11 +177,11 @@ export async function summarizePendingArticles(): Promise<{ processed: number; s
       const summary = await summarizeArticle(article);
       if (summary) {
         const tldr = extractTldr(summary);
-        const cleanSummary = summary.replace(/TLDR:[\s\S]*?(?=\n##)/i, '').trim();
+        const cleanedSummary = cleanSummaryText(summary);
 
         await query(
           'UPDATE articles SET summary_text = $1, summary_status = $2, tldr = $3 WHERE id = $4',
-          [cleanSummary, 'done', tldr || null, article.id]
+          [cleanedSummary, 'done', tldr || null, article.id]
         );
         succeeded++;
       } else {
