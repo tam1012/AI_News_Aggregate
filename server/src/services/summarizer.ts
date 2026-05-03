@@ -90,11 +90,11 @@ Ngôn ngữ gốc: ${article.language || 'không rõ'}
 
 <raw_data>
 ${truncate(content, 20000)}
-</raw_data>\`;
+</raw_data>`;
 }
 
 function buildForumPrompt(article: ArticleForSummary, content: string): string {
-  return \`Bạn là chuyên gia tổng hợp thông tin từ các diễn đàn công nghệ (Reddit, VOZ...). Nhiệm vụ của bạn là tổng hợp bài đăng gốc và các luồng thảo luận của cộng đồng một cách khách quan dựa trên <raw_data>.
+  return `Bạn là chuyên gia tổng hợp thông tin từ các diễn đàn công nghệ (Reddit, VOZ...). Nhiệm vụ của bạn là tổng hợp bài đăng gốc và các luồng thảo luận của cộng đồng một cách khách quan dựa trên <raw_data>.
 
 NGUYÊN TẮC CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
 1. Không bịa đặt: CHỈ dùng thông tin và bình luận có trong <raw_data>. KHÔNG bịa ra ý kiến ảo.
@@ -122,7 +122,7 @@ Nguồn: ${article.source_name}
 
 <raw_data>
 ${truncate(content, 28000)}
-</raw_data>\`;
+</raw_data>`;
 }
 
 // Tóm tắt hàng loạt articles chưa có summary
