@@ -3,6 +3,7 @@ import { getMany, getOne, query } from '../db/index.js';
 
 const articles = new Hono();
 const LOCAL_DATE_SQL = `DATE(COALESCE(a.published_at, a.created_at) AT TIME ZONE 'Asia/Ho_Chi_Minh')`;
+const LOCAL_DATE_TEXT_SQL = `TO_CHAR(${LOCAL_DATE_SQL}, 'YYYY-MM-DD')`;
 
 function parseBoundedInt(value: string | undefined, fallback: number, min: number, max: number): number {
   const parsed = parseInt(value || '', 10);
@@ -24,7 +25,7 @@ articles.get('/dates', async (c) => {
   }
 
   const rows = await getMany(
-    `SELECT ${LOCAL_DATE_SQL} as date, COUNT(*)::int as count
+    `SELECT ${LOCAL_DATE_TEXT_SQL} as date, COUNT(*)::int as count
      FROM articles a
      ${where}
      GROUP BY ${LOCAL_DATE_SQL}
