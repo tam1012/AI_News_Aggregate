@@ -259,6 +259,11 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .feed-item-preview {
   font-size: 0.85rem; line-height: 1.55;
   color: var(--color-text-secondary);
+  /* Hard-cap at 3 lines with ellipsis */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* Feed item with thumbnail */
