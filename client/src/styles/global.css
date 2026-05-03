@@ -121,6 +121,32 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .icon-btn.active { border-color: var(--color-accent); color: var(--color-accent); }
 .icon-btn:disabled { opacity: 0.3; cursor: default; }
 
+/* ===== Font Size Button ===== */
+.font-size-btn {
+  display: inline-flex; align-items: center; gap: 3px;
+  height: 34px; padding: 0 10px;
+  border-radius: 17px;
+  border: 1px solid var(--color-border);
+  background: transparent; color: var(--color-text-secondary);
+  font-family: var(--font-heading);
+  transition: all 0.15s; cursor: pointer;
+  margin-right: 2px;
+}
+.font-size-btn:hover {
+  background: var(--color-bg-hover); color: var(--color-text);
+  border-color: var(--color-text-muted);
+}
+.font-size-btn:active { transform: scale(0.95); }
+.font-size-btn-label {
+  font-size: 0.88rem; font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.font-size-btn-value {
+  font-size: 0.65rem; font-weight: 500;
+  color: var(--color-text-muted);
+  min-width: 14px; text-align: center;
+}
+
 /* ===== Feed Tabs (News / Digest) ===== */
 .feed-tabs {
   display: flex; align-items: center; justify-content: center;

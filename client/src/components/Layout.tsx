@@ -5,7 +5,7 @@ import { useSettings } from '../hooks/useApi';
 const ADMIN_TOKEN_STORAGE_KEY = 'admin_token';
 
 export function Layout() {
-  const { theme, toggleTheme } = useSettings();
+  const { fontSize, cycleFontSize, theme, toggleTheme } = useSettings();
   const location = useLocation();
   const isAdmin = location.pathname.startsWith('/admin');
   const isSources = location.pathname.startsWith('/sources');
@@ -53,6 +53,14 @@ export function Layout() {
                 ⚙️
               </NavLink>
             ))}
+            <button
+              className="font-size-btn"
+              onClick={cycleFontSize}
+              title={`Cỡ chữ: ${fontSize}px`}
+            >
+              <span className="font-size-btn-label">Aa</span>
+              <span className="font-size-btn-value">{fontSize}</span>
+            </button>
             <button
               className="icon-btn"
               onClick={toggleTheme}
