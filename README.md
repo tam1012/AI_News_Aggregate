@@ -1,6 +1,6 @@
-# NewsTamHV
+# SynthNews
 
-NewsTamHV là một hệ thống đọc tin cá nhân theo mô hình full-stack monorepo. Ứng dụng tự động lấy bài viết từ RSS, web và forum, lưu vào PostgreSQL, gọi AI để tóm tắt bằng tiếng Việt, rồi hiển thị dưới dạng giao diện đọc nhanh tối ưu cho desktop lẫn mobile.
+SynthNews là một hệ thống đọc tin cá nhân theo mô hình full-stack monorepo. Ứng dụng tự động lấy bài viết từ RSS, web và forum, lưu vào PostgreSQL, gọi AI để tóm tắt bằng tiếng Việt, rồi hiển thị dưới dạng giao diện đọc nhanh tối ưu cho desktop lẫn mobile.
 
 Trọng tâm của project này không phải là một cổng tin tức công cộng quy mô lớn. Nó được thiết kế cho nhu cầu cá nhân: mở lên là đọc nhanh, lọc theo nguồn, xem lại theo ngày, và có một khu quản trị gọn để vận hành scraper, AI provider, cùng các job nền.
 
@@ -32,7 +32,7 @@ Trọng tâm của project này không phải là một cổng tin tức công c
 - Hỗ trợ nguồn **RSS** chuẩn.
 - Hỗ trợ **web scraping** với selector cấu hình theo từng nguồn.
 - Hỗ trợ **Reddit** theo hướng RSS + enrich thêm nội dung, comment top-level và reply nổi bật qua JSON khi khả dụng.
-- Hỗ trợ **VOZ forum** theo hướng riêng: lấy thread từ RSS rồi vào trang thread thật để bóc tách bài gốc và bình luận thành viên trên nhiều page đầu.
+- Hỗ trợ **VOZ forum** theo hướng riêng: lấy thread từ RSS rồi vào trang thread thật để bóc tách bài gốc và bình luận thành viên trên nhiều page (tối đa 15 page).
 
 ### 2. Tóm tắt bài viết bằng AI
 
@@ -41,6 +41,7 @@ Trọng tâm của project này không phải là một cổng tin tức công c
 - Có prompt riêng cho:
   - tin báo thông thường,
   - nội dung forum / cộng đồng như Reddit, VOZ.
+- Prompt sử dụng định dạng linh hoạt theo nội dung (bullet points, numbered list, đoạn ngắn) thay vì ép khuôn mẫu cứng.
 - Có retry cho bài lỗi hoặc bài bị kẹt ở trạng thái `processing`.
 
 ### 3. Tạo bản tin tổng hợp
@@ -391,9 +392,9 @@ ADMIN_TOKEN=change-me-to-a-random-string
 SCRAPE_INTERVAL_HOURS=3
 MAX_ARTICLES_PER_SOURCE=20
 MAX_AI_CALLS_PER_RUN=30
-VOZ_MAX_THREAD_PAGES=4
-FORUM_MAX_COMMENTS=40
-FORUM_RAW_CONTENT_MAX_LENGTH=60000
+VOZ_MAX_THREAD_PAGES=15
+FORUM_MAX_COMMENTS=70
+FORUM_RAW_CONTENT_MAX_LENGTH=80000
 REDDIT_COMMENT_LIMIT=30
 REDDIT_COMMENT_DEPTH=3
 ```
@@ -484,9 +485,9 @@ ADMIN_TOKEN=thay-bang-chuoi-ngau-nhien-dai
 SCRAPE_INTERVAL_HOURS=3
 MAX_ARTICLES_PER_SOURCE=20
 MAX_AI_CALLS_PER_RUN=30
-VOZ_MAX_THREAD_PAGES=4
-FORUM_MAX_COMMENTS=40
-FORUM_RAW_CONTENT_MAX_LENGTH=60000
+VOZ_MAX_THREAD_PAGES=15
+FORUM_MAX_COMMENTS=70
+FORUM_RAW_CONTENT_MAX_LENGTH=80000
 REDDIT_COMMENT_LIMIT=30
 REDDIT_COMMENT_DEPTH=3
 CORS_ORIGIN=https://newstamhv.duckdns.org
@@ -532,9 +533,9 @@ ADMIN_TOKEN=change-me-to-a-random-string
 SCRAPE_INTERVAL_HOURS=3
 MAX_ARTICLES_PER_SOURCE=20
 MAX_AI_CALLS_PER_RUN=30
-VOZ_MAX_THREAD_PAGES=4
-FORUM_MAX_COMMENTS=40
-FORUM_RAW_CONTENT_MAX_LENGTH=60000
+VOZ_MAX_THREAD_PAGES=15
+FORUM_MAX_COMMENTS=70
+FORUM_RAW_CONTENT_MAX_LENGTH=80000
 REDDIT_COMMENT_LIMIT=30
 REDDIT_COMMENT_DEPTH=3
 ```
@@ -627,16 +628,28 @@ Nếu chỉ đọc RSS của VOZ, hệ thống sẽ thiếu phần bình luận.
 - Bài đã đọc được làm dịu màu để quét nhanh hơn.
 - Thêm nút copy link bài gốc.
 - Ẩn icon Admin/Sources khỏi header public để giao diện sạch hơn.
+- Auto-scroll lên đầu khi chọn bài mới.
+- Font chữ DM Sans cho cả tiêu đề và nội dung.
+- Dark mode dịu mắt, giảm tương phản.
+- Welcome card với GitHub link và danh sách tính năng.
 
 ### Hạ tầng backend
 
 - Sửa race condition của summarizer bằng cơ chế claim atomic với `FOR UPDATE SKIP LOCKED`.
 - Dockerfile production chuyển sang runtime từ `dist/` thay vì chạy `tsx` trực tiếp.
+- Tăng max_tokens AI provider lên 4096 để tóm tắt không bị cắt.
+
+### AI Summarization
+
+- Prompt linh hoạt theo loại bài viết: bullet points cho danh sách, numbered list cho quy trình, đoạn ngắn cho phân tích.
+- TLDR hiển thị đầy đủ trong list preview (không cắt ký tự).
 
 ### Scraping
 
 - Đã có scraper riêng cho VOZ để lấy nội dung thread và bình luận thành viên tốt hơn so với RSS thuần.
+- Tăng VOZ_MAX_THREAD_PAGES lên 15, FORUM_MAX_COMMENTS lên 70, FORUM_RAW_CONTENT_MAX_LENGTH lên 80000.
+- Giảm sleep giữa các page VOZ từ 800ms xuống 500ms.
 
 ---
 
-Nếu dùng đúng theo mục tiêu ban đầu của project này, NewsTamHV hoạt động tốt nhất như một hệ thống đọc tin cá nhân self-hosted: ít thao tác, dễ vận hành, và tập trung vào tốc độ đọc hơn là bề mặt tính năng quá rộng.
+Nếu dùng đúng theo mục tiêu ban đầu của project này, SynthNews hoạt động tốt nhất như một hệ thống đọc tin cá nhân self-hosted: ít thao tác, dễ vận hành, và tập trung vào tốc độ đọc hơn là bề mặt tính năng quá rộng.
