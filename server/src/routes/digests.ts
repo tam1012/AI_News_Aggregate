@@ -3,13 +3,19 @@ import { getMany, getOne, query } from '../db/index.js';
 
 const digests = new Hono();
 
+function parseBoundedInt(value: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = parseInt(value || '', 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(parsed, min), max);
+}
+
 // Digest moi nhat
 digests.get('/latest', async (c) => {
   const lang = c.req.query('lang') || 'vi';
   const row = await getOne(
     `SELECT * FROM digests
      WHERE status = 'done' AND language = $1
-     ORDER BY digest_date DESC LIMIT 1`,
+     ORDER BY digest_date DESC, created_at DESC LIMIT 1`,
     [lang]
   );
   if (!row) {
@@ -33,8 +39,8 @@ digests.get('/latest', async (c) => {
 
 // Danh sach digests (phan trang)
 digests.get('/', async (c) => {
-  const page = parseInt(c.req.query('page') || '1');
-  const limit = parseInt(c.req.query('limit') || '10');
+  const page = parseBoundedInt(c.req.query('page'), 1, 1, 500);
+  const limit = parseBoundedInt(c.req.query('limit'), 10, 1, 50);
   const offset = (page - 1) * limit;
 
   const countResult = await getOne<{ count: string }>(
@@ -45,7 +51,7 @@ digests.get('/', async (c) => {
   const rows = await getMany(
     `SELECT id, digest_date, title, article_count, language, status, created_at
      FROM digests WHERE status = 'done'
-     ORDER BY digest_date DESC
+     ORDER BY digest_date DESC, created_at DESC
      LIMIT $1 OFFSET $2`,
     [limit, offset]
   );

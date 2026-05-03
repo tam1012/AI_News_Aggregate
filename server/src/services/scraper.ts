@@ -1,9 +1,9 @@
 import RssParser from 'rss-parser';
 import * as cheerio from 'cheerio';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import puppeteer from 'puppeteer-core';
 import { query, getOne, getMany } from '../db/index.js';
-import { generateId, createContentHash, normalizeUrl, truncate, sleep } from '../lib/utils.js';
+import { generateId, createContentHash, normalizePublicHttpUrl, truncate, sleep } from '../lib/utils.js';
 
 const rssParser = new RssParser({
   timeout: 15000,
@@ -36,44 +36,56 @@ async function getRedditToken(): Promise<string | null> {
   if (!hasRedditOAuth()) return null;
   if (redditToken && Date.now() < redditToken.expires_at) return redditToken.access_token;
 
-  return new Promise((resolve) => {
-    const cmd = `curl -s -X POST -H "User-Agent: newstamhv/1.0" -u "${REDDIT_CLIENT_ID}:${REDDIT_CLIENT_SECRET}" -d "grant_type=password&username=${encodeURIComponent(REDDIT_USERNAME)}&password=${encodeURIComponent(REDDIT_PASSWORD)}" "https://www.reddit.com/api/v1/access_token"`;
-    exec(cmd, { timeout: 15000 }, (err, stdout) => {
-      if (err) { console.error('Reddit OAuth error:', err.message); resolve(null); return; }
-      try {
-        const data = JSON.parse(stdout);
-        if (data.access_token) {
-          redditToken = { access_token: data.access_token, expires_at: Date.now() + (data.expires_in - 60) * 1000 };
-          resolve(data.access_token);
-        } else {
-          console.error('Reddit OAuth: no token in response', stdout.substring(0, 200));
-          resolve(null);
-        }
-      } catch (e) {
-        console.error('Reddit OAuth parse error:', stdout.substring(0, 200));
-        resolve(null);
-      }
+  try {
+    const body = new URLSearchParams({
+      grant_type: 'password',
+      username: REDDIT_USERNAME,
+      password: REDDIT_PASSWORD,
     });
-  });
+    const response = await fetch('https://www.reddit.com/api/v1/access_token', {
+      method: 'POST',
+      headers: {
+        'User-Agent': 'newstamhv/1.0',
+        Authorization: `Basic ${Buffer.from(`${REDDIT_CLIENT_ID}:${REDDIT_CLIENT_SECRET}`).toString('base64')}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body,
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new Error(`Status code ${response.status}`);
+
+    const data = await response.json();
+    if (data.access_token) {
+      redditToken = { access_token: data.access_token, expires_at: Date.now() + (data.expires_in - 60) * 1000 };
+      return data.access_token;
+    }
+    console.error('Reddit OAuth: no token in response');
+    return null;
+  } catch (err: any) {
+    console.error('Reddit OAuth error:', err.message);
+    return null;
+  }
 }
 
 async function redditApiFetch(path: string): Promise<any | null> {
   const token = await getRedditToken();
   if (!token) return null;
 
-  return new Promise((resolve) => {
+  try {
     const url = `https://oauth.reddit.com${path}`;
-    const cmd = `curl -s -L --max-time 15 -H "User-Agent: newstamhv/1.0" -H "Authorization: Bearer ${token}" "${url}"`;
-    exec(cmd, { timeout: 20000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
-      if (err) { console.error('Reddit API error:', err.message); resolve(null); return; }
-      try {
-        resolve(JSON.parse(stdout));
-      } catch {
-        console.error('Reddit API: invalid JSON', stdout.substring(0, 200));
-        resolve(null);
-      }
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'newstamhv/1.0',
+        Authorization: `Bearer ${token}`,
+      },
+      signal: AbortSignal.timeout(15000),
     });
-  });
+    if (!response.ok) throw new Error(`Status code ${response.status}`);
+    return await response.json();
+  } catch (err: any) {
+    console.error('Reddit API error:', err.message);
+    return null;
+  }
 }
 
 function isRedditUrl(url: string): boolean {
@@ -185,8 +197,23 @@ export function selectForumComments(comments: ForumComment[], maxComments: numbe
 // Use curl to bypass Cloudflare TLS fingerprinting that blocks Node.js fetch()
 export function curlFetch(url: string, accept: string, timeoutSec: number): Promise<{ ok: boolean; status: number; text: () => Promise<string>; json: () => Promise<any> }> {
   return new Promise((resolve, reject) => {
-    const cmd = `curl -s -L --max-time ${timeoutSec} -H "User-Agent: ${BROWSER_UA}" -H "Accept: ${accept}" -H "Accept-Language: vi-VN,vi;q=0.9,en;q=0.8" "${url}"`;
-    exec(cmd, { timeout: (timeoutSec + 2) * 1000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+    const safeUrl = normalizePublicHttpUrl(url);
+    if (!safeUrl) {
+      reject(new Error('URL must be a public http(s) URL'));
+      return;
+    }
+
+    const safeTimeout = Math.max(1, Math.min(timeoutSec, 60));
+    const args = [
+      '-s',
+      '-L',
+      '--max-time', String(safeTimeout),
+      '-H', `User-Agent: ${BROWSER_UA}`,
+      '-H', `Accept: ${accept}`,
+      '-H', 'Accept-Language: vi-VN,vi;q=0.9,en;q=0.8',
+      safeUrl,
+    ];
+    execFile('curl', args, { timeout: (safeTimeout + 2) * 1000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
       if (err) {
         reject(err);
         return;
@@ -222,6 +249,9 @@ async function getBrowser(): Promise<any> {
 }
 
 export async function browserFetch(url: string, timeoutMs: number = 30000, rawText: boolean = false): Promise<string> {
+  const safeUrl = normalizePublicHttpUrl(url);
+  if (!safeUrl) throw new Error('URL must be a public http(s) URL');
+
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
@@ -235,7 +265,7 @@ export async function browserFetch(url: string, timeoutMs: number = 30000, rawTe
     await page.setUserAgent(BROWSER_UA);
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
     await page.setViewport({ width: 1920, height: 1080 });
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: timeoutMs });
+    await page.goto(safeUrl, { waitUntil: 'networkidle2', timeout: timeoutMs });
 
     // Try to dismiss Reddit cookie/consent wall if present
     try {
@@ -293,7 +323,8 @@ export function extractVozPagination(html: string, threadUrl: string): string[] 
     const href = $(el).attr('href');
     if (!href) return;
     try {
-      urls.add(normalizeUrl(new URL(href, threadUrl).toString()));
+      const publicUrl = normalizePublicHttpUrl(new URL(href, threadUrl).toString());
+      if (publicUrl) urls.add(publicUrl);
     } catch {}
   });
 
@@ -399,11 +430,12 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
     for (const item of items) {
       if (!item.link || !item.title) continue;
 
-      const url = normalizeUrl(item.link);
+      const url = normalizePublicHttpUrl(item.link);
+      if (!url) continue;
       const existing = await getOne('SELECT id FROM articles WHERE url = $1', [url]);
       if (existing) continue;
 
-      const postPath = new URL(item.link).pathname;
+      const postPath = new URL(url).pathname;
       const rssContent = item.contentSnippet || item.content || '';
       let postContent = stripHtmlBasic(rssContent) || item.title;
       let outboundUrl: string | null = null;
@@ -422,7 +454,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
               postContent = normalizeWhitespace(postData.selftext);
             }
             if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
-              outboundUrl = String(postData.url);
+              outboundUrl = normalizePublicHttpUrl(String(postData.url));
             }
             const comments = commentsData[1]?.data?.children || [];
             const flattened: ForumComment[] = [];
@@ -444,7 +476,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
                   postContent = normalizeWhitespace(postData.selftext);
                 }
                 if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
-                  outboundUrl = String(postData.url);
+                  outboundUrl = normalizePublicHttpUrl(String(postData.url));
                 }
                 const comments = commentsData[1]?.data?.children || [];
                 const flattened: ForumComment[] = [];
@@ -472,7 +504,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
                     postContent = normalizeWhitespace(postData.selftext);
                   }
                   if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
-                    outboundUrl = String(postData.url);
+                    outboundUrl = normalizePublicHttpUrl(String(postData.url));
                   }
                   const comments = commentsData[1]?.data?.children || [];
                   const flattened: ForumComment[] = [];
@@ -562,7 +594,10 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
   const result: ScrapeResult = { itemsFound: 0, itemsInserted: 0, errors: [] };
 
   try {
-    const response = await fetch(source.url, {
+    const sourceUrl = normalizePublicHttpUrl(source.url);
+    if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
+
+    const response = await fetch(sourceUrl, {
       headers: {
         'User-Agent': BROWSER_UA,
         Accept: 'application/rss+xml, application/xml, text/xml, application/atom+xml;q=0.9, */*;q=0.8',
@@ -580,7 +615,8 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
     for (const item of items) {
       if (!item.link || !item.title) continue;
 
-      const url = normalizeUrl(item.link);
+      const url = normalizePublicHttpUrl(item.link);
+      if (!url) continue;
       const existing = await getOne('SELECT id FROM articles WHERE url = $1', [url]);
       if (existing) continue;
 
@@ -593,12 +629,13 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
       let imageUrl: string | null = null;
 
       try {
-        const pagesToVisit: string[] = [item.link];
+        const pagesToVisit: string[] = [url];
         const visited = new Set<string>();
         const allPosts: VozPost[] = [];
 
         for (let pageIndex = 0; pageIndex < pagesToVisit.length && pageIndex < VOZ_MAX_THREAD_PAGES; pageIndex++) {
-          const pageUrl = normalizeUrl(pagesToVisit[pageIndex]);
+          const pageUrl = normalizePublicHttpUrl(pagesToVisit[pageIndex]);
+          if (!pageUrl) continue;
           if (visited.has(pageUrl)) continue;
           visited.add(pageUrl);
 
@@ -610,7 +647,7 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
           allPosts.push(...parseVozPosts(threadHtml, pageIndex + 1));
 
           if (pageIndex === 0) {
-            const pageLinks = extractVozPagination(threadHtml, item.link).slice(0, Math.max(0, VOZ_MAX_THREAD_PAGES - 1));
+            const pageLinks = extractVozPagination(threadHtml, url).slice(0, Math.max(0, VOZ_MAX_THREAD_PAGES - 1));
             for (const nextPage of pageLinks) {
               if (!pagesToVisit.includes(nextPage)) pagesToVisit.push(nextPage);
             }
@@ -621,7 +658,7 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
               const firstImg = $('article.message--post').first().find('.message-body img').first().attr('src');
               if (firstImg) {
                 try {
-                  imageUrl = new URL(firstImg, item.link).toString();
+                  imageUrl = normalizePublicHttpUrl(new URL(firstImg, url).toString());
                 } catch {}
               }
             }
@@ -688,7 +725,10 @@ export async function scrapeRssSource(source: SourceRow): Promise<ScrapeResult> 
   const result: ScrapeResult = { itemsFound: 0, itemsInserted: 0, errors: [] };
 
   try {
-    const response = await fetch(source.url, {
+    const sourceUrl = normalizePublicHttpUrl(source.url);
+    if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
+
+    const response = await fetch(sourceUrl, {
       headers: {
         'User-Agent': BROWSER_UA,
         Accept: 'application/rss+xml, application/xml, text/xml, application/atom+xml;q=0.9, */*;q=0.8',
@@ -706,7 +746,8 @@ export async function scrapeRssSource(source: SourceRow): Promise<ScrapeResult> 
     for (const item of items) {
       if (!item.link || !item.title) continue;
 
-      const url = normalizeUrl(item.link);
+      const url = normalizePublicHttpUrl(item.link);
+      if (!url) continue;
       const existing = await getOne('SELECT id FROM articles WHERE url = $1', [url]);
       if (existing) continue;
 
@@ -760,10 +801,14 @@ export async function scrapeWebSource(source: SourceRow): Promise<ScrapeResult> 
   }
 
   try {
-    const response = await fetch(source.url, {
+    const sourceUrl = normalizePublicHttpUrl(source.url);
+    if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
+
+    const response = await fetch(sourceUrl, {
       headers: { 'User-Agent': BROWSER_UA },
       signal: AbortSignal.timeout(15000),
     });
+    if (!response.ok) throw new Error(`Status code ${response.status}`);
     const html = await response.text();
     const $ = cheerio.load(html);
 
@@ -772,8 +817,9 @@ export async function scrapeWebSource(source: SourceRow): Promise<ScrapeResult> 
       const href = $(el).attr('href');
       if (href) {
         try {
-          const absoluteUrl = new URL(href, source.url).toString();
-          links.push(normalizeUrl(absoluteUrl));
+          const absoluteUrl = new URL(href, sourceUrl).toString();
+          const publicUrl = normalizePublicHttpUrl(absoluteUrl);
+          if (publicUrl) links.push(publicUrl);
         } catch {}
       }
     });
@@ -792,6 +838,7 @@ export async function scrapeWebSource(source: SourceRow): Promise<ScrapeResult> 
           headers: { 'User-Agent': BROWSER_UA },
           signal: AbortSignal.timeout(15000),
         });
+        if (!articleRes.ok) throw new Error(`Status code ${articleRes.status}`);
         const articleHtml = await articleRes.text();
         const $article = cheerio.load(articleHtml);
 
@@ -814,6 +861,7 @@ export async function scrapeWebSource(source: SourceRow): Promise<ScrapeResult> 
         if (imgSrc) {
           try {
             imageUrl = new URL(imgSrc, articleUrl).toString();
+            imageUrl = normalizePublicHttpUrl(imageUrl);
           } catch {}
         }
 
@@ -950,4 +998,3 @@ export async function retryRedditComments(): Promise<{ checked: number; enriched
 
   return { checked: articles.length, enriched };
 }
-

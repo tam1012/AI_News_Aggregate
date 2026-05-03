@@ -52,7 +52,7 @@ function formatExtraConfig(value: unknown): string {
 
 export function Admin() {
   const [tab, setTab] = useState<'overview' | 'ai' | 'articles'>('overview');
-  const { data: health, loading, reload } = useFetch<any>(() => api.getHealth());
+  const { data: health, loading, error, reload } = useFetch<any>(() => api.getHealth());
   const [actionLoading, setActionLoading] = useState('');
 
   const trigger = async (action: string, fn: () => Promise<any>) => {
@@ -93,6 +93,11 @@ export function Admin() {
         <div>
           {loading ? (
             <div className="loading">Đang tải...</div>
+          ) : error ? (
+            <div className="empty-state">
+              <p style={{ color: 'var(--color-error)' }}>{error}</p>
+              <button className="btn btn-primary" onClick={reload} style={{ marginTop: 12 }}>Nhập lại token</button>
+            </div>
           ) : health ? (
             <div style={{ display: 'grid', gap: 12 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>

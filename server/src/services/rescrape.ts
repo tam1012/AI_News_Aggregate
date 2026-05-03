@@ -1,9 +1,9 @@
 import { getOne, getMany, query } from '../db/index.js';
-import { truncate, normalizeUrl, sleep } from '../lib/utils.js';
-import { 
-  curlFetch, browserFetch, parseVozPosts, extractVozPagination, 
-  buildVozRawContent, flattenRedditComments, buildRedditRawContent, 
-  selectForumComments, ForumComment, VozPost 
+import { truncate, normalizePublicHttpUrl, sleep } from '../lib/utils.js';
+import {
+  curlFetch, browserFetch, parseVozPosts, extractVozPagination,
+  buildVozRawContent, flattenRedditComments, buildRedditRawContent,
+  scoreForumComment, selectForumComments, ForumComment, VozPost
 } from './scraper.js';
 
 const VOZ_MAX_THREAD_PAGES = parseInt(process.env.VOZ_MAX_THREAD_PAGES || '15');
@@ -34,12 +34,16 @@ export async function rescrapeArticle(articleId: string, force: boolean = false)
 
   try {
     if (/voz/i.test(article.source_name || article.url)) {
-      const pagesToVisit: string[] = [article.url];
+      const articleUrl = normalizePublicHttpUrl(article.url);
+      if (!articleUrl) return false;
+
+      const pagesToVisit: string[] = [articleUrl];
       const visited = new Set<string>();
       const allPosts: VozPost[] = [];
 
       for (let pageIndex = 0; pageIndex < pagesToVisit.length && pageIndex < VOZ_MAX_THREAD_PAGES; pageIndex++) {
-        const pageUrl = normalizeUrl(pagesToVisit[pageIndex]);
+        const pageUrl = normalizePublicHttpUrl(pagesToVisit[pageIndex]);
+        if (!pageUrl) continue;
         if (visited.has(pageUrl)) continue;
         visited.add(pageUrl);
 
@@ -51,7 +55,7 @@ export async function rescrapeArticle(articleId: string, force: boolean = false)
         allPosts.push(...parseVozPosts(threadHtml, pageIndex + 1));
 
         if (pageIndex === 0) {
-          const pageLinks = extractVozPagination(threadHtml, article.url).slice(0, Math.max(0, VOZ_MAX_THREAD_PAGES - 1));
+          const pageLinks = extractVozPagination(threadHtml, articleUrl).slice(0, Math.max(0, VOZ_MAX_THREAD_PAGES - 1));
           for (const nextPage of pageLinks) {
             if (!pagesToVisit.includes(nextPage)) pagesToVisit.push(nextPage);
           }
@@ -67,7 +71,7 @@ export async function rescrapeArticle(articleId: string, force: boolean = false)
             reactions: post.reactions,
             page: post.page,
             order: post.order,
-            score: post.order, // Simplified for now
+            score: scoreForumComment(post.body, post.reactions, post.page, post.order),
           }));
 
         const selectedComments = selectForumComments(comments, FORUM_MAX_COMMENTS);
@@ -76,7 +80,9 @@ export async function rescrapeArticle(articleId: string, force: boolean = false)
     } else if (/reddit/i.test(article.source_name || article.url)) {
       let postPath = '';
       try {
-        postPath = new URL(article.url).pathname;
+        const articleUrl = normalizePublicHttpUrl(article.url);
+        if (!articleUrl) return false;
+        postPath = new URL(articleUrl).pathname;
       } catch (e) {
         return false;
       }
@@ -103,7 +109,7 @@ export async function rescrapeArticle(articleId: string, force: boolean = false)
             postContent = postData.selftext.replace(/\s+/g, ' ').trim();
           }
           if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
-            outboundUrl = String(postData.url);
+            outboundUrl = normalizePublicHttpUrl(String(postData.url));
           }
           const comments = commentsData[1]?.data?.children || [];
           const flattened: ForumComment[] = [];

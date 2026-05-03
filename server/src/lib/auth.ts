@@ -1,11 +1,39 @@
 import { Context, Next } from 'hono';
 
+const WEAK_ADMIN_TOKENS = new Set(['', 'change-me', 'change-me-to-a-random-string']);
+
 // Routes that require auth for ALL methods (including GET)
-const PROTECTED_PREFIXES = ['/api/ai-providers', '/api/health/trigger'];
+const PROTECTED_PREFIXES = ['/api/ai-providers', '/api/health'];
+const PUBLIC_GET_PATHS = new Set(['/api/health/live']);
+
+function extractBearerToken(value?: string): string {
+  return value?.replace(/^Bearer\s+/i, '').trim() || '';
+}
+
+function isWeakAdminToken(token?: string): boolean {
+  return WEAK_ADMIN_TOKENS.has((token || '').trim());
+}
+
+export function assertAdminTokenConfigured() {
+  if (process.env.NODE_ENV !== 'production') return;
+  if (isWeakAdminToken(process.env.ADMIN_TOKEN)) {
+    throw new Error('ADMIN_TOKEN must be set to a non-default value in production');
+  }
+}
+
+export function hasValidAdminToken(authHeader?: string): boolean {
+  const adminToken = process.env.ADMIN_TOKEN || '';
+  if (isWeakAdminToken(adminToken)) return false;
+  return extractBearerToken(authHeader) === adminToken;
+}
 
 export async function authMiddleware(c: Context, next: Next) {
   const path = c.req.path;
   const method = c.req.method;
+
+  if (method === 'GET' && PUBLIC_GET_PATHS.has(path)) {
+    return next();
+  }
 
   // Check if this route requires auth for ALL methods
   const isFullyProtected = PROTECTED_PREFIXES.some(prefix => path.startsWith(prefix));
@@ -16,14 +44,7 @@ export async function authMiddleware(c: Context, next: Next) {
   }
 
   // Everything else needs token
-  const token = c.req.header('Authorization')?.replace('Bearer ', '');
-  const adminToken = process.env.ADMIN_TOKEN;
-
-  if (!adminToken || adminToken === 'change-me-to-a-random-string') {
-    console.warn('WARNING: ADMIN_TOKEN not configured or using default value!');
-  }
-
-  if (!token || token !== adminToken) {
+  if (!hasValidAdminToken(c.req.header('Authorization'))) {
     return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid or missing token' } }, 401);
   }
 

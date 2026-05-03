@@ -246,6 +246,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .feed-item-preview {
   font-size: 0.85rem; line-height: 1.55;
   color: var(--color-text-secondary);
+  white-space: normal;
+  overflow: visible;
 }
 
 /* Feed item with thumbnail */

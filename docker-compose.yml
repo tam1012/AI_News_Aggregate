@@ -32,7 +32,7 @@ services:
       PORT: 3000
       NODE_ENV: production
       DATABASE_URL: postgresql://newstamhv:${DB_PASSWORD:-newstamhv_secret}@db:5432/newstamhv
-      ADMIN_TOKEN: ${ADMIN_TOKEN:-change-me}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?ADMIN_TOKEN is required}
       SCRAPE_INTERVAL_HOURS: ${SCRAPE_INTERVAL_HOURS:-3}
       MAX_ARTICLES_PER_SOURCE: ${MAX_ARTICLES_PER_SOURCE:-20}
       MAX_AI_CALLS_PER_RUN: ${MAX_AI_CALLS_PER_RUN:-30}
@@ -47,6 +47,12 @@ services:
       REDDIT_USERNAME: ${REDDIT_USERNAME:-}
       REDDIT_PASSWORD: ${REDDIT_PASSWORD:-}
       REDDIT_PROXY_URL: ${REDDIT_PROXY_URL:-}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/api/health/live >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 volumes:
   pgdata:

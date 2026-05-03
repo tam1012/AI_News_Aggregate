@@ -1,5 +1,11 @@
 node_modules
 dist
 .env
+.env.*
+*.pem
+*.key
+output
 .git
 *.md
+*.sql
+!server/src/db/migrations/*.sql

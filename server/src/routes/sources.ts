@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { getMany, getOne, query } from '../db/index.js';
-import { generateId, normalizeUrl } from '../lib/utils.js';
+import { generateId, normalizePublicHttpUrl, normalizeUrl } from '../lib/utils.js';
 import RssParser from 'rss-parser';
 import * as cheerio from 'cheerio';
 
@@ -75,7 +75,13 @@ sources.post('/', async (c) => {
   }
 
   const id = generateId('src');
-  const normalizedUrl = normalizeUrl(url);
+  const normalizedUrl = normalizePublicHttpUrl(url);
+  if (!normalizedUrl) {
+    return c.json({
+      success: false,
+      error: { code: 'VALIDATION', message: 'url must be a public http(s) URL' },
+    }, 400);
+  }
   const now = new Date().toISOString();
 
   try {
@@ -117,6 +123,13 @@ sources.patch('/:id', async (c) => {
     }
   }
 
+  if (body.type !== undefined && !['rss', 'web'].includes(body.type)) {
+    return c.json({
+      success: false,
+      error: { code: 'VALIDATION', message: 'type must be rss or web' },
+    }, 400);
+  }
+
   // Cho phep update cac truong nay
   const allowedFields = ['name', 'url', 'language', 'category', 'is_enabled', 'fetch_interval_minutes', 'parser_config', 'type'];
   const updates: string[] = [];
@@ -126,7 +139,15 @@ sources.patch('/:id', async (c) => {
   for (const field of allowedFields) {
     if (body[field] !== undefined) {
       let value = body[field];
-      if (field === 'url') value = normalizeUrl(value);
+      if (field === 'url') {
+        value = normalizePublicHttpUrl(value);
+        if (!value) {
+          return c.json({
+            success: false,
+            error: { code: 'VALIDATION', message: 'url must be a public http(s) URL' },
+          }, 400);
+        }
+      }
       if (field === 'parser_config') value = JSON.stringify(value);
       updates.push(`${field} = $${paramIndex}`);
       values.push(value);
@@ -177,7 +198,10 @@ sources.post('/detect', async (c) => {
     return c.json({ success: false, error: { code: 'VALIDATION', message: 'url is required' } }, 400);
   }
 
-  const normalizedUrl = normalizeUrl(url);
+  const normalizedUrl = normalizePublicHttpUrl(url);
+  if (!normalizedUrl) {
+    return c.json({ success: false, error: { code: 'VALIDATION', message: 'url must be a public http(s) URL' } }, 400);
+  }
   const redditRssUrl = getRedditRssUrl(normalizedUrl);
   const result: any = {
     url: normalizedUrl,
@@ -232,6 +256,7 @@ sources.post('/detect', async (c) => {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NewsDigest/1.0)' },
       signal: AbortSignal.timeout(10000),
     });
+    if (!response.ok) throw new Error(`Status code ${response.status}`);
     const html = await response.text();
     const $ = cheerio.load(html);
 
@@ -251,7 +276,8 @@ sources.post('/detect', async (c) => {
       if (href) {
         try {
           const absoluteUrl = new URL(href, normalizedUrl).toString();
-          feedLinks.push({ url: absoluteUrl, title, type });
+          const publicUrl = normalizePublicHttpUrl(absoluteUrl);
+          if (publicUrl) feedLinks.push({ url: publicUrl, title, type });
         } catch {}
       }
     });
@@ -263,7 +289,8 @@ sources.post('/detect', async (c) => {
       if (href && !feedLinks.some((f) => f.url === href)) {
         try {
           const absoluteUrl = new URL(href, normalizedUrl).toString();
-          feedLinks.push({ url: absoluteUrl, title, type: 'rss' });
+          const publicUrl = normalizePublicHttpUrl(absoluteUrl);
+          if (publicUrl) feedLinks.push({ url: publicUrl, title, type: 'rss' });
         } catch {}
       }
     });

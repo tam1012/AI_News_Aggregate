@@ -13,10 +13,11 @@ import { articles } from './routes/articles.js';
 import { digests } from './routes/digests.js';
 import { health } from './routes/health.js';
 import { aiProviders } from './routes/ai-providers.js';
-import { authMiddleware } from './lib/auth.js';
+import { assertAdminTokenConfigured, authMiddleware } from './lib/auth.js';
 import { startCronJobs } from './jobs/scheduler.js';
 
 dotenv.config();
+assertAdminTokenConfigured();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = new Hono();

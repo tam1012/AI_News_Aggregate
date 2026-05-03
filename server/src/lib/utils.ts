@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid';
+import { createHash } from 'crypto';
 
 export function generateId(prefix?: string): string {
   const id = nanoid(16);
@@ -11,13 +12,7 @@ export function truncate(text: string, maxLength: number): string {
 }
 
 export function createContentHash(content: string): string {
-  // Simple hash - dung cho dedupe, khong can crypto-safe
-  let hash = 0;
-  for (let i = 0; i < content.length; i++) {
-    const char = content.charCodeAt(i);
-    hash = ((hash << 5) - hash + char) | 0;
-  }
-  return Math.abs(hash).toString(36);
+  return createHash('sha256').update(content.trim().toLowerCase()).digest('hex').slice(0, 32);
 }
 
 export function normalizeUrl(url: string): string {
@@ -37,6 +32,38 @@ export function normalizeUrl(url: string): string {
     return u.toString();
   } catch {
     return url;
+  }
+}
+
+function isPrivateHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
+  if (host === '::1' || host === '[::1]') return true;
+
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!ipv4) return false;
+
+  const parts = ipv4.slice(1).map(Number);
+  if (parts.some((part) => part < 0 || part > 255)) return true;
+  const [a, b] = parts;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
+}
+
+export function normalizePublicHttpUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    if (isPrivateHostname(u.hostname)) return null;
+    return normalizeUrl(u.toString());
+  } catch {
+    return null;
   }
 }
 

@@ -4,6 +4,7 @@ import { api } from '../services/api';
 import { useFetchRaw } from '../hooks/useApi';
 
 const READ_ARTICLES_STORAGE_KEY = 'read_articles';
+const FEED_PREVIEW_MAX_CHARS = 180;
 
 /* ── helpers ── */
 function formatTime(dateStr: string): string {
@@ -27,6 +28,47 @@ function extractSourceLabel(article: any): string {
 
 function cleanTitle(title: string): string {
   return title.replace(/^\[r\/[^\]]+\]\s*/, '');
+}
+
+function stripPreviewMarkup(text: string): string {
+  return text
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/^#+\s+/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[*_`>#-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function makeShortPreview(text: string, maxChars = FEED_PREVIEW_MAX_CHARS): string {
+  const cleaned = stripPreviewMarkup(text);
+  if (!cleaned) return '';
+  if (cleaned.length <= maxChars) return cleaned;
+
+  const firstSentence = cleaned.match(/^(.{70,180}?[.!?])\s/)?.[1];
+  if (firstSentence) return firstSentence.trim();
+
+  const cut = cleaned.slice(0, maxChars);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${cut.slice(0, lastSpace > 80 ? lastSpace : maxChars).trim()}…`;
+}
+
+function buildFeedPreview(article: any): string {
+  const candidates = [
+    article.tldr,
+    article.raw_excerpt,
+    article.summary_text,
+    article.raw_content,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue;
+    const preview = makeShortPreview(candidate);
+    if (preview.length >= 30) return preview;
+  }
+
+  return '';
 }
 
 function loadReadArticles(): string[] {
@@ -394,30 +436,7 @@ function FeedItem({
   const time = article.published_at ? formatTime(article.published_at) : '';
 
   const preview = useMemo(() => {
-    // 1. Use AI-generated tldr (short summary, generated with the main summary)
-    const tldr = (article.tldr || '').trim();
-    if (tldr.length > 10) return tldr;
-
-    // 2. Fallback: raw_excerpt (scraped meta description)
-    const excerpt = (article.raw_excerpt || '').trim();
-    if (excerpt.length > 20) {
-      return excerpt.length > 400 ? excerpt.slice(0, 400) + '…' : excerpt;
-    }
-
-    // 3. Last resort: strip from raw_content
-    const raw = (article.raw_content || '').trim();
-    if (raw) {
-      return raw
-        .replace(/<[^>]+>/g, '')
-        .replace(/^#+\s.+$/gm, '')
-        .replace(/\*\*(.*?)\*\*/g, '$1')
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-        .replace(/\n+/g, ' ')
-        .trim()
-        .slice(0, 400) + '…';
-    }
-
-    return '';
+    return buildFeedPreview(article);
   }, [article]);
 
   return (

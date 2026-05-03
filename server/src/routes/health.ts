@@ -4,6 +4,15 @@ import { runScrapeJob, runSummarizeJob, runDigestJob, runCleanupJob } from '../j
 
 const health = new Hono();
 
+health.get('/live', async (c) => {
+  try {
+    await getOne('SELECT 1');
+    return c.json({ success: true, data: { status: 'ok' } });
+  } catch {
+    return c.json({ success: false, error: { code: 'HEALTH_CHECK_FAILED', message: 'Database unavailable' } }, 500);
+  }
+});
+
 health.get('/', async (c) => {
   try {
     const dbCheck = await getOne('SELECT NOW() as time');

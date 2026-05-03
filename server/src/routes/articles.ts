@@ -4,6 +4,12 @@ import { getMany, getOne, query } from '../db/index.js';
 const articles = new Hono();
 const LOCAL_DATE_SQL = `DATE(COALESCE(a.published_at, a.created_at) AT TIME ZONE 'Asia/Ho_Chi_Minh')`;
 
+function parseBoundedInt(value: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = parseInt(value || '', 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(parsed, min), max);
+}
+
 // Danh sach ngay co bai viet (de UI hien date picker)
 articles.get('/dates', async (c) => {
   const sourceId = c.req.query('sourceId');
@@ -32,12 +38,20 @@ articles.get('/dates', async (c) => {
 
 // Danh sach articles (phan trang, loc theo ngay va nguon)
 articles.get('/', async (c) => {
-  const page = parseInt(c.req.query('page') || '1');
-  const limit = parseInt(c.req.query('limit') || '50');
+  const page = parseBoundedInt(c.req.query('page'), 1, 1, 500);
+  const limit = parseBoundedInt(c.req.query('limit'), 50, 1, 100);
   const sourceId = c.req.query('sourceId');
   const status = c.req.query('status');
   const date = c.req.query('date'); // YYYY-MM-DD local VN date
   const offset = (page - 1) * limit;
+
+  if (status && !['pending', 'processing', 'done', 'failed', 'skipped'].includes(status)) {
+    return c.json({ success: false, error: { code: 'VALIDATION', message: 'Invalid status' } }, 400);
+  }
+
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return c.json({ success: false, error: { code: 'VALIDATION', message: 'date must be YYYY-MM-DD' } }, 400);
+  }
 
   let where = 'WHERE 1=1';
   const params: any[] = [];
@@ -129,7 +143,10 @@ articles.delete('/:id', async (c) => {
 articles.get('/:id', async (c) => {
   const { id } = c.req.param();
   const row = await getOne(
-    `SELECT a.*, s.name as source_name, s.type as source_type
+    `SELECT a.id, a.source_id, a.url, a.title, a.author, a.published_at,
+            a.content_type, a.language, a.raw_excerpt, a.summary_text, a.tldr,
+            a.summary_status, a.image_url, a.created_at, a.updated_at,
+            s.name as source_name, s.type as source_type
      FROM articles a
      LEFT JOIN sources s ON s.id = a.source_id
      WHERE a.id = $1`,
