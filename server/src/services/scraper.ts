@@ -491,7 +491,47 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
             console.log(`[reddit] old.reddit.com failed for ${postPath}: ${e.message}`);
           }
 
-          // Strategy 2: Cloudflare Worker proxy (real-time Reddit API access)
+          // Strategy 2: Comment RSS Feed (Native backdoor, bypasses Cloudflare JSON block)
+          if (discussionComments.length === 0) {
+            try {
+              const commentRssUrl = `https://www.reddit.com${postPath}.rss`;
+              const rssRes = await fetch(commentRssUrl, {
+                headers: {
+                  'User-Agent': BROWSER_UA,
+                  Accept: 'application/rss+xml, application/xml, text/xml',
+                },
+                signal: AbortSignal.timeout(15000),
+              });
+              if (rssRes.ok) {
+                const xml = await rssRes.text();
+                const feed = await rssParser.parseString(xml);
+                const comments: ForumComment[] = [];
+                // First item is usually the post itself, skip it or filter
+                for (let i = 1; i < feed.items.length; i++) {
+                  const item = feed.items[i];
+                  const body = normalizeWhitespace(stripHtmlBasic(item.contentSnippet || item.content || ''));
+                  if (body && body.length > 20) {
+                    comments.push({
+                      author: item.author || 'unknown',
+                      body: body.substring(0, 900),
+                      reactions: 0, // RSS doesn't provide scores, but we have the text
+                      page: 1,
+                      order: i,
+                      score: scoreForumComment(body, 0, 1, i)
+                    });
+                  }
+                }
+                discussionComments = selectForumComments(comments, REDDIT_COMMENT_LIMIT);
+                if (discussionComments.length > 0) {
+                  console.log(`[reddit] RSS Comment Fallback: got ${discussionComments.length} comments for ${postPath}`);
+                }
+              }
+            } catch (e: any) {
+              console.log(`[reddit] RSS Comment Fallback failed for ${postPath}: ${e.message}`);
+            }
+          }
+
+          // Strategy 3: Cloudflare Worker proxy (real-time Reddit API access)
           if (discussionComments.length === 0 && REDDIT_PROXY_URL) {
             try {
               const proxyUrl = `${REDDIT_PROXY_URL}?path=${encodeURIComponent(postPath + '.json')}&limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
@@ -520,7 +560,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
             }
           }
 
-          // Strategy 2: Pullpush archive API (fallback, data may be stale)
+          // Strategy 4: Pullpush archive API (fallback, data may be stale)
           if (discussionComments.length === 0 && postId) {
             try {
               const pullpushUrl = `https://api.pullpush.io/reddit/comment/search?link_id=${postId}&size=${REDDIT_COMMENT_LIMIT}&sort=score&sort_type=score`;
