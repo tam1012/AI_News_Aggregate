@@ -29,7 +29,7 @@ export function Layout() {
       <header className="header">
         <div className={(location.pathname === '/' || location.pathname.startsWith('/admin') || location.pathname.startsWith('/sources') ? 'container-fluid' : 'container') + ' header-inner'}>
           <div className="header-left">
-            <NavLink to="/" className="header-logo">NewsTamHV</NavLink>
+            <NavLink to="/" className="header-logo">SynthNews</NavLink>
             <span className="header-date">{todayStr}</span>
           </div>
           <div className="header-actions">

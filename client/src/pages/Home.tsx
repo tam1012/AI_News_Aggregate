@@ -52,26 +52,45 @@ function saveReadArticles(ids: string[]) {
 function ReadmeWelcome() {
   return (
     <div className="card" style={{ padding: '40px', textAlign: 'center', marginTop: '20px' }}>
-      <h2 style={{ fontSize: '1.8rem', marginBottom: '16px', fontFamily: 'var(--font-heading)' }}>Chào mừng đến với NewsTamHV</h2>
+      <h2 style={{ fontSize: '1.8rem', marginBottom: '16px', fontFamily: 'var(--font-heading)' }}>Chào mừng đến với SynthNews</h2>
       <p style={{ color: 'var(--color-text-secondary)', marginBottom: '24px', fontSize: '1.1rem', lineHeight: '1.6' }}>
         Hệ thống đọc tin tự động bằng Trí Tuệ Nhân Tạo.
       </p>
-      
+
       <div style={{ textAlign: 'left', background: 'var(--color-bg)', padding: '24px', borderRadius: 'var(--radius)', fontSize: '0.95rem', lineHeight: '1.7' }}>
-        <h3 style={{ marginBottom: '12px' }}>🚀 Cách hoạt động:</h3>
+        <h3 style={{ marginBottom: '12px' }}>Cách hoạt động:</h3>
         <ul style={{ paddingLeft: '20px', marginBottom: '20px', color: 'var(--color-text-secondary)' }}>
           <li><strong>Cào tin (Mỗi 1 giờ):</strong> Hệ thống liên tục quét các nguồn tin RSS và báo mạng để lấy bài viết mới nhất.</li>
-          <li><strong>Tóm tắt (Tự động):</strong> AI sẽ đọc toàn bộ nội dung gốc và viết lại thành 3 đoạn ngắn gọn.</li>
+          <li><strong>Tóm tắt (Tự động):</strong> AI sẽ đọc toàn bộ nội dung gốc và viết lại thành bản tóm tắt chi tiết bằng tiếng Việt.</li>
           <li><strong>Bản tin (Mỗi 1 giờ):</strong> Gom nhóm tất cả tin tức trong ngày thành một "Bản tin thời sự" duy nhất.</li>
         </ul>
-        
-        <h3 style={{ marginBottom: '12px' }}>💡 Hướng dẫn:</h3>
+
+        <h3 style={{ marginBottom: '12px' }}>Tính năng chính:</h3>
+        <ul style={{ paddingLeft: '20px', marginBottom: '20px', color: 'var(--color-text-secondary)' }}>
+          <li>Hỗ trợ nguồn RSS, web scraping, Reddit và VOZ forum.</li>
+          <li>Tóm tắt bằng AI với prompt thích ứng theo loại bài viết.</li>
+          <li>Giao diện split view trên desktop, overlay trên mobile.</li>
+          <li>Lọc theo nguồn, điều hướng theo ngày, đánh dấu bài đã đọc.</li>
+          <li>Dark mode / Light mode.</li>
+        </ul>
+
+        <h3 style={{ marginBottom: '12px' }}>Hướng dẫn:</h3>
         <ul style={{ paddingLeft: '20px', color: 'var(--color-text-secondary)' }}>
           <li>Bấm vào bài viết bên trái để đọc chi tiết tóm tắt.</li>
           <li>Chuyển sang tab <strong>Bản tin</strong> để đọc tổng hợp toàn bộ sự kiện trong ngày.</li>
           <li>Chuyển ngày ở khung bên trái để xem lại tin cũ.</li>
         </ul>
       </div>
+
+      <a
+        href="https://github.com/tam1012/AI_News_Aggregate"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="btn btn-ghost"
+        style={{ marginTop: '20px' }}
+      >
+        GitHub Repository
+      </a>
     </div>
   );
 }
