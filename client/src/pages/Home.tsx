@@ -71,6 +71,42 @@ function buildFeedPreview(article: any): string {
   return '';
 }
 
+function shouldTryFeedThumbnail(article: any): boolean {
+  const imageUrl = String(article.image_url || '').trim();
+  if (!imageUrl) return false;
+
+  const title = String(article.title || '').toLowerCase();
+  const sourceName = String(article.source_name || '').toLowerCase();
+  const url = imageUrl.toLowerCase();
+  const articleUrl = String(article.url || '').toLowerCase();
+
+  if (sourceName.includes('reddit') || sourceName.includes('voz') || title.startsWith('[r/') || articleUrl.includes('reddit.com') || articleUrl.includes('voz.vn')) {
+    return false;
+  }
+
+  if (/avatar|profile|logo|icon|sprite|badge|emoji|placeholder|default|blank|transparent|favicon|redditstatic|snoo|voz\./.test(url)) {
+    return false;
+  }
+
+  if (/screenshot|screen-shot|screen_shot|capture|thumb\?/.test(url)) {
+    return false;
+  }
+
+  return true;
+}
+
+function isUsefulFeedThumbnail(img: HTMLImageElement): boolean {
+  const width = img.naturalWidth;
+  const height = img.naturalHeight;
+  if (!width || !height) return false;
+  if (width < 160 || height < 90) return false;
+
+  const ratio = width / height;
+  if (ratio < 0.55 || ratio > 3.2) return false;
+
+  return true;
+}
+
 function loadReadArticles(): string[] {
   if (typeof window === 'undefined') return [];
 
@@ -435,6 +471,12 @@ function FeedItem({
   const title = cleanTitle(article.title);
   const time = article.published_at ? formatTime(article.published_at) : '';
 
+  const [showThumbnail, setShowThumbnail] = useState(() => shouldTryFeedThumbnail(article));
+
+  useEffect(() => {
+    setShowThumbnail(shouldTryFeedThumbnail(article));
+  }, [article.id, article.image_url]);
+
   const preview = useMemo(() => {
     return buildFeedPreview(article);
   }, [article]);
@@ -452,13 +494,14 @@ function FeedItem({
           <h3 className="feed-item-title">{title}</h3>
           <p className="feed-item-preview">{preview}</p>
         </div>
-        {article.image_url && (
+        {showThumbnail && article.image_url && (
           <img
             src={article.image_url}
             alt=""
             className="feed-item-thumb"
             loading="lazy"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            onLoad={(e) => { if (!isUsefulFeedThumbnail(e.currentTarget)) setShowThumbnail(false); }}
+            onError={() => setShowThumbnail(false)}
           />
         )}
       </div>

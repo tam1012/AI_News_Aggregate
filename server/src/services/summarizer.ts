@@ -1,5 +1,6 @@
 import { query, getMany } from '../db/index.js';
 import { generateId, truncate } from '../lib/utils.js';
+import { normalizeTldr } from '../lib/tldr.js';
 import { callAi } from './ai-client.js';
 
 interface ArticleForSummary {
@@ -48,21 +49,6 @@ function extractTldr(summaryText: string): string {
 /** Remove the <tldr> block from summary, leaving only the main content */
 function cleanSummaryText(summaryText: string): string {
   return summaryText.replace(/<tldr>[\s\S]*?<\/tldr>/i, '').trim();
-}
-
-function normalizeTldr(tldr: string): string {
-  const cleaned = tldr
-    .replace(/[*_`>#-]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  if (cleaned.length <= 180) return cleaned;
-
-  const sentence = cleaned.match(/^(.{80,180}?[.!?])\s/)?.[1];
-  if (sentence) return sentence.trim();
-
-  const cut = cleaned.slice(0, 180);
-  return `${cut.slice(0, Math.max(0, cut.lastIndexOf(' '))).trim()}…`;
 }
 
 export async function summarizeArticle(article: ArticleForSummary): Promise<string | null> {
