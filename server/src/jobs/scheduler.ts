@@ -146,17 +146,17 @@ async function runRetryJob() {
     console.log(`  Reset ${failedResult.rowCount} failed articles for retry`);
     
     // Retry lấy comment Reddit cho bài chưa có comment (Pullpush chậm index)
+    let redditEnriched = 0;
     try {
       const redditRetry = await retryRedditComments();
-      if (redditRetry.enriched > 0) {
-        console.log(`  Reddit comments retry: ${redditRetry.enriched}/${redditRetry.checked} enriched`);
-      }
+      redditEnriched = redditRetry.enriched;
+      console.log(`  Reddit comments retry: checked=${redditRetry.checked}, enriched=${redditRetry.enriched}`);
     } catch (err: any) {
       console.log(`  Reddit retry error: ${err.message}`);
     }
 
-    // Nếu có bài được reset, gọi ngay summarize job
-    const totalReset = (stuckResult.rowCount || 0) + (failedResult.rowCount || 0);
+    // Nếu có bài được reset hoặc Reddit enriched, gọi ngay summarize job
+    const totalReset = (stuckResult.rowCount || 0) + (failedResult.rowCount || 0) + redditEnriched;
     if (totalReset > 0) {
       console.log(`  Triggering summarizer for ${totalReset} retried articles...`);
       await runSummarizeJob();
