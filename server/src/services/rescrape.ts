@@ -1,4 +1,3 @@
-import * as cheerio from 'cheerio';
 import { getOne, getMany, query } from '../db/index.js';
 import { truncate, normalizeUrl, sleep } from '../lib/utils.js';
 import { 
