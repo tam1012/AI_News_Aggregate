@@ -62,39 +62,27 @@ export async function summarizeArticle(article: ArticleForSummary): Promise<stri
 }
 
 function buildNewsPrompt(article: ArticleForSummary, content: string): string {
-  return `Biên tập viên tin tức cấp cao. Phân tích và tóm tắt CHI TIẾT, CHÍNH XÁC dựa hoàn toàn trên <raw_data>.
+  return `Bạn là một biên tập viên tin tức khách quan và chuyên nghiệp. Nhiệm vụ của bạn là phân tích và tóm tắt CHI TIẾT bài báo dựa hoàn toàn trên <raw_data>.
 
-NGUYÊN TẮC:
-- CHỈ dùng thông tin trong <raw_data>. KHÔNG suy đoán, KHÔNG bổ sung.
-- Nếu thiếu dữ kiện → bỏ qua, KHÔNG tự điền.
-- KHÔNG dùng từ suy diễn ("đáng chú ý", "gây tranh cãi", "quan trọng") nếu không có trong bài.
-- Ưu tiên số liệu, tên riêng, mốc thời gian cụ thể.
-- Luôn output tiếng Việt. Giữ nguyên tên riêng gốc (tiếng Anh, tên sản phẩm, thuật ngữ kỹ thuật).
+NGUYÊN TẮC CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
+1. Không bịa đặt: CHỈ dùng thông tin có thật trong <raw_data>. KHÔNG suy đoán, KHÔNG bổ sung ý kiến cá nhân.
+2. Khách quan: Duy trì sự trung lập. KHÔNG dùng các từ suy diễn cảm xúc ("đáng chú ý", "gây sốc") trừ khi có trong bài gốc.
+3. Giữ lại chi tiết đắt giá: Ưu tiên giữ lại các con số, số liệu thống kê, tên riêng, ngày tháng và dữ liệu quan trọng.
+4. Xử lý tên riêng: Giữ nguyên tên riêng tiếng Anh, tên sản phẩm, thuật ngữ kỹ thuật.
 
-ĐỊNH DẠNG OUTPUT (dùng markdown, chỉ trả về nội dung, không giải thích):
+ĐỊNH DẠNG OUTPUT (Sử dụng Markdown, chỉ trả về nội dung, không giải thích):
 
-## Tổng quan
+## 📌 Key Takeaways
+[Trình bày 3-5 gạch đầu dòng ngắn gọn (bullet points) nêu bật những thông tin quan trọng nhất, kết luận cốt lõi, hoặc giá trị thiết thực nhất từ bài viết. Giúp người đọc nắm bắt toàn bộ tinh thần bài viết chỉ trong 10 giây.]
 
-Viết 2-3 câu mô tả sự kiện/tin tức chính: chuyện gì xảy ra, ai liên quan, ở đâu, khi nào. Nêu rõ tên tổ chức, sản phẩm, nhân vật nếu có.
+## 📖 Nội dung chi tiết
+[Phân chia nội dung bài viết thành các mục nhỏ với heading cấp 3 (###). Linh hoạt đặt tên heading theo chủ đề.]
+- **Sử dụng in đậm (bold)** cho các thuật ngữ và từ khóa quan trọng.
+- Sử dụng bảng (Markdown table) nếu bài viết có chứa dữ liệu so sánh, thông số kỹ thuật hoặc danh sách số liệu.
+- Giữ bố cục thoáng, dễ quét thông tin.
 
-## Các điểm chính
-
-Liệt kê các thông tin quan trọng nhất từ bài viết:
-- **Label ngắn gọn**: Giải thích chi tiết 1-2 câu, ưu tiên số liệu/tên/ngày cụ thể.
-  - Sub-bullet nếu có chi tiết bổ sung, ví dụ cụ thể, hoặc so sánh.
-- **Label ngắn gọn**: Giải thích chi tiết.
-  - Sub-bullet nếu cần.
-- (Tối đa 6 điểm. Chỉ ghi ý có thật trong <raw_data>. Không lặp ý.)
-
-## Bối cảnh và tác động
-
-Viết 1-3 câu về bối cảnh rộng hơn nếu bài có đề cập: nguyên nhân, hệ quả, xu hướng liên quan, hoặc phản ứng từ các bên. Bỏ qua mục này hoàn toàn nếu bài không có thông tin bối cảnh.
-
-QUY TẮC VIẾT:
-- Không dùng: "bài viết nói về", "theo nguồn tin", "nội dung đề cập".
-- In đậm (**bold**) các label và thuật ngữ quan trọng.
-- Toàn bộ output: 300-600 từ tuỳ độ phong phú của dữ liệu.
-- Verify: mọi chi tiết phải tồn tại trong <raw_data>. Loại bullet trùng ý.
+## 🌍 Bối cảnh & Tác động (Nếu có)
+[Viết 1-3 câu nêu rõ nguyên nhân, hệ quả, hoặc bối cảnh rộng hơn của sự kiện nếu bài gốc có đề cập. Bỏ qua mục này hoàn toàn nếu không có thông tin.]
 
 Tiêu đề: ${article.title}
 Nguồn: ${article.source_name}
@@ -102,61 +90,39 @@ Ngôn ngữ gốc: ${article.language || 'không rõ'}
 
 <raw_data>
 ${truncate(content, 20000)}
-</raw_data>`;
+</raw_data>\`;
 }
 
-
 function buildForumPrompt(article: ArticleForSummary, content: string): string {
-  return `Biên tập viên tổng hợp chuyên sâu nội dung từ Reddit/VOZ/Forum, viết cho app đọc tin tiếng Việt. Phân tích và tóm tắt CHI TIẾT dựa hoàn toàn trên <raw_data>.
+  return \`Bạn là chuyên gia tổng hợp thông tin từ các diễn đàn công nghệ (Reddit, VOZ...). Nhiệm vụ của bạn là tổng hợp bài đăng gốc và các luồng thảo luận của cộng đồng một cách khách quan dựa trên <raw_data>.
 
-NGUYÊN TẮC:
-- CHỈ dùng thông tin trong <raw_data>. KHÔNG suy đoán, KHÔNG bổ sung, KHÔNG khái quát nếu dữ liệu không đủ.
-- Tổng hợp CẢ nội dung gốc VÀ bình luận thảo luận một cách đầy đủ.
-- Mỗi ý kiến phải phản ánh nội dung thực sự trong bình luận (có thể diễn đạt lại, không thay đổi ý nghĩa).
-- Ưu tiên bình luận có nhiều upvote hoặc được nhắc lại nhiều lần.
-- Nếu có tranh luận → thể hiện rõ các phía, không gộp sai lệch.
-- Luôn output tiếng Việt. Giữ nguyên tên riêng gốc (tiếng Anh, tên sản phẩm, thuật ngữ kỹ thuật).
+NGUYÊN TẮC CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
+1. Không bịa đặt: CHỈ dùng thông tin và bình luận có trong <raw_data>. KHÔNG bịa ra ý kiến ảo.
+2. Phân tách rõ ràng: Phân biệt rõ đâu là thông tin từ bài đăng gốc (OP), đâu là phản ứng từ cộng đồng (Comments).
+3. Lọc nhiễu (Signal-to-noise): Bỏ qua các bình luận vô nghĩa, cợt nhả. Ưu tiên các bình luận có hàm lượng thông tin cao, kinh nghiệm thực tế, tranh luận logic hoặc được upvote/nhắc lại nhiều.
 
-ĐỊNH DẠNG OUTPUT (dùng markdown, chỉ trả về nội dung, không giải thích):
+ĐỊNH DẠNG OUTPUT (Sử dụng Markdown, kết hợp emoji cho sinh động, chỉ trả về nội dung):
 
-## Tổng quan về nội dung
+## 📌 Key Takeaways
+[3-5 gạch đầu dòng (bullet points) tóm tắt nhanh nhất cốt lõi bài đăng và phản ứng chung của cộng đồng. Đọc xong phần này là hiểu thread nói về cái gì.]
 
-Viết 2-3 câu mô tả bài viết gốc: tác giả đăng gì, mục đích gì, bối cảnh gì. Nếu bài có link, sản phẩm, dự án → nêu rõ tên.
+## 📝 Nội dung bài đăng gốc
+[Tóm tắt ngắn gọn bối cảnh, câu hỏi hoặc chia sẻ của người đăng bài. Nêu rõ tên công cụ/sản phẩm đang được thảo luận.]
 
-## Các điểm chính trong thảo luận
+## 🗣️ Phản hồi từ cộng đồng
+[Gom nhóm các bình luận nổi bật thành các nhóm chủ đề/quan điểm (sử dụng heading cấp 3 - ###). Không ép buộc vào các danh mục cố định, hãy linh hoạt chia nhóm dựa trên nội dung thực tế (ví dụ: ### Cách giải quyết thay thế, ### Kinh nghiệm đau thương, ### Cảnh báo rủi ro).]
+- In đậm (**bold**) các luận điểm chính.
+- Thể hiện đa chiều các quan điểm đối lập nếu có tranh cãi. Không thiên vị.
 
-Liệt kê các điểm nổi bật nhất từ bài viết gốc VÀ bình luận:
-- **Label ngắn gọn**: Giải thích chi tiết 1-2 câu dựa trên nội dung thực.
-  - Sub-bullet nếu có chi tiết bổ sung hoặc ví dụ cụ thể từ bình luận.
-- **Label ngắn gọn**: Giải thích chi tiết.
-  - Sub-bullet nếu cần.
-- (Tối đa 6 điểm. Chỉ ghi ý có thật trong <raw_data>. Không lặp ý.)
-
-## Phản hồi từ cộng đồng
-
-Tổng hợp phản ứng và ý kiến nổi bật từ bình luận:
-- **Quan điểm ủng hộ/tích cực**: Tóm tắt các ý kiến đồng tình, khen ngợi (nếu có).
-- **Góp ý cải thiện / Phản biện**: Tóm tắt các ý kiến phản đối, góp ý, hoặc cảnh báo.
-  - Sub-bullet cho từng ý riêng biệt nếu có nhiều góc nhìn.
-- **Thách thức / Rủi ro**: Nếu cộng đồng nêu ra rủi ro hoặc hạn chế → ghi rõ.
-- (Bỏ mục nào nếu không có dữ liệu. KHÔNG bịa ý kiến.)
-
-## Kết luận
-
-Viết 1-2 câu tổng kết xu hướng chung của thảo luận. Nếu ý kiến phân tán → ghi rõ "Cộng đồng có nhiều quan điểm trái chiều về vấn đề này".
-
-QUY TẮC VIẾT:
-- Viết tự nhiên, dùng thuật ngữ phù hợp cộng đồng tech Việt.
-- In đậm (**bold**) các label và thuật ngữ quan trọng.
-- Toàn bộ output: 300-600 từ tuỳ độ phong phú của dữ liệu.
-- Verify: mọi chi tiết phải tồn tại trong <raw_data>. Loại bullet trùng ý.
+## 🎯 Tổng kết xu hướng
+[1-2 câu kết luận tổng thể về thái độ của cộng đồng (ví dụ: phần lớn đồng tình, tranh cãi gay gắt, hay chưa có hồi kết).]
 
 Tiêu đề: ${article.title}
 Nguồn: ${article.source_name}
 
 <raw_data>
 ${truncate(content, 28000)}
-</raw_data>`;
+</raw_data>\`;
 }
 
 // Tóm tắt hàng loạt articles chưa có summary
