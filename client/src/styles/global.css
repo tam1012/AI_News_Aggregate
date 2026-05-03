@@ -150,7 +150,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   border-radius: var(--radius-sm);
   box-shadow: 0 8px 24px var(--color-shadow);
   min-width: 180px; z-index: 50;
-  overflow: hidden;
+  max-height: 60vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   animation: fadeIn 0.12s ease-out;
 }
 .filter-option {
