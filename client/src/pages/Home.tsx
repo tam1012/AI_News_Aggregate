@@ -374,14 +374,12 @@ function FeedItem({
   const preview = useMemo(() => {
     // 1. Use AI-generated tldr (short summary, generated with the main summary)
     const tldr = (article.tldr || '').trim();
-    if (tldr.length > 10) {
-      return tldr.length > 300 ? tldr.slice(0, 300) + '…' : tldr;
-    }
+    if (tldr.length > 10) return tldr;
 
     // 2. Fallback: raw_excerpt (scraped meta description)
     const excerpt = (article.raw_excerpt || '').trim();
     if (excerpt.length > 20) {
-      return excerpt.length > 300 ? excerpt.slice(0, 300) + '…' : excerpt;
+      return excerpt.length > 400 ? excerpt.slice(0, 400) + '…' : excerpt;
     }
 
     // 3. Last resort: strip from raw_content
@@ -394,7 +392,7 @@ function FeedItem({
         .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
         .replace(/\n+/g, ' ')
         .trim()
-        .slice(0, 300) + '…';
+        .slice(0, 400) + '…';
     }
 
     return '';
@@ -544,17 +542,9 @@ function ArticleDetail({
 
           <div className="detail-body">
             {article.summary_text ? (
-              <>
-                {summaryParts.tldr && (
-                  <div className="ai-tldr-box">
-                    <div className="ai-tldr-header">✨ AI Tóm tắt nhanh</div>
-                    <ReactMarkdown>{summaryParts.tldr}</ReactMarkdown>
-                  </div>
-                )}
-                <div className="article-main-content">
-                  <ReactMarkdown>{summaryParts.rest}</ReactMarkdown>
-                </div>
-              </>
+              <div className="article-main-content">
+                <ReactMarkdown>{summaryParts.rest}</ReactMarkdown>
+              </div>
             ) : (
               <p>{article.raw_excerpt || 'Chưa có tóm tắt.'}</p>
             )}
