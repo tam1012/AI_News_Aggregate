@@ -372,37 +372,27 @@ function FeedItem({
   const time = article.published_at ? formatTime(article.published_at) : '';
 
   const preview = useMemo(() => {
-    const text = article.summary_text || article.raw_excerpt || '';
+    // Use raw_excerpt (scraped meta description / first paragraph) as primary source
+    // This is independent of the AI summary shown in the detail panel
+    const excerpt = (article.raw_excerpt || '').trim();
+    if (excerpt.length > 20) {
+      return excerpt.length > 200 ? excerpt.slice(0, 200) + '…' : excerpt;
+    }
 
-    // Try to extract first bullet point(s) from Key Takeaways (new prompt format)
-    const keyTakeawaysMatch = text.match(/##\s*[^\n]*Key Takeaways[^\n]*\n+([^#]+)/i);
-    if (keyTakeawaysMatch && keyTakeawaysMatch[1].trim()) {
-      const bullets = keyTakeawaysMatch[1]
+    // Fallback: pull first ~200 chars from raw_content, strip markdown/html
+    const raw = (article.raw_content || '').trim();
+    if (raw) {
+      return raw
+        .replace(/<[^>]+>/g, '')          // strip HTML tags
+        .replace(/^#+\s.+$/gm, '')        // strip markdown headings
+        .replace(/\*\*(.*?)\*\*/g, '$1')  // strip bold
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // strip links
+        .replace(/\n+/g, ' ')
         .trim()
-        .split('\n')
-        .filter((line: string) => line.trim().match(/^[-•*]/))
-        .slice(0, 2) // max 2 bullets
-        .map((line: string) => line.replace(/^[-•*]\s*/, '').replace(/\*\*(.*?)\*\*/g, '$1').trim())
-        .join(' · ');
-      if (bullets) return bullets;
+        .slice(0, 200) + '…';
     }
 
-    // Legacy: extract paragraph from "## Tổng quan"
-    const overviewMatch = text.match(/##\s*Tổng quan[^\n]*\n+([^#]+)/i);
-    if (overviewMatch && overviewMatch[1].trim()) {
-      return overviewMatch[1].trim()
-        .replace(/\*\*(.*?)\*\*/g, '$1')
-        .replace(/\n+/g, ' ');
-    }
-
-    // Fallback: strip markdown and get the first chunk
-    return text
-      .replace(/^#+.*$/gm, '') // remove headings
-      .replace(/\*\*(.*?)\*\*/g, '$1') // remove bold
-      .replace(/^[-•*]\s*/gm, '')
-      .replace(/\[([^\]]+)\]/g, '') // strip bracket content (prompt instructions)
-      .replace(/\n+/g, ' ')
-      .trim();
+    return '';
   }, [article]);
 
   return (
