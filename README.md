@@ -657,3 +657,5 @@ Náº¿u dÃ¹ng Ä‘Ãºng theo má»¥c tiÃªu ban Ä‘áº§u cá»§a project nÃ y, SynthNews hoá
 
 ## CI/CD Deployment
 This project uses GitHub Actions for automatic deployment to the Oracle VPS.
+
+- **Lýu ?:** Quy tr?nh này s? t? ð?ng ch?y l?nh \git pull\ và \docker compose up -d --build\ trên VPS. Do ðó, KHÔNG C?N SSH vào VPS ð? restart service th? công.
