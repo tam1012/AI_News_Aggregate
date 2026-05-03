@@ -1,8 +1,8 @@
 /* ===== Design Tokens ===== */
 :root {
   --font-size: 16px;
-  --font-heading: 'Newsreader', Georgia, serif;
-  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-heading: 'Playfair Display', Georgia, serif;
+  --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* Light theme — premium newsdigest colors */
   --color-bg: #f9f9f6;
@@ -402,8 +402,6 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .article-main-content {
   font-size: 1.05rem;
   line-height: 1.8;
-}
-  .detail-title { font-size: 1.25rem; }
 }
 
 .detail-image {

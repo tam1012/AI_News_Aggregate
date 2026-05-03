@@ -445,6 +445,12 @@ function ArticleDetail({
   const sourceLabel = extractSourceLabel(article);
   const title = cleanTitle(article.title);
 
+  // Auto-scroll to top when article changes
+  useEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [article.id]);
+
   // Split summary into TL;DR and Body
   const summaryParts = useMemo(() => {
     const tldr = (article.tldr || '').trim();
