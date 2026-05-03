@@ -14,13 +14,13 @@ const FORUM_RAW_CONTENT_MAX_LENGTH = parseInt(process.env.FORUM_RAW_CONTENT_MAX_
 
 export async function rescrapeArticle(articleId: string, force: boolean = false): Promise<boolean> {
   const article = await getOne(`
-    SELECT a.*, s.type as source_type 
+    SELECT a.*, s.type as source_type, s.name as source_name
     FROM articles a 
     JOIN sources s ON a.source_id = s.id 
     WHERE a.id = $1
   `, [articleId]);
 
-  if (!article || !['voz', 'reddit'].includes(article.source_type)) {
+  if (!article || !/voz|reddit/i.test(article.source_name || article.url)) {
     return false; // Only support rescraping forum threads
   }
 
@@ -33,7 +33,7 @@ export async function rescrapeArticle(articleId: string, force: boolean = false)
   let updated = false;
 
   try {
-    if (article.source_type === 'voz') {
+    if (/voz/i.test(article.source_name || article.url)) {
       const pagesToVisit: string[] = [article.url];
       const visited = new Set<string>();
       const allPosts: VozPost[] = [];
@@ -73,7 +73,7 @@ export async function rescrapeArticle(articleId: string, force: boolean = false)
         const selectedComments = selectForumComments(comments, FORUM_MAX_COMMENTS);
         newRawContent = buildVozRawContent(allPosts, selectedComments, visited.size, comments.length);
       }
-    } else if (article.source_type === 'reddit') {
+    } else if (/reddit/i.test(article.source_name || article.url)) {
       let postPath = '';
       try {
         postPath = new URL(article.url).pathname;
@@ -143,10 +143,10 @@ export async function rescrapeArticle(articleId: string, force: boolean = false)
 export async function runForumRescrapeJob(): Promise<{ checked: number; updated: number }> {
   console.log(`[${new Date().toISOString()}] Starting forum rescrape job...`);
   const articles = await getMany(`
-    SELECT a.id, a.url, s.type as source_type 
+    SELECT a.id, a.url, s.type as source_type, s.name as source_name
     FROM articles a 
     JOIN sources s ON a.source_id = s.id 
-    WHERE s.type IN ('reddit', 'voz') 
+    WHERE (s.name ILIKE '%reddit%' OR s.name ILIKE '%voz%')
       AND a.created_at >= NOW() - INTERVAL '4 hours'
       AND a.rescraped_count < 2
     ORDER BY a.created_at DESC LIMIT 30

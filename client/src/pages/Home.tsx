@@ -60,15 +60,18 @@ function ReadmeWelcome() {
       <div style={{ textAlign: 'left', background: 'var(--color-bg)', padding: '24px', borderRadius: 'var(--radius)', fontSize: '0.95rem', lineHeight: '1.7' }}>
         <h3 style={{ marginBottom: '12px' }}>Cách hoạt động:</h3>
         <ul style={{ paddingLeft: '20px', marginBottom: '20px', color: 'var(--color-text-secondary)' }}>
-          <li><strong>Cào tin (Mỗi 1 giờ):</strong> Hệ thống liên tục quét các nguồn tin RSS và báo mạng để lấy bài viết mới nhất.</li>
+          <li><strong>Cào tin (Mỗi 3 giờ):</strong> Hệ thống tự động quét toàn bộ nguồn tin RSS, báo mạng, Reddit và VOZ vào các khung giờ 0h, 3h, 6h, 9h, 12h, 15h, 18h, 21h.</li>
+          <li><strong>Cào lại bình luận (Mỗi 30 phút):</strong> Các bài từ Reddit và VOZ sẽ được cào lại tối đa 2 lần để cập nhật bình luận mới nhất.</li>
           <li><strong>Tóm tắt (Tự động):</strong> AI sẽ đọc toàn bộ nội dung gốc và viết lại thành bản tóm tắt chi tiết bằng tiếng Việt.</li>
-          <li><strong>Bản tin (Mỗi 1 giờ):</strong> Gom nhóm tất cả tin tức trong ngày thành một "Bản tin thời sự" duy nhất.</li>
+          <li><strong>Bản tin (Mỗi 3 giờ):</strong> Gom nhóm tất cả tin tức trong ngày thành một "Bản tin thời sự" duy nhất.</li>
         </ul>
 
         <h3 style={{ marginBottom: '12px' }}>Tính năng chính:</h3>
         <ul style={{ paddingLeft: '20px', marginBottom: '20px', color: 'var(--color-text-secondary)' }}>
           <li>Hỗ trợ nguồn RSS, web scraping, Reddit và VOZ forum.</li>
+          <li>Reddit sử dụng Puppeteer (Headless Chrome) để lách Cloudflare.</li>
           <li>Tóm tắt bằng AI với prompt thích ứng theo loại bài viết.</li>
+          <li>Nút "Cào lại" thủ công cho Admin để cập nhật bình luận bất kỳ lúc nào.</li>
           <li>Giao diện split view trên desktop, overlay trên mobile.</li>
           <li>Lọc theo nguồn, điều hướng theo ngày, đánh dấu bài đã đọc.</li>
           <li>Dark mode / Light mode.</li>
@@ -348,7 +351,7 @@ export function Home() {
             )}
 
             <div className="reader-footer">
-              <p>🤖 Tin tức cập nhật mỗi 1 giờ · Tóm tắt bằng AI</p>
+              <p>🤖 Tin tức cập nhật mỗi 3 giờ · Bình luận forum cập nhật mỗi 30 phút · Tóm tắt bằng AI</p>
             </div>
           </div>
         </div>
