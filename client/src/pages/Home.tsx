@@ -55,8 +55,12 @@ function makeShortPreview(text: string, maxChars = FEED_PREVIEW_MAX_CHARS): stri
 }
 
 function buildFeedPreview(article: any): string {
+  if (article.tldr && typeof article.tldr === 'string') {
+    const preview = stripPreviewMarkup(article.tldr);
+    if (preview.length >= 30) return preview;
+  }
+
   const candidates = [
-    article.tldr,
     article.raw_excerpt,
     article.summary_text,
     article.raw_content,
