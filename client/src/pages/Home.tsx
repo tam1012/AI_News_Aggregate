@@ -377,19 +377,18 @@ function FeedItem({
     // Extract the paragraph directly under "## Tổng quan"
     const overviewMatch = text.match(/## Tổng quan[^\n]*\n+([^#]+)/i);
     if (overviewMatch && overviewMatch[1].trim()) {
-      const extracted = overviewMatch[1].trim().replace(/\n+/g, ' ');
-      return extracted.length > 220 ? extracted.substring(0, 217) + '...' : extracted;
+      return overviewMatch[1].trim()
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/\n+/g, ' ');
     }
 
     // Fallback: strip markdown and get the first chunk
-    const plain = text
+    return text
       .replace(/^#+.*$/gm, '') // remove headings completely
-      .replace(/\*\*[^*]+\*\*:?\s*/g, '') // remove bold labels
+      .replace(/\*\*(.*?)\*\*/g, '$1') // remove bold formatting
       .replace(/^[-•]\s*/gm, '')
       .replace(/\n+/g, ' ')
       .trim();
-      
-    return plain.length > 220 ? plain.substring(0, 217) + '...' : plain;
   }, [article]);
 
   return (
