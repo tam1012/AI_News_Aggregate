@@ -221,17 +221,22 @@ export async function generateDigest(): Promise<string | null> {
     .map((a, i) => `${i + 1}. [${a.source_name}] ${a.title}\n   ${a.summary_text || 'Chưa có tóm tắt'}`)
     .join('\n\n');
 
+  const digestDateStr = now.toISOString().split('T')[0];
   const prompt = `Bạn là biên tập viên tin tức. Hãy tổng hợp các tin tức dưới đây thành 1 bản tin hằng ngày bằng tiếng Việt.
 Nhóm theo chủ đề (Công nghệ, Kinh tế, Xã hội, Thế giới, ...).
 Tránh lặp lại thông tin.
 Viết ngắn gọn, dễ đọc.
 Định dạng: Markdown với headings (##) và bullet points.
 
-Các bài viết hôm nay:
+QUAN TRỌNG: 
+1. TUYỆT ĐỐI KHÔNG tự viết thêm tiêu đề chính (H1 hoặc # Tiêu đề).
+2. Tên các chuyên mục dùng ## (ví dụ: ## Công nghệ).
+
+Các bài viết hôm nay (${digestDateStr}):
 ${articleSummaries}`;
 
   try {
-    const digestContent = await callAi(prompt);
+    const digestContent = await callAi(prompt, { max_tokens: 4000 });
     const digestId = generateId('dig');
     const digestDate = now.toISOString().split('T')[0];
 

@@ -84,43 +84,54 @@ export async function getActiveProvider(): Promise<AiProvider | null> {
 // ==========================================
 // Goi AI - tu dong chon provider dang active
 // ==========================================
-export async function callAi(prompt: string): Promise<string> {
+export async function callAi(prompt: string, overrides?: { max_tokens?: number, temperature?: number }): Promise<string> {
   const provider = await getActiveProvider();
   if (!provider) {
     throw new Error('No active AI provider configured. Go to Settings > AI Providers to set one up.');
   }
-  return callAiProvider(provider, prompt);
+  return callAiProvider(provider, prompt, overrides);
 }
 
 // ==========================================
 // Goi AI voi 1 provider cu the
 // ==========================================
-export async function callAiProvider(provider: AiProvider, prompt: string): Promise<string> {
+export async function callAiProvider(provider: AiProvider, prompt: string, overrides?: { max_tokens?: number, temperature?: number }): Promise<string> {
   try {
     let result: string;
 
-    switch (provider.provider_type) {
+    const finalProvider = {
+      ...provider,
+      max_tokens: overrides?.max_tokens ?? provider.max_tokens,
+      temperature: overrides?.temperature ?? provider.temperature
+    };
+
+    switch (finalProvider.provider_type) {
       case 'vertex_ai':
-        result = await callVertexAi(provider, prompt);
+        result = await callVertexAi(finalProvider, prompt);
         break;
       case 'gemini':
-        result = await callGeminiStudio(provider, prompt);
+        result = await callGeminiStudio(finalProvider, prompt);
         break;
       case 'openai':
       case 'xai':
       case 'deepseek':
       case 'groq':
       case 'mimo':
-        result = await callOpenAiCompatible(provider, prompt);
+        result = await callOpenAiCompatible(finalProvider, prompt);
         break;
       case 'anthropic':
-        result = await callAnthropic(provider, prompt);
+        result = await callAnthropic(finalProvider, prompt);
         break;
       case 'custom':
-        result = await callCustom(provider, prompt);
+        result = await callCustom(finalProvider, prompt);
         break;
       default:
-        throw new Error(`Unsupported provider type: ${provider.provider_type}`);
+        throw new Error(`Unsupported provider type: ${finalProvider.provider_type}`);
+    }
+
+    // Safety check: if the router or API intercepted and returned the raw rejection string
+    if (result.includes('The request was rejected because it was considered high risk')) {
+      throw new Error('AI Provider rejected the request due to safety/high-risk filters.');
     }
 
     // Update tracking
@@ -165,6 +176,12 @@ async function callVertexAi(provider: AiProvider, prompt: string): Promise<strin
         temperature: provider.temperature,
         maxOutputTokens: provider.max_tokens,
       },
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+      ]
     }),
     signal: AbortSignal.timeout(60000),
   });
@@ -196,6 +213,12 @@ async function callGeminiStudio(provider: AiProvider, prompt: string): Promise<s
         temperature: provider.temperature,
         maxOutputTokens: provider.max_tokens,
       },
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+      ]
     }),
     signal: AbortSignal.timeout(60000),
   });
@@ -307,6 +330,12 @@ async function callCustom(provider: AiProvider, prompt: string): Promise<string>
         temperature: provider.temperature,
         maxOutputTokens: provider.max_tokens,
       },
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+      ]
     };
   } else {
     body = {
