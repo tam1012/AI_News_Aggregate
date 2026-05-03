@@ -27,21 +27,21 @@
 }
 
 [data-theme="dark"] {
-  --color-bg: #0d0d0c;
-  --color-bg-card: #141413;
-  --color-bg-hover: #1c1c1b;
-  --color-bg-overlay: rgba(0, 0, 0, 0.6);
-  --color-text: #e7e9ea;
-  --color-text-secondary: #a0a8b4;
-  --color-text-muted: #6b7280;
+  --color-bg: #161614;
+  --color-bg-card: #1e1e1b;
+  --color-bg-hover: #262623;
+  --color-bg-overlay: rgba(0, 0, 0, 0.55);
+  --color-text: #d8dbd9;
+  --color-text-secondary: #9ca3a0;
+  --color-text-muted: #606562;
   --color-accent: #d4a855;
   --color-accent-hover: #e0bc6e;
   --color-success: #4ade80;
   --color-warning: #fbbf24;
   --color-error: #f87171;
-  --color-border: #222221;
-  --color-border-light: #191918;
-  --color-shadow: rgba(0, 0, 0, 0.4);
+  --color-border: #2a2a27;
+  --color-border-light: #222220;
+  --color-shadow: rgba(0, 0, 0, 0.35);
 }
 
 /* ===== Reset ===== */
