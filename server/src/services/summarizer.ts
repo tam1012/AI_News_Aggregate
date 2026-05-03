@@ -62,29 +62,38 @@ export async function summarizeArticle(article: ArticleForSummary): Promise<stri
 }
 
 function buildNewsPrompt(article: ArticleForSummary, content: string): string {
-  return `Biên tập viên tin tức cấp cao. Tóm tắt CHÍNH XÁC, NGẮN GỌN dựa hoàn toàn trên <raw_data>.
+  return `Biên tập viên tin tức cấp cao. Phân tích và tóm tắt CHI TIẾT, CHÍNH XÁC dựa hoàn toàn trên <raw_data>.
 
 NGUYÊN TẮC:
 - CHỈ dùng thông tin trong <raw_data>. KHÔNG suy đoán, KHÔNG bổ sung.
 - Nếu thiếu dữ kiện → bỏ qua, KHÔNG tự điền.
 - KHÔNG dùng từ suy diễn ("đáng chú ý", "gây tranh cãi", "quan trọng") nếu không có trong bài.
 - Ưu tiên số liệu, tên riêng, mốc thời gian cụ thể.
-- Luôn output tiếng Việt. Giữ nguyên tên riêng gốc.
+- Luôn output tiếng Việt. Giữ nguyên tên riêng gốc (tiếng Anh, tên sản phẩm, thuật ngữ kỹ thuật).
 
-ĐỊNH DẠNG (chỉ trả về nội dung, không giải thích):
+ĐỊNH DẠNG OUTPUT (dùng markdown, chỉ trả về nội dung, không giải thích):
 
-**Tổng quan:** 1-2 câu tóm sự kiện chính.
+## Tổng quan
 
-**Điểm nổi bật:**
-- #1: [Chi tiết cụ thể, ưu tiên số liệu/tên/ngày]
-- #2: [Chi tiết khác, không trùng ý #1]
-- (Tối đa 5. Chỉ ghi ý có thật. Không lặp ý.)
+Viết 2-3 câu mô tả sự kiện/tin tức chính: chuyện gì xảy ra, ai liên quan, ở đâu, khi nào. Nêu rõ tên tổ chức, sản phẩm, nhân vật nếu có.
 
-**Bối cảnh:** 1 câu nếu bài có đề cập rõ. Bỏ qua mục này nếu không có.
+## Các điểm chính
+
+Liệt kê các thông tin quan trọng nhất từ bài viết:
+- **Label ngắn gọn**: Giải thích chi tiết 1-2 câu, ưu tiên số liệu/tên/ngày cụ thể.
+  - Sub-bullet nếu có chi tiết bổ sung, ví dụ cụ thể, hoặc so sánh.
+- **Label ngắn gọn**: Giải thích chi tiết.
+  - Sub-bullet nếu cần.
+- (Tối đa 6 điểm. Chỉ ghi ý có thật trong <raw_data>. Không lặp ý.)
+
+## Bối cảnh và tác động
+
+Viết 1-3 câu về bối cảnh rộng hơn nếu bài có đề cập: nguyên nhân, hệ quả, xu hướng liên quan, hoặc phản ứng từ các bên. Bỏ qua mục này hoàn toàn nếu bài không có thông tin bối cảnh.
 
 QUY TẮC VIẾT:
 - Không dùng: "bài viết nói về", "theo nguồn tin", "nội dung đề cập".
-- Mỗi bullet tối đa 1 câu. Toàn bộ output tối đa 200 từ.
+- In đậm (**bold**) các label và thuật ngữ quan trọng.
+- Toàn bộ output: 300-600 từ tuỳ độ phong phú của dữ liệu.
 - Verify: mọi chi tiết phải tồn tại trong <raw_data>. Loại bullet trùng ý.
 
 Tiêu đề: ${article.title}
@@ -92,9 +101,10 @@ Nguồn: ${article.source_name}
 Ngôn ngữ gốc: ${article.language || 'không rõ'}
 
 <raw_data>
-${truncate(content, 10000)}
+${truncate(content, 20000)}
 </raw_data>`;
 }
+
 
 function buildForumPrompt(article: ArticleForSummary, content: string): string {
   return `Biên tập viên tổng hợp chuyên sâu nội dung từ Reddit/VOZ/Forum, viết cho app đọc tin tiếng Việt. Phân tích và tóm tắt CHI TIẾT dựa hoàn toàn trên <raw_data>.
