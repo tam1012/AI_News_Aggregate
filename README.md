@@ -1,4 +1,4 @@
-﻿# SynthNews
+# SynthNews
 
 SynthNews là một hệ thống đọc tin cá nhân theo mô hình full-stack monorepo. Ứng dụng tự động lấy bài viết từ RSS, web và forum, lưu vào PostgreSQL, gọi AI để tóm tắt bằng tiếng Việt, rồi hiển thị dưới dạng giao diện đọc nhanh tối ưu cho desktop lẫn mobile.
 
@@ -38,15 +38,16 @@ Trọng tâm của project này không phải là một cổng tin tức công c
 
 - Mỗi bài mới được đưa vào hàng đợi `pending`.
 - Backend chọn provider AI đang active và sinh tóm tắt tiếng Việt.
-- Có prompt riêng cho:
-  - tin báo thông thường,
-  - nội dung forum / cộng đồng như Reddit, VOZ.
-- Prompt sử dụng định dạng linh hoạt theo nội dung (bullet points, numbered list, đoạn ngắn) thay vì ép khuôn mẫu cứng.
+- Có prompt riêng, được tinh chỉnh cho từng loại bài:
+  - **Tin báo**: prompt biên tập viên cấp cao — yêu cầu 3-6 sections, 400-800 từ, trích dẫn quotes và số liệu cụ thể, phân tích tác động.
+  - **Forum (Reddit, VOZ)**: prompt phóng viên cộng đồng — trích dẫn ít nhất 2-3 comment nổi bật kèm tên user, phân tích sentiment, 400-700 từ.
+- TLDR tự động được trích xuất từ tag `<tldr>` trong output AI, chuẩn hóa tối đa 200 ký tự.
 - Có retry cho bài lỗi hoặc bài bị kẹt ở trạng thái `processing`.
 
 ### 3. Tạo bản tin tổng hợp
 
 - Gom các bài đã tóm tắt thành một digest định kỳ.
+- Digest viết theo phong cách editorial: nhóm tin theo chủ đề, viết liền mạch, có section "Điểm nhấn trong ngày" cuối bản tin.
 - Digest được hiển thị ngay trong app ở tab **Bản tin**.
 
 ### 4. Giao diện đọc nhanh
@@ -244,7 +245,11 @@ Trang quản trị tập trung vào vận hành:
 
 ### Health
 
-`GET /api/health`
+`GET /api/health/live` (public)
+
+Kiểm tra nhanh kết nối DB, trả `{ success: true }`.
+
+`GET /api/health` (cần auth)
 
 Trả về:
 
@@ -297,11 +302,15 @@ Database migrations hiện có trong:
 
 - `server/src/db/migrations/001_initial.sql`
 - `server/src/db/migrations/002_ai_providers.sql`
+- `server/src/db/migrations/003_add_tldr.sql`
+- `server/src/db/migrations/004_add_rescraped_count.sql`
+
+Migrations tự động chạy khi server khởi động.
 
 Các nhóm bảng quan trọng:
 
 - `sources`
-- `articles`
+- `articles` (có cột `tldr`, `rescraped_count`)
 - `scrape_logs`
 - `digests`
 - `digest_items`
@@ -545,7 +554,7 @@ REDDIT_COMMENT_DEPTH=3
 - `PORT`: cổng backend
 - `NODE_ENV`: môi trường chạy
 - `DATABASE_URL`: chuỗi kết nối PostgreSQL
-- `ADMIN_TOKEN`: token cho thao tác quản trị
+- `ADMIN_TOKEN`: token cho thao tác quản trị. **Bắt buộc phải đặt giá trị mạnh khi `NODE_ENV=production`** — server sẽ crash nếu token yếu hoặc mặc định.
 - `SCRAPE_INTERVAL_HOURS`: chu kỳ scrape / summarize / digest
 - `MAX_ARTICLES_PER_SOURCE`: số bài tối đa lấy từ mỗi nguồn mỗi đợt
 - `MAX_AI_CALLS_PER_RUN`: số bài tối đa được tóm tắt mỗi lần job chạy
@@ -641,8 +650,11 @@ Nếu chỉ đọc RSS của VOZ, hệ thống sẽ thiếu phần bình luận.
 
 ### AI Summarization
 
-- Prompt linh hoạt theo loại bài viết: bullet points cho danh sách, numbered list cho quy trình, đoạn ngắn cho phân tích.
-- TLDR hiển thị đầy đủ trong list preview (không cắt ký tự).
+- Prompt editorial chuyên sâu cho tin báo: yêu cầu 3-6 sections, 400-800 từ, trích dẫn trực tiếp quotes và số liệu, phân tích tác động.
+- Prompt phóng viên cộng đồng cho forum: trích dẫn 2-3 comment cụ thể kèm tên user, phân tích sentiment, xu hướng community.
+- Digest viết liền mạch như bản tin editorial, 800-1500 từ, có section "Điểm nhấn trong ngày".
+- TLDR tự động trích xuất từ tag `<tldr>` trong output AI, chuẩn hóa tối đa 200 ký tự, hiển thị trong list preview.
+- Scraper metrics chính xác: dùng `RETURNING id` để chỉ đếm bài thực sự được insert (không đếm sai khi `ON CONFLICT DO NOTHING`).
 
 ### Scraping
 
