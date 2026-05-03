@@ -848,3 +848,79 @@ function stripHtml(html: string): string {
 function stripHtmlBasic(html: string): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
+
+// Retry lấy comment Reddit cho các bài chưa có comment (Pullpush index chậm)
+export async function retryRedditComments(): Promise<{ checked: number; enriched: number }> {
+  const MAX_RETRY = 10;
+
+  // Tìm bài Reddit tạo trong 48h qua, có raw_content chứa "Đã trích 0 comment"
+  const articles = await getMany(
+    `SELECT a.id, a.url, a.title, a.raw_content
+     FROM articles a
+     JOIN sources s ON a.source_id = s.id
+     WHERE LOWER(s.name) LIKE '%reddit%'
+       AND a.created_at > NOW() - INTERVAL '48 hours'
+       AND a.raw_content LIKE '%Đã trích 0 comment%'
+     ORDER BY a.created_at DESC
+     LIMIT $1`,
+    [MAX_RETRY]
+  );
+
+  if (articles.length === 0) return { checked: 0, enriched: 0 };
+
+  let enriched = 0;
+
+  for (const article of articles) {
+    try {
+      // Extract post ID from URL: /r/sub/comments/POST_ID/...
+      const postIdMatch = article.url?.match(/\/comments\/([a-z0-9]+)/);
+      if (!postIdMatch) continue;
+      const postId = postIdMatch[1];
+
+      await sleep(1000);
+      const pullpushUrl = `https://api.pullpush.io/reddit/comment/search?link_id=${postId}&size=${REDDIT_COMMENT_LIMIT}&sort=score&sort_type=score`;
+      const pullpushRes = await curlFetch(pullpushUrl, 'application/json', 10);
+      if (!pullpushRes.ok) continue;
+
+      const pullpushData = await pullpushRes.json();
+      const pullpushComments: ForumComment[] = (pullpushData.data || [])
+        .filter((c: any) => c.body && c.body !== '[deleted]' && c.body !== '[removed]' && c.body.length > 20)
+        .map((c: any, idx: number) => ({
+          author: c.author || 'unknown',
+          body: c.body.substring(0, 900),
+          reactions: c.score || 0,
+          page: 1,
+          order: idx,
+          score: scoreForumComment(c.body, c.score || 0, 1, idx),
+        }));
+
+      if (pullpushComments.length === 0) continue;
+
+      const selectedComments = selectForumComments(pullpushComments, FORUM_MAX_COMMENTS);
+
+      // Reconstruct raw_content: keep original post content, replace comment section
+      const existingContent = article.raw_content || '';
+      const postContentMatch = existingContent.match(/\[Nội dung bài viết\]\n([\s\S]*?)\n\n\[/);
+      const postContent = postContentMatch ? postContentMatch[1].trim() : article.title;
+
+      // Check for outbound link
+      const linkMatch = existingContent.match(/\[Link chia sẻ\]: (.+)/);
+      const outboundUrl = linkMatch ? linkMatch[1].trim() : null;
+
+      const newRawContent = buildRedditRawContent(postContent, outboundUrl, selectedComments, pullpushComments.length);
+
+      await query(
+        `UPDATE articles SET raw_content = $1, summary_status = 'pending', updated_at = NOW() WHERE id = $2`,
+        [truncate(newRawContent, FORUM_RAW_CONTENT_MAX_LENGTH), article.id]
+      );
+
+      console.log(`[reddit-retry] Enriched ${article.id} with ${selectedComments.length} comments (from ${pullpushComments.length} total)`);
+      enriched++;
+    } catch (err: any) {
+      console.log(`[reddit-retry] Failed for ${article.id}: ${err.message}`);
+    }
+  }
+
+  return { checked: articles.length, enriched };
+}
+

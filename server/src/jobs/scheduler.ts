@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { getMany, query, getOne } from '../db/index.js';
-import { scrapeSource } from '../services/scraper.js';
+import { scrapeSource, retryRedditComments } from '../services/scraper.js';
 import { summarizePendingArticles, generateDigest } from '../services/summarizer.js';
 import { generateId } from '../lib/utils.js';
 
@@ -145,6 +145,16 @@ async function runRetryJob() {
     );
     console.log(`  Reset ${failedResult.rowCount} failed articles for retry`);
     
+    // Retry lấy comment Reddit cho bài chưa có comment (Pullpush chậm index)
+    try {
+      const redditRetry = await retryRedditComments();
+      if (redditRetry.enriched > 0) {
+        console.log(`  Reddit comments retry: ${redditRetry.enriched}/${redditRetry.checked} enriched`);
+      }
+    } catch (err: any) {
+      console.log(`  Reddit retry error: ${err.message}`);
+    }
+
     // Nếu có bài được reset, gọi ngay summarize job
     const totalReset = (stuckResult.rowCount || 0) + (failedResult.rowCount || 0);
     if (totalReset > 0) {
