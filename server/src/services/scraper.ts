@@ -567,12 +567,13 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
       const id = generateId('art');
       const publishedAt = item.pubDate ? new Date(item.pubDate).toISOString() : null;
 
-      await query(
+      const insertResult = await query(
         `INSERT INTO articles (id, source_id, external_id, url, title, author, published_at,
                                content_type, language, raw_excerpt, raw_content, content_hash,
                                image_url, summary_status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, 'article', $8, $9, $10, $11, $12, 'pending')
-         ON CONFLICT (url) DO NOTHING`,
+         ON CONFLICT (url) DO NOTHING
+         RETURNING id`,
         [
           id, source.id, item.guid || null, url,
           `[r/${subreddit}] ${item.title.trim()}`,
@@ -581,7 +582,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
           truncate(fullContent || item.title, FORUM_RAW_CONTENT_MAX_LENGTH), contentHash, imageUrl,
         ]
       );
-      result.itemsInserted++;
+      if (insertResult.rowCount && insertResult.rowCount > 0) result.itemsInserted++;
     }
   } catch (err: any) {
     result.errors.push(err.message);
@@ -699,12 +700,13 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
         }
       }
 
-      await query(
+      const insertResult = await query(
         `INSERT INTO articles (id, source_id, external_id, url, title, author, published_at,
                                content_type, language, raw_excerpt, raw_content, content_hash,
                                image_url, summary_status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, 'article', $8, $9, $10, $11, $12, 'pending')
-         ON CONFLICT (url) DO NOTHING`,
+         ON CONFLICT (url) DO NOTHING
+         RETURNING id`,
         [
           id, source.id, item.guid || null, url, item.title.trim(),
           item.creator || item.author || null, publishedAt,
@@ -712,7 +714,7 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
           truncate(fullContent, FORUM_RAW_CONTENT_MAX_LENGTH), contentHash, imageUrl,
         ]
       );
-      result.itemsInserted++;
+      if (insertResult.rowCount && insertResult.rowCount > 0) result.itemsInserted++;
     }
   } catch (err: any) {
     result.errors.push(err.message);
@@ -769,12 +771,13 @@ export async function scrapeRssSource(source: SourceRow): Promise<ScrapeResult> 
         imageUrl = $('img').first().attr('src') || null;
       }
 
-      await query(
+      const insertResult = await query(
         `INSERT INTO articles (id, source_id, external_id, url, title, author, published_at,
                                content_type, language, raw_excerpt, raw_content, content_hash,
                                image_url, summary_status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, 'article', $8, $9, $10, $11, $12, 'pending')
-         ON CONFLICT (url) DO NOTHING`,
+         ON CONFLICT (url) DO NOTHING
+         RETURNING id`,
         [
           id, source.id, item.guid || null, url, item.title.trim(),
           item.creator || item.author || null, publishedAt,
@@ -782,7 +785,7 @@ export async function scrapeRssSource(source: SourceRow): Promise<ScrapeResult> 
           truncate(stripHtml(rawContent), 30000), contentHash, imageUrl,
         ]
       );
-      result.itemsInserted++;
+      if (insertResult.rowCount && insertResult.rowCount > 0) result.itemsInserted++;
     }
   } catch (err: any) {
     result.errors.push(err.message);
@@ -877,15 +880,16 @@ export async function scrapeWebSource(source: SourceRow): Promise<ScrapeResult> 
         }
 
         const id = generateId('art');
-        await query(
+        const insertResult = await query(
           `INSERT INTO articles (id, source_id, url, title, published_at, content_type, language,
                                  raw_excerpt, raw_content, content_hash, image_url, summary_status)
            VALUES ($1, $2, $3, $4, $5, 'article', $6, $7, $8, $9, $10, 'pending')
-           ON CONFLICT (url) DO NOTHING`,
+           ON CONFLICT (url) DO NOTHING
+           RETURNING id`,
           [id, source.id, articleUrl, title, publishedAt, source.language,
             excerpt, truncate(content, 30000), contentHash, imageUrl]
         );
-        result.itemsInserted++;
+        if (insertResult.rowCount && insertResult.rowCount > 0) result.itemsInserted++;
       } catch (err: any) {
         result.errors.push(`Failed to fetch ${articleUrl}: ${err.message}`);
       }

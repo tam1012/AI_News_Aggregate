@@ -11,7 +11,7 @@ export function stripTldrMarkup(text: string): string {
     .trim();
 }
 
-export function normalizeTldr(tldr: string, maxChars = 180): string {
+export function normalizeTldr(tldr: string, maxChars = 200): string {
   const cleaned = stripTldrMarkup(tldr);
   if (!cleaned) return '';
   if (cleaned.length <= maxChars) return cleaned;
@@ -26,7 +26,7 @@ export function normalizeTldr(tldr: string, maxChars = 180): string {
   return `${cut.slice(0, lastSpace > 80 ? lastSpace : cutLimit).trim()}${ELLIPSIS}`;
 }
 
-export function makeTldrFromSummary(summaryText: string, maxChars = 180): string {
+export function makeTldrFromSummary(summaryText: string, maxChars = 200): string {
   const cleaned = stripTldrMarkup(summaryText);
   if (!cleaned) return '';
 
