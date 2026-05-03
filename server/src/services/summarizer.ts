@@ -70,37 +70,39 @@ export async function summarizeArticle(article: ArticleForSummary): Promise<stri
 }
 
 function buildNewsPrompt(article: ArticleForSummary, content: string): string {
-  return `Bạn là một biên tập viên tin tức chuyên nghiệp, có khả năng viết tóm tắt vừa đủ chi tiết vừa hấp dẫn như một bài phân tích ngắn. Nhiệm vụ: phân tích <raw_data> và tạo bản tóm tắt CÓ CHIỀU SÂU, giàu thông tin, giúp người đọc hiểu trọn vẹn sự việc mà không cần đọc bài gốc.
+  return `Bạn là biên tập viên tin tức. Phân tích <raw_data> và viết bản tóm tắt chi tiết bằng tiếng Việt.
 
-NGUYÊN TẮC BẮT BUỘC:
-1. KHÔNG bịa đặt — chỉ dùng thông tin có trong <raw_data>.
-2. Giữ nguyên số liệu, tên riêng, ngày tháng, thuật ngữ kỹ thuật (không dịch).
-3. Viết bằng tiếng Việt tự nhiên, mạch lạc, không sáo rỗng. Tránh các cụm từ mở đầu nhàm chán như "Theo đó", "Được biết".
-4. Mỗi section phải có NỘI DUNG THỰC, không được viết chung chung hay lặp lại tiêu đề.
+NGUYÊN TẮC:
+1. KHÔNG bịa đặt — chỉ dùng thông tin trong <raw_data>.
+2. Giữ nguyên tên riêng, số liệu, thuật ngữ kỹ thuật.
+3. Tránh sáo rỗng ("Theo đó", "Được biết").
 
-YÊU CẦU VỀ CHIỀU SÂU:
-- TLDR phải tóm tắt được BỐI CẢNH + KẾT QUẢ/Ý NGHĨA, không chỉ nêu sự kiện.
-- Mỗi heading section phải có ít nhất 3-4 câu phân tích/điểm tin, không được viết 1 câu rồi chuyển heading.
-- Nếu bài viết có số liệu, con số — PHẢI trích dẫn cụ thể.
-- Nếu có nhiều bên liên quan — nêu rõ quan điểm/tư thế của từng bên.
-- Nếu có bối cảnh lịch sử hoặc so sánh — trình bày để người đọc hiểu tại sao sự kiện này quan trọng.
+QUAN TRỌNG VỀ ĐỊNH DẠNG:
+- Mỗi section PHẢI dùng bullet points (-) để liệt kê thông tin, KHÔNG viết đoạn văn dài.
+- In đậm (**bold**) các thuật ngữ, tên riêng, con số quan trọng.
+- Tiêu đề sections phải ngắn gọn, rõ ràng, KHÔNG dùng ngoặc vuông.
+- Viết sao cho dễ scan — người đọc lướt qua cũng nắm được ý chính.
 
 ĐỊNH DẠNG OUTPUT (Markdown, KHÔNG emoji):
 
 TLDR:
-[Viết 1 đoạn văn 3-4 câu. Không dùng gạch đầu dòng. Phải bao gồm: (1) Sự việc chính là gì, (2) Bối cảnh/tại sao quan trọng, (3) Kết quả hoặc hệ quả. Bắt đầu bằng "TLDR:"]
+[1 đoạn văn ngắn 2-3 câu tóm tắt sự việc. Bắt đầu bằng "TLDR:"]
 
-## [Tiêu đề mô tả trực diện sự kiện]
-[Đoạn mở bài: trình bày sự việc chính, ai, ở đâu, khi nào. Viết như mở đầu một bài phân tích — lôi cuốn nhưng chính xác. Tối thiểu 4-5 câu.]
+## [Tiêu đề sự kiện chính]
+- Điểm tin 1: mô tả cụ thể, có số liệu nếu có
+- Điểm tin 2: ai làm gì, ở đâu, khi nào
+- Điểm tin 3: kết quả hoặc phản ứng ban đầu
+- Điểm tin 4 (nếu có): thêm chi tiết đáng chú ý
 
-## [Tiêu đề về bối cảnh hoặc nguyên nhân]
-[Giải thích tại sao chuyện này xảy ra, tiền sử sự việc, hoặc các yếu tố dẫn đến. Nếu không có bối cảnh rõ ràng thì dùng section này cho diễn biến chi tiết hơn. Tối thiểu 3-4 câu.]
+## [Tiêu đề bối cảnh hoặc phân tích]
+- Điểm phân tích 1: tại sao quan trọng
+- Điểm phân tích 2: tiền sử hoặc so sánh
+- Điểm phân tích 3: tác động đến ngành/liên quan
 
-## [Tiêu đề về phản ứng, hệ quả hoặc ý kiến]
-[Trình bày phản ứng từ các bên liên quan, hệ quả dự kiến, hoặc các góc nhìn khác nhau. Trích dẫn cụ thể nếu có. Tối thiểu 3-4 câu.]
-
-## [Tiêu đề về tác động hoặc tương lai]
-[Nếu phù hợp: hệ quả rộng hơn, tác động đến ngành/cộng đồng, hoặc những gì sẽ xảy ra tiếp theo. Nếu không có đủ thông tin, bỏ qua section này.]
+## [Tiêu đề phản ứng hoặc hệ quả]
+- Phản ứng từ bên liên quan A
+- Phản ứng từ bên liên quan B
+- Hệ quả dự kiến
 
 Tiêu đề: ${article.title}
 Nguồn: ${article.source_name}
@@ -112,37 +114,38 @@ ${truncate(content, 20000)}
 }
 
 function buildForumPrompt(article: ArticleForSummary, content: string): string {
-  return `Bạn là chuyên gia tổng hợp thông tin từ diễn đàn (Reddit, VOZ...). Nhiệm vụ: tổng hợp bài đăng gốc và thảo luận cộng đồng thành bản phân tích có cấu trúc, giàu thông tin, giúp người đọc nắm bắt toàn bộ cuộc thảo luận mà không cần đọc từng comment.
+  return `Bạn là chuyên gia tổng hợp thông tin từ diễn đàn (Reddit, VOZ...). Tổng hợp bài gốc và thảo luận thành bản tóm tắt dễ đọc.
 
-NGUYÊN TẮC BẮT BUỘC:
-1. KHÔNG bịa đặt — chỉ dùng nội dung có trong <raw_data>.
-2. Phân biệt rõ OP (bài gốc) vs Comments (phản hồi cộng đồng).
-3. Lọc nhiễu: bỏ comment vô nghĩa, troll, meme. Ưu tiên comment có thông tin thực, kinh nghiệm dùng, tranh luận logic, hoặc upvote cao.
-4. Khi trích dẫn ý kiến cộng đồng, ghi rõ đặc điểm người viết (ví dụ: "một người dùng tự nhận là dev 10 năm kinh nghiệm", "nhiều người dùng khác đồng tình").
-5. Viết bằng tiếng Việt tự nhiên, không sáo rỗng.
+NGUYÊN TẮC:
+1. KHÔNG bịa đặt — chỉ dùng nội dung trong <raw_data>.
+2. Phân biệt OP (bài gốc) vs Comments (cộng đồng).
+3. Lọc bỏ troll, meme, comment vô nghĩa. Ưu tiên comment có kinh nghiệm thực, tranh luận logic, upvote cao.
 
-YÊU CẦU VỀ CHIỀU SÂU:
-- TLDR phải nêu: (1) Chủ đề thảo luận là gì, (2) Xu hướng phản hồi chính của cộng đồng (đồng tình, phản đối, hay chia rẽ?).
-- Mỗi section phải có ít nhất 3-4 câu nội dung thực, không được viết 1 câu rồi chuyển section.
-- Nếu có số liệu, benchmark, ví dụ cụ thể từ comment — PHẢI trích dẫn.
-- Nếu có tranh luận/disagreement — trình bày CẢ HAI phía với luận điểm cụ thể.
+QUAN TRỌNG VỀ ĐỊNH DẠNG:
+- Mỗi section PHẢI dùng bullet points (-) để liệt kê, KHÔNG viết đoạn văn dài.
+- In đậm (**bold**) tên riêng, thuật ngữ, con số quan trọng.
+- Tiêu đề sections ngắn gọn, rõ ràng, KHÔNG dùng ngoặc vuông.
 
 ĐỊNH DẠNG OUTPUT (Markdown, KHÔNG emoji):
 
 TLDR:
-[1 đoạn văn 3-4 câu: chủ đề chính + xu hướng phản hồi cộng đồng + kết luận/ý nghĩa. Bắt đầu bằng "TLDR:"]
+[1 đoạn văn ngắn 2-3 câu: chủ đề + xu hướng phản hồi. Bắt đầu bằng "TLDR:"]
 
-## [Tiêu đề mô tả bài gốc / câu hỏi của OP]
-[Tóm tắt bài gốc: OP hỏi gì/chia sẻ gì, bối cảnh, link nếu có. Tối thiểu 3-4 câu.]
+## [Tiêu đề bài gốc]
+- Bối cảnh bài viết: ai đăng, nội dung chính
+- Câu hỏi hoặc vấn đề được nêu ra
 
-## [Tiêu đề mô tả luồng ý kiến ủng hộ/chính]
-[Tổng hợp các bình luận đồng tình, ủng hộ, hoặc chia sẻ kinh nghiệm tương tự. Trích dẫn cụ thể luận điểm. Tối thiểu 3-4 câu.]
+## [Tiêu đề luồng ý kiến A]
+- Ý kiến 1: trích dẫn luận điểm cụ thể, ghi rõ đặc điểm người viết
+- Ý kiến 2: thêm ví dụ hoặc kinh nghiệm thực tế
 
-## [Tiêu đề mô tả luồng ý kiến phản đối/khác biệt]
-[Tổng hợp các bình luận phản đối, đặt câu hỏi, hoặc cung cấp góc nhìn khác. Trích dẫn cụ thể. Tối thiểu 3-4 câu.]
+## [Tiêu đề luồng ý kiến B]
+- Ý kiến đối lập: luận điểm cụ thể
+- Phản biện hoặc góc nhìn khác
 
-## [Tiêu đề về kết luận hoặc điểm đáng chú ý]
-[Nếu có: câu trả lời được upvote nhiều nhất, insight bất ngờ, hoặc kết luận ngầm của cộng đồng. Nếu không đủ thông tin, bỏ qua section này.]
+## [Kết luận]
+- Điểm đáng chú ý nhất
+- Xu hướng chung của cộng đồng (nếu có)
 
 Tiêu đề: ${article.title}
 Nguồn: ${article.source_name}
