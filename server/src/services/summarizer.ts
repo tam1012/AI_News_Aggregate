@@ -97,31 +97,48 @@ ${truncate(content, 10000)}
 }
 
 function buildForumPrompt(article: ArticleForSummary, content: string): string {
-  return `Biên tập viên tổng hợp nội dung từ Reddit/VOZ/Forum, viết cho app đọc tin tiếng Việt. Tóm tắt CHÍNH XÁC dựa trên <raw_data>.
+  return `Biên tập viên tổng hợp chuyên sâu nội dung từ Reddit/VOZ/Forum, viết cho app đọc tin tiếng Việt. Phân tích và tóm tắt CHI TIẾT dựa hoàn toàn trên <raw_data>.
 
 NGUYÊN TẮC:
 - CHỈ dùng thông tin trong <raw_data>. KHÔNG suy đoán, KHÔNG bổ sung, KHÔNG khái quát nếu dữ liệu không đủ.
-- Tổng hợp CẢ nội dung gốc VÀ bình luận thảo luận.
+- Tổng hợp CẢ nội dung gốc VÀ bình luận thảo luận một cách đầy đủ.
 - Mỗi ý kiến phải phản ánh nội dung thực sự trong bình luận (có thể diễn đạt lại, không thay đổi ý nghĩa).
 - Ưu tiên bình luận có nhiều upvote hoặc được nhắc lại nhiều lần.
 - Nếu có tranh luận → thể hiện rõ các phía, không gộp sai lệch.
-- Luôn output tiếng Việt. Giữ nguyên tên riêng gốc.
+- Luôn output tiếng Việt. Giữ nguyên tên riêng gốc (tiếng Anh, tên sản phẩm, thuật ngữ kỹ thuật).
 
-ĐỊNH DẠNG (chỉ trả về nội dung, không giải thích):
+ĐỊNH DẠNG OUTPUT (dùng markdown, chỉ trả về nội dung, không giải thích):
 
-**Chủ đề:** 1-2 câu tóm tắt nội dung bài viết gốc. Không thêm thông tin ngoài bài.
+## Tổng quan về nội dung
 
-**Ý kiến cộng đồng:**
-- #1: [Ý kiến thực tế từ bình luận, viết lại ngắn gọn]
-- #2: [Ý kiến khác biệt hoặc bổ sung]
-- #3: [Ý kiến khác nếu có]
-- (Tối đa 5. Nếu không đủ 3 ý → chỉ ghi những ý có thật, không tự thêm.)
+Viết 2-3 câu mô tả bài viết gốc: tác giả đăng gì, mục đích gì, bối cảnh gì. Nếu bài có link, sản phẩm, dự án → nêu rõ tên.
 
-**Tóm lại:** 1 câu tổng kết xu hướng ý kiến. Nếu ý kiến phân tán → ghi "Ý kiến cộng đồng chưa thống nhất".
+## Các điểm chính trong thảo luận
+
+Liệt kê các điểm nổi bật nhất từ bài viết gốc VÀ bình luận:
+- **Label ngắn gọn**: Giải thích chi tiết 1-2 câu dựa trên nội dung thực.
+  - Sub-bullet nếu có chi tiết bổ sung hoặc ví dụ cụ thể từ bình luận.
+- **Label ngắn gọn**: Giải thích chi tiết.
+  - Sub-bullet nếu cần.
+- (Tối đa 6 điểm. Chỉ ghi ý có thật trong <raw_data>. Không lặp ý.)
+
+## Phản hồi từ cộng đồng
+
+Tổng hợp phản ứng và ý kiến nổi bật từ bình luận:
+- **Quan điểm ủng hộ/tích cực**: Tóm tắt các ý kiến đồng tình, khen ngợi (nếu có).
+- **Góp ý cải thiện / Phản biện**: Tóm tắt các ý kiến phản đối, góp ý, hoặc cảnh báo.
+  - Sub-bullet cho từng ý riêng biệt nếu có nhiều góc nhìn.
+- **Thách thức / Rủi ro**: Nếu cộng đồng nêu ra rủi ro hoặc hạn chế → ghi rõ.
+- (Bỏ mục nào nếu không có dữ liệu. KHÔNG bịa ý kiến.)
+
+## Kết luận
+
+Viết 1-2 câu tổng kết xu hướng chung của thảo luận. Nếu ý kiến phân tán → ghi rõ "Cộng đồng có nhiều quan điểm trái chiều về vấn đề này".
 
 QUY TẮC VIẾT:
-- Viết tự nhiên, dùng thuật ngữ phù hợp cộng đồng.
-- Mỗi bullet tối đa 1 câu. Toàn bộ output tối đa 200 từ.
+- Viết tự nhiên, dùng thuật ngữ phù hợp cộng đồng tech Việt.
+- In đậm (**bold**) các label và thuật ngữ quan trọng.
+- Toàn bộ output: 300-600 từ tuỳ độ phong phú của dữ liệu.
 - Verify: mọi chi tiết phải tồn tại trong <raw_data>. Loại bullet trùng ý.
 
 Tiêu đề: ${article.title}
