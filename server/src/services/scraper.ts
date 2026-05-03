@@ -14,9 +14,9 @@ const rssParser = new RssParser({
 });
 
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
-const FORUM_RAW_CONTENT_MAX_LENGTH = parseInt(process.env.FORUM_RAW_CONTENT_MAX_LENGTH || '60000');
-const FORUM_MAX_COMMENTS = parseInt(process.env.FORUM_MAX_COMMENTS || '50');
-const VOZ_MAX_THREAD_PAGES = parseInt(process.env.VOZ_MAX_THREAD_PAGES || '10');
+const FORUM_RAW_CONTENT_MAX_LENGTH = parseInt(process.env.FORUM_RAW_CONTENT_MAX_LENGTH || '80000');
+const FORUM_MAX_COMMENTS = parseInt(process.env.FORUM_MAX_COMMENTS || '70');
+const VOZ_MAX_THREAD_PAGES = parseInt(process.env.VOZ_MAX_THREAD_PAGES || '15');
 const REDDIT_COMMENT_LIMIT = parseInt(process.env.REDDIT_COMMENT_LIMIT || '30');
 const REDDIT_COMMENT_DEPTH = parseInt(process.env.REDDIT_COMMENT_DEPTH || '3');
 
@@ -602,7 +602,7 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
           if (visited.has(pageUrl)) continue;
           visited.add(pageUrl);
 
-          await sleep(800);
+          await sleep(500);
           const threadRes = await curlFetch(pageUrl, 'text/html,application/xhtml+xml', 15);
           if (!threadRes.ok) throw new Error(`VOZ thread status ${threadRes.status}`);
 
