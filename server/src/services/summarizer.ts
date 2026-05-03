@@ -70,36 +70,43 @@ export async function summarizeArticle(article: ArticleForSummary): Promise<stri
 }
 
 function buildNewsPrompt(article: ArticleForSummary, content: string): string {
-  return `Bạn là biên tập viên tin tức. Phân tích <raw_data> và viết bản tóm tắt chi tiết bằng tiếng Việt.
+  return `Bạn là biên tập viên tin tức chuyên nghiệp. Nhiệm vụ: đọc toàn bộ <raw_data> và viết bản tóm tắt CHI TIẾT, ĐẦY ĐỦ thông tin, giúp người đọc hiểu toàn diện sự việc mà không cần đọc bài gốc.
 
 NGUYÊN TẮC:
 1. KHÔNG bịa đặt — chỉ dùng thông tin trong <raw_data>.
 2. Giữ nguyên tên riêng, số liệu, thuật ngữ kỹ thuật.
 3. Tránh sáo rỗng ("Theo đó", "Được biết").
 
+YÊU CẦU CHIỀU SÂU (BẮT BUỘC):
+- TLDR phải viết 3-4 câu, bao gồm: (1) sự việc chính, (2) bối cảnh/tại sao quan trọng, (3) kết quả hoặc hệ quả.
+- Mỗi section PHẢI có nội dung thực tế, KHÔNG được viết 1 câu rồi chuyển section.
+- Nếu bài viết có số liệu, con số — PHẢI trích dẫn cụ thể.
+- Nếu có nhiều bên liên quan — nêu rõ quan điểm của từng bên.
+
 NGUYÊN TẮC ĐỊNH DẠNG (linh hoạt theo nội dung):
-- **Phải có tiêu đề sections ngắn gọn, rõ ràng** — mỗi section mở đầu bằng ## và tên mô tả trực diện.
-- **Bullet points (-)** khi liệt kê nhiều điểm cùng loại (ví dụ: danh sách tính năng, timeline, so sánh).
-- **In đậm (bold)** cho thuật ngữ, tên riêng, con số quan trọng. Đặt bold ở đầu mỗi bullet nếu bullet có dạng "Label: mô tả".
-- **Đoạn văn ngắn** khi cần giải thích bối cảnh hoặc phân tích sâu (1-3 câu).
+- **Bullet points (-)** khi liệt kê nhiều điểm. Mỗi bullet PHẢI có bold label ở đầu: "- **Label:** nội dung chi tiết".
 - **Numbered list (1. 2. 3.)** khi có thứ tự hoặc quy trình.
+- **Đoạn văn ngắn** khi cần giải thích bối cảnh hoặc phân tích sâu.
 - **KHÔNG dùng ngoặc vuông [ ] trong tiêu đề sections.**
-- LINH HOẠT: chọn cách trình bày phù hợp nhất với nội dung bài viết. Bài có timeline → bullet với bold label + ngày tháng. Bài có nhiều sản phẩm → numbered list. Bài phân tích → mix bullet và đoạn ngắn. Bài có so sánh → bullet nêu rõ A vs B.
-- BẮT BUỘC có TLDR ở đầu: 1 đoạn ngắn 2-3 câu tóm tắt toàn bộ sự việc. Bắt đầu bằng "TLDR:".
+- LINH HOẠT: chọn cách trình bày phù hợp nhất với nội dung bài viết.
 
 ĐỊNH DẠNG OUTPUT (Markdown, KHÔNG emoji):
 
 TLDR:
-[1-2 câu tóm tắt sự việc. Bắt đầu bằng "TLDR:"]
+[3-4 câu tóm tắt toàn diện sự việc. Bắt đầu bằng "TLDR:"]
 
-## [Tiêu đề section 1 — mô tả trực diện sự kiện]
-[Chọn format phù hợp: bullet points, numbered list, hoặc đoạn ngắn. Tùy nội dung.]
+## [Tiêu đề section 1 — sự kiện chính]
+- **Sự việc:** mô tả cụ thể, ai làm gì, ở đâu, khi nào
+- **Chi tiết đáng chú ý:** số liệu, thống kê, tên riêng quan trọng
+- **Phản ứng ban đầu:** từ các bên liên quan
 
 ## [Tiêu đề section 2 — bối cảnh hoặc phân tích]
-[Chọn format phù hợp.]
+- **Tại sao quan trọng:** bối cảnh lịch sử, so sánh, xu hướng
+- **Phân tích:** góc nhìn chuyên gia, dữ liệu hỗ trợ
 
-## [Tiêu đề section 3 — phản ứng hoặc hệ quả]
-[Chọn format phù hợp. Section này có thể bỏ qua nếu không đủ thông tin.]
+## [Tiêu đề section 3 — hệ quả hoặc tương lai]
+- **Hệ quả dự kiến:** tác động đến ngành, người dùng, thị trường
+- **Bước tiếp theo:** những gì sẽ xảy ra tiếp theo
 
 Tiêu đề: ${article.title}
 Nguồn: ${article.source_name}

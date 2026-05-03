@@ -614,17 +614,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
     padding: 0 20px;
     border-right: 1px solid var(--color-border);
     background: var(--color-bg);
-    transition: opacity 0.3s ease;
   }
-  
-  /* Zen Mode: Dim left pane when interacting with right pane */
-  body.split-view-active:has(.split-right:hover) .split-left {
-    opacity: 0.4;
-  }
-  body.split-view-active:has(.split-right:hover) .split-left:hover {
-    opacity: 1; /* Restore if they move mouse back over it quickly */
-  }
-  
+
   .split-left .feed-tabs {
     position: sticky; top: 0; z-index: 10;
     margin: 0 -20px;
