@@ -653,3 +653,7 @@ Nếu chỉ đọc RSS của VOZ, hệ thống sẽ thiếu phần bình luận.
 ---
 
 Nếu dùng đúng theo mục tiêu ban đầu của project này, SynthNews hoạt động tốt nhất như một hệ thống đọc tin cá nhân self-hosted: ít thao tác, dễ vận hành, và tập trung vào tốc độ đọc hơn là bề mặt tính năng quá rộng.
+
+
+## CI/CD Deployment
+This project uses GitHub Actions for automatic deployment to the Oracle VPS.
