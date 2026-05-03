@@ -3,6 +3,7 @@ import { getMany, query, getOne } from '../db/index.js';
 import { scrapeSource, retryRedditComments } from '../services/scraper.js';
 import { summarizePendingArticles, generateDigest } from '../services/summarizer.js';
 import { generateId } from '../lib/utils.js';
+import { rescrapeArticle, runForumRescrapeJob } from '../services/rescrape.js';
 
 // Scrape ALL enabled sources (chay moi gio tai :00)
 async function runScrapeJob() {
@@ -167,14 +168,33 @@ async function runRetryJob() {
 }
 
 export function startCronJobs() {
-  const intervalHours = parseInt(process.env.SCRAPE_INTERVAL_HOURS || '1');
+  const intervalHours = parseInt(process.env.SCRAPE_INTERVAL_HOURS || '3');
 
-  // Scrape mỗi giờ ở phút 00
+  // Scrape at minute 0 past every X hours (e.g. 0, 3, 6, 9...)
   cron.schedule(`0 */${intervalHours} * * *`, async () => {
     try {
       await runScrapeJob();
-      // Chạy tóm tắt ngay sau khi cào xong
       await runSummarizeJob();
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  // Re-scrape active forum threads every 30 minutes (at :30 and :00 of non-scrape hours)
+  cron.schedule(`0,30 * * * *`, async () => {
+    const currentHour = new Date().getHours();
+    const currentMinute = new Date().getMinutes();
+    
+    // Don't run at minute 0 if it's the main scrape hour to avoid overlap
+    if (currentMinute === 0 && currentHour % intervalHours === 0) {
+      return;
+    }
+
+    try {
+      const result = await runForumRescrapeJob();
+      if (result.updated > 0) {
+        await runSummarizeJob();
+      }
     } catch (err) {
       console.error(err);
     }
@@ -197,10 +217,11 @@ export function startCronJobs() {
 
   console.log(`Cron jobs scheduled:`);
   console.log(`  - Scrape & Summarize: every ${intervalHours}h at :00`);
+  console.log(`  - Forum Rescrape: every 30 mins (max 2 times per article)`);
   console.log(`  - Digest: every ${intervalHours}h at :30`);
   console.log(`  - Retry: every 10 minutes`);
   console.log(`  - Cleanup: daily at 2:43 AM`);
 }
 
 // Export de co the goi thu cong qua API
-export { runScrapeJob, runSummarizeJob, runDigestJob, runCleanupJob };
+export { runScrapeJob, runSummarizeJob, runDigestJob, runCleanupJob, rescrapeArticle, runForumRescrapeJob };

@@ -141,4 +141,20 @@ articles.get('/:id', async (c) => {
   return c.json({ success: true, data: row });
 });
 
+// Manual Rescrape (for Admin)
+articles.post('/:id/rescrape', async (c) => {
+  const { id } = c.req.param();
+  const { rescrapeArticle } = await import('../services/rescrape.js');
+  const { runSummarizeJob } = await import('../jobs/scheduler.js');
+  
+  const updated = await rescrapeArticle(id, true); // force rescrape
+  if (updated) {
+    // Fire and forget summarizing
+    runSummarizeJob().catch(console.error);
+    return c.json({ success: true, message: 'Article content updated and re-summarizing triggered.' });
+  } else {
+    return c.json({ success: false, message: 'Article content was not updated (either fetch failed, not a forum source, or no new content found).' });
+  }
+});
+
 export { articles };

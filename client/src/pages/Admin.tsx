@@ -587,12 +587,26 @@ function ArticlesTab() {
     reload();
   };
 
-  if (loading) return <div className="loading">Đang tải...</div>;
+  const handleRescrape = async (id: string) => {
+    try {
+      const res = await api.rescrapeArticle(id);
+      if (res.success) {
+        alert(res.message || 'ÄĂ£ láº¥y láº¡i comment vĂ  gá»i yĂªu cáº§u tĂ³m táº¯t');
+      } else {
+        alert(res.message || 'KhĂ´ng cĂ³ gĂ¬ Ä‘á»ƒ cáº­p nháº­t');
+      }
+      reload();
+    } catch (err: any) {
+      alert('Lá»—i: ' + err.message);
+    }
+  };
+
+  if (loading) return <div className="loading">Äang táº£i...</div>;
 
   return (
     <div style={{ display: 'grid', gap: 8 }}>
       <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
-        Hiển thị {articles.length} bài mới nhất
+        Hiá»ƒn thá»‹ {articles.length} bĂ i má»›i nháº¥t
       </div>
       {articles.map((a: any) => (
         <div key={a.id} className="card" style={{ padding: 12 }}>
@@ -609,6 +623,9 @@ function ArticlesTab() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+              {['voz', 'reddit'].includes(a.source_type) && (
+                <button className="btn btn-sm" onClick={() => handleRescrape(a.id)} title="Làm mới bình luận">⬇️</button>
+              )}
               <button className="btn btn-sm" onClick={() => handleReset(a.id)} title="Tóm tắt lại">🔄</button>
               <button className="btn btn-sm btn-danger" onClick={() => handleDelete(a.id)} title="Xóa">🗑</button>
             </div>

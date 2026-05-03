@@ -63,6 +63,7 @@ export const api = {
   },
   getArticle: (id: string) => request<any>(`/articles/${id}`),
   resetArticleSummary: (id: string) => request<any>(`/articles/${id}/reset-summary`, { method: 'POST' }),
+  rescrapeArticle: (id: string) => request<any>(`/articles/${id}/rescrape`, { method: 'POST' }),
   deleteArticle: (id: string) => request<any>(`/articles/${id}`, { method: 'DELETE' }),
 
   // Digests

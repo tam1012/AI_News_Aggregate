@@ -1,0 +1,1 @@
+ALTER TABLE articles ADD COLUMN rescraped_count INTEGER DEFAULT 0;

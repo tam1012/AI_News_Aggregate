@@ -120,7 +120,7 @@ interface ScrapeResult {
   errors: string[];
 }
 
-interface ForumComment {
+export interface ForumComment {
   author: string;
   body: string;
   reactions: number;
@@ -129,7 +129,7 @@ interface ForumComment {
   score: number;
 }
 
-interface VozPost {
+export interface VozPost {
   author: string;
   body: string;
   reactions: number;
@@ -151,7 +151,7 @@ function dedupeTextKey(text: string): string {
   return normalizeWhitespace(text).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').trim();
 }
 
-function scoreForumComment(body: string, reactions: number, page: number, order: number): number {
+export function scoreForumComment(body: string, reactions: number, page: number, order: number): number {
   const lengthBonus = Math.min(body.length / 140, 4);
   const reactionBonus = Math.min(reactions, 50) * 0.35;
   const earlyThreadBonus = page === 1 ? 1.2 : 0;
@@ -159,7 +159,7 @@ function scoreForumComment(body: string, reactions: number, page: number, order:
   return reactionBonus + lengthBonus + earlyThreadBonus + earlyReplyBonus;
 }
 
-function selectForumComments(comments: ForumComment[], maxComments: number): ForumComment[] {
+export function selectForumComments(comments: ForumComment[], maxComments: number): ForumComment[] {
   const seen = new Set<string>();
   const unique = comments.filter((comment) => {
     const key = dedupeTextKey(comment.body);
@@ -183,7 +183,7 @@ function selectForumComments(comments: ForumComment[], maxComments: number): For
 }
 
 // Use curl to bypass Cloudflare TLS fingerprinting that blocks Node.js fetch()
-function curlFetch(url: string, accept: string, timeoutSec: number): Promise<{ ok: boolean; status: number; text: () => Promise<string>; json: () => Promise<any> }> {
+export function curlFetch(url: string, accept: string, timeoutSec: number): Promise<{ ok: boolean; status: number; text: () => Promise<string>; json: () => Promise<any> }> {
   return new Promise((resolve, reject) => {
     const cmd = `curl -s -L --max-time ${timeoutSec} -H "User-Agent: ${BROWSER_UA}" -H "Accept: ${accept}" -H "Accept-Language: vi-VN,vi;q=0.9,en;q=0.8" "${url}"`;
     exec(cmd, { timeout: (timeoutSec + 2) * 1000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
@@ -221,7 +221,7 @@ async function getBrowser(): Promise<any> {
   return browserInstance;
 }
 
-async function browserFetch(url: string, timeoutMs: number = 30000, rawText: boolean = false): Promise<string> {
+export async function browserFetch(url: string, timeoutMs: number = 30000, rawText: boolean = false): Promise<string> {
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
@@ -254,7 +254,7 @@ async function browserFetch(url: string, timeoutMs: number = 30000, rawText: boo
   }
 }
 
-function parseVozPosts(html: string, page: number): VozPost[] {
+export function parseVozPosts(html: string, page: number): VozPost[] {
   const $ = cheerio.load(html);
   const posts: VozPost[] = [];
 
@@ -285,7 +285,7 @@ function parseVozPosts(html: string, page: number): VozPost[] {
   return posts;
 }
 
-function extractVozPagination(html: string, threadUrl: string): string[] {
+export function extractVozPagination(html: string, threadUrl: string): string[] {
   const $ = cheerio.load(html);
   const urls = new Set<string>();
 
@@ -300,7 +300,7 @@ function extractVozPagination(html: string, threadUrl: string): string[] {
   return [...urls];
 }
 
-function buildVozRawContent(posts: VozPost[], selectedComments: ForumComment[], pagesFetched: number, totalCommentsSeen: number): string {
+export function buildVozRawContent(posts: VozPost[], selectedComments: ForumComment[], pagesFetched: number, totalCommentsSeen: number): string {
   if (posts.length === 0) return '';
 
   const opPost = posts.find((post) => post.isOp) || posts[0];
@@ -320,7 +320,7 @@ function buildVozRawContent(posts: VozPost[], selectedComments: ForumComment[], 
   return fullContent;
 }
 
-function flattenRedditComments(nodes: any[], depth: number, maxDepth: number, bucket: ForumComment[]) {
+export function flattenRedditComments(nodes: any[], depth: number, maxDepth: number, bucket: ForumComment[]) {
   if (!Array.isArray(nodes) || depth > maxDepth) return;
 
   for (const node of nodes) {
@@ -346,7 +346,7 @@ function flattenRedditComments(nodes: any[], depth: number, maxDepth: number, bu
   }
 }
 
-function buildRedditRawContent(postContent: string, linkUrl: string | null, selectedComments: ForumComment[], totalCommentsSeen: number): string {
+export function buildRedditRawContent(postContent: string, linkUrl: string | null, selectedComments: ForumComment[], totalCommentsSeen: number): string {
   let fullContent = `[Nội dung bài viết]\n${postContent}\n\n`;
   if (linkUrl) {
     fullContent += `[Link chia sẻ]: ${linkUrl}\n\n`;
