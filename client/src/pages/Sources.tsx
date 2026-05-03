@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { api } from '../services/api';
 import { useFetch } from '../hooks/useApi';
 
@@ -37,7 +37,7 @@ export function Sources() {
       });
       setShowForm(true);
     } catch (err: any) {
-      setFormError('KhĂ´ng thá»ƒ phĂ¢n tĂ­ch URL: ' + err.message);
+      setFormError('Không thể phân tích URL: ' + err.message);
     } finally {
       setDetecting(false);
     }
@@ -95,17 +95,17 @@ export function Sources() {
     setShowForm(true);
     setDetectResult(null);
     setDetectUrl('');
-    // Cuá»™n lĂªn Ä‘áº§u trang
+    // Cuộn lên đầu trang
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`XĂ³a nguá»“n "${name}"?`)) return;
+    if (!confirm(`Xóa nguồn "${name}"?`)) return;
     try {
       await api.deleteSource(id);
       reload();
     } catch (err: any) {
-      alert('Lá»—i: ' + err.message);
+      alert('Lỗi: ' + err.message);
     }
   };
 
@@ -114,23 +114,23 @@ export function Sources() {
       await api.toggleSource(id);
       reload();
     } catch (err: any) {
-      alert('Lá»—i: ' + err.message);
+      alert('Lỗi: ' + err.message);
     }
   };
 
-  if (loading) return <div className="loading">Äang táº£i...</div>;
-  if (error) return <div className="loading" style={{ color: 'var(--color-error)' }}>Lá»—i: {error}</div>;
+  if (loading) return <div className="loading">Đang tải...</div>;
+  if (error) return <div className="loading" style={{ color: 'var(--color-error)' }}>Lỗi: {error}</div>;
 
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Nguá»“n tin ({(sources || []).length})</h1>
+        <h1 className="page-title">Nguồn tin ({(sources || []).length})</h1>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <h3 style={{ marginBottom: 8 }}>ThĂªm nguá»“n tin</h3>
+        <h3 style={{ marginBottom: 8 }}>Thêm nguồn tin</h3>
         <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: 12 }}>
-          DĂ¡n link trang web hoáº·c RSS feed, há»‡ thá»‘ng sáº½ tá»± Ä‘á»™ng phĂ¢n tĂ­ch. Vá»›i Reddit, há»‡ thá»‘ng sáº½ tá»± chuyá»ƒn sang RSS Ä‘á»ƒ láº¥y bĂ i á»•n Ä‘á»‹nh hÆ¡n.
+          Dán link trang web hoặc RSS feed, hệ thống sẽ tự động phân tích. Với Reddit, hệ thống sẽ tự chuyển sang RSS để lấy bài ổn định hơn.
         </p>
         <div style={{ display: 'flex', gap: 8 }}>
           <input
@@ -138,7 +138,7 @@ export function Sources() {
             value={detectUrl}
             onChange={(e) => setDetectUrl(e.target.value)}
             onKeyDown={handleDetectKeyDown}
-            placeholder="DĂ¡n link vĂ o Ä‘Ă¢y... VD: https://vnexpress.net hoáº·c https://vnexpress.net/rss/tin-moi-nhat.rss"
+            placeholder="Dán link vào đây... VD: https://vnexpress.net hoặc https://vnexpress.net/rss/tin-moi-nhat.rss"
             style={{
               flex: 1, padding: '10px 14px',
               border: '1px solid var(--color-border)', borderRadius: 'var(--radius)',
@@ -146,7 +146,7 @@ export function Sources() {
             }}
           />
           <button className="btn btn-primary" onClick={handleDetect} disabled={detecting || !detectUrl.trim()}>
-            {detecting ? 'Äang phĂ¢n tĂ­ch...' : 'PhĂ¢n tĂ­ch'}
+            {detecting ? 'Đang phân tích...' : 'Phân tích'}
           </button>
         </div>
 
@@ -170,7 +170,7 @@ export function Sources() {
             {detectResult.rss_feeds && detectResult.rss_feeds.length > 0 && (
               <div style={{ marginBottom: 8 }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: 4 }}>
-                  TĂ¬m tháº¥y {detectResult.rss_feeds.length} RSS feed:
+                  Tìm thấy {detectResult.rss_feeds.length} RSS feed:
                 </div>
                 {detectResult.rss_feeds.map((feed: any, i: number) => (
                   <div key={i} style={{
@@ -184,7 +184,7 @@ export function Sources() {
                       <span style={{ color: 'var(--color-text-muted)' }}>{feed.url}</span>
                     </span>
                     <button className="btn btn-sm btn-primary" onClick={() => selectFeed(feed.url, feed.title)}>
-                      Chá»n
+                      Chọn
                     </button>
                   </div>
                 ))}
@@ -193,7 +193,7 @@ export function Sources() {
 
             {detectResult.preview?.sample_items && (
               <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>BĂ i viáº¿t máº«u:</div>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>Bài viết mẫu:</div>
                 {detectResult.preview.sample_items.map((item: any, i: number) => (
                   <div key={i} style={{ marginBottom: 2 }}>
                     {i + 1}. {item.title}
@@ -208,24 +208,24 @@ export function Sources() {
       {showForm && (
         <form className="card" style={{ marginBottom: 16 }} onSubmit={handleSubmit}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h3>{editingId ? 'Sá»­a nguá»“n tin' : 'Chi tiáº¿t nguá»“n tin'}</h3>
+            <h3>{editingId ? 'Sửa nguồn tin' : 'Chi tiết nguồn tin'}</h3>
             <button type="button" className="btn btn-sm" onClick={() => { setShowForm(false); setDetectResult(null); setEditingId(null); }}>
-              Há»§y
+              Hủy
             </button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group">
-              <label>Loáº¡i</label>
+              <label>Loại</label>
               <select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })}>
                 <option value="rss">RSS Feed</option>
                 <option value="web">Web Scraping</option>
               </select>
             </div>
             <div className="form-group">
-              <label>NgĂ´n ngá»¯</label>
+              <label>Ngôn ngữ</label>
               <select value={formData.language} onChange={(e) => setFormData({ ...formData, language: e.target.value })}>
-                <option value="vi">Tiáº¿ng Viá»‡t</option>
+                <option value="vi">Tiếng Việt</option>
                 <option value="en">English</option>
                 <option value="ja">Japanese</option>
                 <option value="zh">Chinese</option>
@@ -235,7 +235,7 @@ export function Sources() {
           </div>
 
           <div className="form-group">
-            <label>TĂªn nguá»“n *</label>
+            <label>Tên nguồn *</label>
             <input type="text" required value={formData.name}
               placeholder="VD: VnExpress, TechCrunch..."
               onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
@@ -250,13 +250,13 @@ export function Sources() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group">
-              <label>Danh má»¥c</label>
+              <label>Danh mục</label>
               <input type="text" value={formData.category}
                 placeholder="VD: cong-nghe, kinh-te, the-gioi..."
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })} />
             </div>
             <div className="form-group" style={{ display: 'none' }}>
-              <label>Táº§n suáº¥t láº¥y tin (phĂºt)</label>
+              <label>Tần suất lấy tin (phút)</label>
               <input type="number" min="30" value={formData.fetch_interval_minutes}
                 onChange={(e) => setFormData({ ...formData, fetch_interval_minutes: parseInt(e.target.value) || 180 })} />
             </div>
@@ -265,14 +265,14 @@ export function Sources() {
           {formError && <div style={{ color: 'var(--color-error)', marginBottom: 12, fontSize: '0.875rem' }}>{formError}</div>}
 
           <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? 'Äang lÆ°u...' : editingId ? 'Cáº­p nháº­t nguá»“n tin' : 'ThĂªm nguá»“n tin'}
+            {saving ? 'Đang lưu...' : editingId ? 'Cập nhật nguồn tin' : 'Thêm nguồn tin'}
           </button>
         </form>
       )}
 
       <div className="article-list">
         {(sources || []).length === 0 ? (
-          <div className="empty-state">ChÆ°a cĂ³ nguá»“n tin nĂ o. DĂ¡n link vĂ o Ă´ trĂªn Ä‘á»ƒ báº¯t Ä‘áº§u.</div>
+          <div className="empty-state">Chưa có nguồn tin nào. Dán link vào ô trên để bắt đầu.</div>
         ) : (
           (sources || []).map((source: any) => (
             <div key={source.id} className="card source-item">
@@ -280,19 +280,19 @@ export function Sources() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                   <span className={`badge badge-${source.type}`}>{source.type.toUpperCase()}</span>
                   <span className="source-name">{source.name}</span>
-                  {!source.is_enabled && <span className="badge badge-error">Táº¯t</span>}
+                  {!source.is_enabled && <span className="badge badge-error">Tắt</span>}
                   {source.consecutive_failures > 0 && (
-                    <span className="badge badge-error">{source.consecutive_failures} lá»—i</span>
+                    <span className="badge badge-error">{source.consecutive_failures} lỗi</span>
                   )}
                 </div>
                 <div className="source-url">{source.url}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
-                  {source.language} | {source.category || 'ChÆ°a phĂ¢n loáº¡i'} | Má»—i {source.fetch_interval_minutes} phĂºt
-                  {source.last_success_at && ` | Láº§n cuá»‘i: ${new Date(source.last_success_at).toLocaleString('vi-VN')}`}
+                  {source.language} | {source.category || 'Chưa phân loại'} | Mỗi {source.fetch_interval_minutes} phút
+                  {source.last_success_at && ` | Lần cuối: ${new Date(source.last_success_at).toLocaleString('vi-VN')}`}
                 </div>
                 {source.last_error_message && (
                   <div style={{ fontSize: '0.75rem', color: 'var(--color-error)', marginTop: 2 }}>
-                    Lá»—i: {source.last_error_message}
+                    Lỗi: {source.last_error_message}
                   </div>
                 )}
               </div>
@@ -302,10 +302,10 @@ export function Sources() {
                   <span className="slider"></span>
                 </label>
                 <button className="btn btn-sm" onClick={() => handleEdit(source)}>
-                  Sá»­a
+                  Sửa
                 </button>
                 <button className="btn btn-sm btn-danger" onClick={() => handleDelete(source.id, source.name)}>
-                  XĂ³a
+                  Xóa
                 </button>
               </div>
             </div>

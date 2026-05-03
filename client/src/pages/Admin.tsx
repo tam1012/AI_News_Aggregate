@@ -601,10 +601,10 @@ function ArticlesTab() {
     }
   };
 
-  if (loading) return <div className="loading">Äang táº£i...</div>;
+  if (loading) return <div className="loading">Đang tải...</div>;
 
   return (
-    <div style={{ display: 'grid', gap: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
       <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
         Hiển thị {articles.length} bài mới nhất
       </div>
