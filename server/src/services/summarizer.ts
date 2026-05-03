@@ -77,32 +77,29 @@ NGUYÊN TẮC:
 2. Giữ nguyên tên riêng, số liệu, thuật ngữ kỹ thuật.
 3. Tránh sáo rỗng ("Theo đó", "Được biết").
 
-QUAN TRỌNG VỀ ĐỊNH DẠNG:
-- Mỗi section PHẢI dùng bullet points (-) để liệt kê thông tin, KHÔNG viết đoạn văn dài.
-- In đậm (**bold**) các thuật ngữ, tên riêng, con số quan trọng.
-- Tiêu đề sections phải ngắn gọn, rõ ràng, KHÔNG dùng ngoặc vuông.
-- Viết sao cho dễ scan — người đọc lướt qua cũng nắm được ý chính.
+NGUYÊN TẮC ĐỊNH DẠNG (linh hoạt theo nội dung):
+- **Phải có tiêu đề sections ngắn gọn, rõ ràng** — mỗi section mở đầu bằng ## và tên mô tả trực diện.
+- **Bullet points (-)** khi liệt kê nhiều điểm cùng loại (ví dụ: danh sách tính năng, timeline, so sánh).
+- **In đậm (bold)** cho thuật ngữ, tên riêng, con số quan trọng. Đặt bold ở đầu mỗi bullet nếu bullet có dạng "Label: mô tả".
+- **Đoạn văn ngắn** khi cần giải thích bối cảnh hoặc phân tích sâu (1-3 câu).
+- **Numbered list (1. 2. 3.)** khi có thứ tự hoặc quy trình.
+- **KHÔNG dùng ngoặc vuông [ ] trong tiêu đề sections.**
+- LINH HOẠT: chọn cách trình bày phù hợp nhất với nội dung bài viết. Bài có timeline → bullet với bold label + ngày tháng. Bài có nhiều sản phẩm → numbered list. Bài phân tích → mix bullet và đoạn ngắn. Bài có so sánh → bullet nêu rõ A vs B.
+- BẮT BUỘC có TLDR ở đầu: 1 đoạn ngắn 2-3 câu tóm tắt toàn bộ sự việc. Bắt đầu bằng "TLDR:".
 
 ĐỊNH DẠNG OUTPUT (Markdown, KHÔNG emoji):
 
 TLDR:
-[1 đoạn văn ngắn 2-3 câu tóm tắt sự việc. Bắt đầu bằng "TLDR:"]
+[1-2 câu tóm tắt sự việc. Bắt đầu bằng "TLDR:"]
 
-## [Tiêu đề sự kiện chính]
-- Điểm tin 1: mô tả cụ thể, có số liệu nếu có
-- Điểm tin 2: ai làm gì, ở đâu, khi nào
-- Điểm tin 3: kết quả hoặc phản ứng ban đầu
-- Điểm tin 4 (nếu có): thêm chi tiết đáng chú ý
+## [Tiêu đề section 1 — mô tả trực diện sự kiện]
+[Chọn format phù hợp: bullet points, numbered list, hoặc đoạn ngắn. Tùy nội dung.]
 
-## [Tiêu đề bối cảnh hoặc phân tích]
-- Điểm phân tích 1: tại sao quan trọng
-- Điểm phân tích 2: tiền sử hoặc so sánh
-- Điểm phân tích 3: tác động đến ngành/liên quan
+## [Tiêu đề section 2 — bối cảnh hoặc phân tích]
+[Chọn format phù hợp.]
 
-## [Tiêu đề phản ứng hoặc hệ quả]
-- Phản ứng từ bên liên quan A
-- Phản ứng từ bên liên quan B
-- Hệ quả dự kiến
+## [Tiêu đề section 3 — phản ứng hoặc hệ quả]
+[Chọn format phù hợp. Section này có thể bỏ qua nếu không đủ thông tin.]
 
 Tiêu đề: ${article.title}
 Nguồn: ${article.source_name}
@@ -121,31 +118,28 @@ NGUYÊN TẮC:
 2. Phân biệt OP (bài gốc) vs Comments (cộng đồng).
 3. Lọc bỏ troll, meme, comment vô nghĩa. Ưu tiên comment có kinh nghiệm thực, tranh luận logic, upvote cao.
 
-QUAN TRỌNG VỀ ĐỊNH DẠNG:
-- Mỗi section PHẢI dùng bullet points (-) để liệt kê, KHÔNG viết đoạn văn dài.
-- In đậm (**bold**) tên riêng, thuật ngữ, con số quan trọng.
-- Tiêu đề sections ngắn gọn, rõ ràng, KHÔNG dùng ngoặc vuông.
+NGUYÊN TẮC ĐỊNH DẠNG (linh hoạt theo nội dung):
+- **Tiêu đề sections ngắn gọn, rõ ràng** — mỗi section mở đầu bằng ## và tên mô tả trực diện.
+- **Bullet points (-)** khi liệt kê nhiều ý kiến, tính năng, hoặc so sánh.
+- **Bold label + mô tả** ở đầu mỗi bullet nếu bullet có dạng "Điểm A: giải thích".
+- **Đoạn văn ngắn** khi cần tóm tắt bối cảnh bài gốc.
+- **KHÔNG dùng ngoặc vuông [ ] trong tiêu đề sections.**
+- LINH HOẠT: chọn cách trình bày phù hợp với loại thảo luận. Bài có nhiều ý kiến trái chiều → bullet bold label + mô tả. Bài hỏi kinh nghiệm → bullet liệt kê kinh nghiệm thực tế. Bài thảo luận kỹ thuật → numbered list + bullet chi tiết.
+- BẮT BUỘC có TLDR ở đầu: 1-2 câu tóm tắt chủ đề + xu hướng phản hồi. Bắt đầu bằng "TLDR:".
 
 ĐỊNH DẠNG OUTPUT (Markdown, KHÔNG emoji):
 
 TLDR:
-[1 đoạn văn ngắn 2-3 câu: chủ đề + xu hướng phản hồi. Bắt đầu bằng "TLDR:"]
+[1-2 câu: chủ đề + xu hướng phản hồi. Bắt đầu bằng "TLDR:"]
 
-## [Tiêu đề bài gốc]
-- Bối cảnh bài viết: ai đăng, nội dung chính
-- Câu hỏi hoặc vấn đề được nêu ra
+## [Tiêu đề section 1 — bài gốc hoặc vấn đề]
+[Chọn format phù hợp: đoạn ngắn tóm tắt, bullet, hoặc mix.]
 
-## [Tiêu đề luồng ý kiến A]
-- Ý kiến 1: trích dẫn luận điểm cụ thể, ghi rõ đặc điểm người viết
-- Ý kiến 2: thêm ví dụ hoặc kinh nghiệm thực tế
+## [Tiêu đề section 2 — ý kiến nổi bật]
+[Chọn format phù hợp: bullet bold label + mô tả, hoặc đoạn ngắn.]
 
-## [Tiêu đề luồng ý kiến B]
-- Ý kiến đối lập: luận điểm cụ thể
-- Phản biện hoặc góc nhìn khác
-
-## [Kết luận]
-- Điểm đáng chú ý nhất
-- Xu hướng chung của cộng đồng (nếu có)
+## [Tiêu đề section 3 — ý kiến khác hoặc tranh luận]
+[Section này có thể bỏ qua nếu không có nhiều ý kiến trái chiều.]
 
 Tiêu đề: ${article.title}
 Nguồn: ${article.source_name}
