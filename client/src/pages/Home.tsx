@@ -373,13 +373,23 @@ function FeedItem({
 
   const preview = useMemo(() => {
     const text = article.summary_text || article.raw_excerpt || '';
+    
+    // Extract the paragraph directly under "## Tổng quan"
+    const overviewMatch = text.match(/## Tổng quan[^\n]*\n+([^#]+)/i);
+    if (overviewMatch && overviewMatch[1].trim()) {
+      const extracted = overviewMatch[1].trim().replace(/\n+/g, ' ');
+      return extracted.length > 220 ? extracted.substring(0, 217) + '...' : extracted;
+    }
+
+    // Fallback: strip markdown and get the first chunk
     const plain = text
+      .replace(/^#+.*$/gm, '') // remove headings completely
       .replace(/\*\*[^*]+\*\*:?\s*/g, '') // remove bold labels
       .replace(/^[-•]\s*/gm, '')
-      .replace(/#{1,3}\s*/g, '')
       .replace(/\n+/g, ' ')
       .trim();
-    return plain.substring(0, 200);
+      
+    return plain.length > 220 ? plain.substring(0, 217) + '...' : plain;
   }, [article]);
 
   return (
