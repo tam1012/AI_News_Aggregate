@@ -659,3 +659,6 @@ Náº¿u dÃ¹ng Ä‘Ãºng theo má»¥c tiÃªu ban Ä‘áº§u cá»§a project nÃ y, SynthNews hoá
 This project uses GitHub Actions for automatic deployment to the Oracle VPS.
 
 - **Lýu ?:** Quy tr?nh này s? t? ð?ng ch?y l?nh \git pull\ và \docker compose up -d --build\ trên VPS. Do ðó, KHÔNG C?N SSH vào VPS ð? restart service th? công.
+
+## Scraping Strategies
+- **Reddit:** Do Reddit ch?n API (Data API) g?t gao, project s? d?ng **Puppeteer (Headless Chrome)** ch?y ng?m ð? truy c?p vào \old.reddit.com\. Cõ ch? này mô ph?ng ngý?i dùng th?t ð? lách qua block c?a Cloudflare và l?y comment v? mà không c?n API Key.
