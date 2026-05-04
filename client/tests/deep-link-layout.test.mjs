@@ -26,9 +26,14 @@ test('article deep links use the fluid layout shell', () => {
   assert.equal(usesFluidShell('/article/art_zXtPJ0VQPsQBv-my'), true);
 });
 
-test('regular article-free routes keep their existing shell class behavior', () => {
+test('home feed routes use the fluid layout shell on hard refresh', () => {
   assert.equal(usesFluidShell('/'), true);
+  assert.equal(usesFluidShell('/voz'), true);
+  assert.equal(usesFluidShell('/reddit'), true);
+  assert.equal(usesFluidShell('/digest'), true);
+});
+
+test('admin routes keep the fluid layout shell', () => {
   assert.equal(usesFluidShell('/admin'), true);
   assert.equal(usesFluidShell('/sources'), true);
-  assert.equal(usesFluidShell('/voz'), false);
 });
