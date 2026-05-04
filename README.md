@@ -24,6 +24,7 @@ Trọng tâm của project này không phải là một cổng tin tức công c
 - [Bảo mật và auth](#bảo-mật-và-auth)
 - [Ghi chú vận hành thực tế](#ghi-chú-vận-hành-thực-tế)
 - [Các cải tiến gần đây](#các-cải-tiến-gần-đây)
+- [Scraping Strategies](#scraping-strategies)
 
 ## Tính năng chính
 
@@ -676,5 +677,99 @@ This project uses GitHub Actions for automatic deployment to the Oracle VPS.
 - **Lưu ý:** Quy trình này sẽ tự động chạy lệnh git pull và docker compose up -d --build trên VPS. Do đó, KHÔNG CẦN SSH vào VPS để restart service thủ công.
 
 ## Scraping Strategies
-- **Reddit:** Do Reddit chặn API (Data API) gắt gao, project sử dụng **Puppeteer (Headless Chrome)** chạy ngầm để truy cập vào old.reddit.com. Cơ chế này mô phỏng người dùng thật để lách qua block của Cloudflare và lấy comment về mà không cần API Key.
-- **Voz:** Dùng crawler quét từng page của thread để lấy comment nhiều nhất có thể (chặn giới hạn tuỳ chỉnh trong file env, ví dụ tối đa 15 trang).
+
+### Reddit — Waterfall 4-layer Comment Extraction
+
+Reddit chặn API gắt gao (rate-limit, Cloudflare, Data API yêu cầu trả phí). Project giải quyết bằng cơ chế **waterfall**: thử từng strategy theo thứ tự ưu tiên, strategy đầu tiên thành công sẽ được dùng, nếu thất bại thì tự động fallback xuống strategy tiếp theo.
+
+#### Bước 1: Lấy danh sách bài mới
+
+Dùng **Subreddit RSS Feed** (`/r/{sub}/hot/.rss`) để lấy danh sách thread hot. RSS feed là endpoint ổn định nhất của Reddit, hiếm khi bị block.
+
+#### Bước 2: Lấy comment cho từng bài (Waterfall)
+
+Với mỗi bài mới, hệ thống thử lấy comment theo thứ tự:
+
+| # | Strategy | Endpoint | Ưu điểm | Nhược điểm |
+|---|----------|----------|----------|------------|
+| 0 | **Reddit OAuth API** | `oauth.reddit.com` | Full data (score, replies, selftext) | Cần Reddit app credentials |
+| 1 | **Puppeteer Headless** | `old.reddit.com/.json` | Bypass Cloudflare, full JSON | Chậm (~25s), tốn RAM |
+| 2 | **Comment RSS Feed** | `reddit.com/{path}.rss` | Nhẹ, nhanh, không bị block | Không có score, giới hạn số comment |
+| 3 | **Cloudflare Worker Proxy** | Custom proxy URL | Truy cập API từ IP sạch | Cần deploy Worker riêng |
+| 4 | **Pullpush Archive** | `api.pullpush.io` | Backup cuối cùng | Data có thể chậm index vài giờ |
+
+**Thứ tự ưu tiên thực tế:**
+- Nếu có OAuth credentials (`REDDIT_CLIENT_ID`, etc.) → dùng **Strategy 0** trực tiếp, bỏ qua waterfall.
+- Nếu không có OAuth → chạy waterfall **1 → 2 → 3 → 4**, dừng ngay khi strategy nào trả comment thành công.
+- Giới hạn tối đa **8 bài được enrich** mỗi lần cào (tránh quá tải Puppeteer/proxy).
+
+#### Chi tiết từng strategy
+
+**Strategy 0 — Reddit OAuth API** (`hasRedditOAuth()`)
+- Gọi `oauth.reddit.com/{postPath}.json` với Bearer token.
+- Token lấy qua Reddit OAuth password grant, tự cache và refresh.
+- Trả về full JSON: selftext, outbound URL, comments tree với score.
+- Env vars: `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USERNAME`, `REDDIT_PASSWORD`.
+
+**Strategy 1 — Puppeteer Headless Browser** (`browserFetch()`)
+- Dùng Chromium headless (Puppeteer) truy cập `old.reddit.com/{postPath}.json`.
+- Anti-detection: xóa `navigator.webdriver`, set user agent Chrome thật, viewport 1920×1080.
+- Tự dismiss cookie consent wall nếu có.
+- Parse JSON từ `document.body.innerText` (rawText mode).
+- Timeout: 25 giây.
+
+**Strategy 2 — Comment RSS Feed**
+- Fetch `reddit.com/{postPath}.rss` — endpoint RSS của chính thread đó.
+- Reddit cung cấp RSS cho cả comment (ít người biết), không bị Cloudflare block.
+- Hạn chế: không có score/upvote, chỉ lấy được ~25 comment gần nhất.
+- Dù vậy đủ để AI có ngữ cảnh thảo luận cho tóm tắt.
+
+**Strategy 3 — Cloudflare Worker Proxy**
+- Gửi request qua proxy URL tự deploy (`REDDIT_PROXY_URL`).
+- Proxy fetch Reddit API từ IP Cloudflare sạch, trả JSON nguyên bản.
+- Chỉ active nếu env `REDDIT_PROXY_URL` được set.
+
+**Strategy 4 — Pullpush Archive API**
+- Gọi `api.pullpush.io/reddit/comment/search?link_id={postId}`.
+- Pullpush lưu trữ Reddit data nhưng index chậm (có thể vài giờ sau khi post).
+- Sort theo score, trả về comment kèm score.
+
+#### Comment Processing Pipeline
+
+Sau khi lấy được raw comments từ bất kỳ strategy nào:
+
+1. **Flatten**: Comments tree (nested replies) được flatten thành mảng phẳng, giữ lại depth info.
+2. **Filter**: Loại `[deleted]`, `[removed]`, comment < 20 ký tự.
+3. **Score**: Tính điểm dựa trên `upvote score × 0.35 + length bonus + early thread bonus + depth bonus`.
+4. **Dedupe**: Loại comment trùng nội dung (normalize text → lowercase → remove punctuation).
+5. **Select**: Chọn top N comment (mặc định 30), sort lại theo thứ tự xuất hiện gốc.
+6. **Build content**: Ghép thành `raw_content` cấu trúc: `[Nội dung bài viết] + [Link chia sẻ] + [Dữ liệu thảo luận] + [Bình luận cộng đồng]`.
+
+#### Retry cơ chế (mỗi 10 phút)
+
+Bài Reddit tạo trong 48 giờ qua mà vẫn có "Đã trích 0 comment" sẽ được retry tự động:
+- Dùng **Pullpush API** để lấy comment (vì lúc này Pullpush đã index xong).
+- Nếu lấy được → cập nhật `raw_content`, reset `summary_status = 'pending'` → AI tóm tắt lại.
+- Tối đa 10 bài mỗi lần retry.
+
+#### Env vars liên quan
+
+| Biến | Mặc định | Mô tả |
+|------|----------|-------|
+| `REDDIT_COMMENT_LIMIT` | `30` | Số comment tối đa được giữ lại |
+| `REDDIT_COMMENT_DEPTH` | `3` | Độ sâu reply tree tối đa |
+| `REDDIT_CLIENT_ID` | *(trống)* | Reddit OAuth app client ID |
+| `REDDIT_CLIENT_SECRET` | *(trống)* | Reddit OAuth app secret |
+| `REDDIT_USERNAME` | *(trống)* | Reddit account username |
+| `REDDIT_PASSWORD` | *(trống)* | Reddit account password |
+| `REDDIT_PROXY_URL` | *(trống)* | URL Cloudflare Worker proxy |
+
+### VOZ — Multi-page Thread Crawler
+
+- Lấy danh sách thread mới từ **VOZ RSS feed**.
+- Với mỗi thread, fetch trang HTML thật bằng `curl` (bypass Cloudflare TLS fingerprinting).
+- Parse bài gốc (OP) + bình luận thành viên bằng **Cheerio**.
+- Tự phát hiện và duyệt pagination (tối đa `VOZ_MAX_THREAD_PAGES` trang, mặc định 15).
+- Comment được scoring, dedup, chọn lọc top `FORUM_MAX_COMMENTS` (mặc định 70).
+- Sleep 500ms giữa các page để tránh rate-limit.
+
