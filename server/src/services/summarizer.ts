@@ -1,7 +1,10 @@
 import { query, getMany } from '../db/index.js';
 import { generateId, truncate } from '../lib/utils.js';
 import { normalizeTldr } from '../lib/tldr.js';
+import { PromptConfig } from '../lib/promptConfig.js';
+import { ParsedSummaryOutput, parseAiSummaryOutput } from '../lib/summaryOutput.js';
 import { callAi } from './ai-client.js';
+import { getPromptConfig } from './prompt-settings.js';
 
 interface ArticleForSummary {
   id: string;
@@ -51,8 +54,9 @@ function cleanSummaryText(summaryText: string): string {
   return summaryText.replace(/<tldr>[\s\S]*?<\/tldr>/i, '').trim();
 }
 
-export async function summarizeArticle(article: ArticleForSummary): Promise<string | null> {
+export async function summarizeArticle(article: ArticleForSummary, promptConfig?: PromptConfig): Promise<ParsedSummaryOutput | null> {
   const content = article.raw_content || article.raw_excerpt || '';
+  const config = promptConfig || await getPromptConfig();
   
   const isForum = article.source_name?.toLowerCase().includes('reddit') ||
                   article.source_name?.toLowerCase().includes('voz') ||
@@ -62,19 +66,41 @@ export async function summarizeArticle(article: ArticleForSummary): Promise<stri
   if (!isForum && content.length < 80) return null;
 
   const prompt = isForum
-    ? buildForumPrompt(article, content)
-    : buildNewsPrompt(article, content);
+    ? buildForumPrompt(article, content, config)
+    : buildNewsPrompt(article, content, config);
 
   try {
     const result = await callAi(prompt);
-    return result.trim();
+    return parseAiSummaryOutput(result.trim(), config.allowed_tags);
   } catch (err: any) {
     console.error(`Failed to summarize article ${article.id}:`, err.message);
     throw err;
   }
 }
 
-function buildNewsPrompt(article: ArticleForSummary, content: string): string {
+function buildStructuredOutputContract(config: PromptConfig): string {
+  const customContext = config.custom_context
+    ? `\nCustom context: ${config.custom_context}`
+    : '';
+
+  return `Return ONLY one valid JSON object. Do not wrap it in markdown fences.
+JSON schema:
+{
+  "tldr": "1-2 natural sentences, max 200 characters",
+  "summary_short": "1 short paragraph for article cards, max 300 characters",
+  "hot_score": 1,
+  "tags": ["one to three allowed tags"],
+  "editorial_markdown": "full editorial article in Markdown, using ## headings"
+}
+
+Rules for JSON fields:
+- Write all human-readable fields in ${config.output_language}.
+- hot_score must be an integer from 1 to 10. Prioritize: ${config.topic_priorities.join(', ')}.
+- tags must use only these exact values: ${config.allowed_tags.join(', ')}.
+- editorial_markdown must keep the deep editorial style and must not include the tldr tag.${customContext}`;
+}
+
+function buildNewsPrompt(article: ArticleForSummary, content: string, config: PromptConfig): string {
   return `Bạn là biên tập viên cấp cao tại một tòa soạn báo uy tín. Đọc kỹ toàn bộ <raw_data> và viết một bài phân tích CHUYÊN SÂU, giúp người đọc hiểu TOÀN DIỆN sự việc mà KHÔNG cần đọc bài gốc.
 
 NGƯỜI ĐỌC: Một chuyên gia công nghệ/kinh doanh Việt Nam, am hiểu thuật ngữ, muốn nắm bắt nhanh nhưng đầy đủ. Viết cho người bận rộn nhưng thông minh.
@@ -132,10 +158,12 @@ Ngôn ngữ gốc: ${article.language || 'không rõ'}
 
 <raw_data>
 ${truncate(content, 28000)}
-</raw_data>`;
+</raw_data>
+
+${buildStructuredOutputContract(config)}`;
 }
 
-function buildForumPrompt(article: ArticleForSummary, content: string): string {
+function buildForumPrompt(article: ArticleForSummary, content: string, config: PromptConfig): string {
   return `Bạn là phóng viên mảng cộng đồng và diễn đàn. Đọc kỹ toàn bộ <raw_data> (bao gồm bài gốc + bình luận) và viết bản tổng hợp CHUYÊN SÂU, giúp người đọc nắm được toàn cảnh cuộc thảo luận mà không cần lướt thread.
 
 NGƯỜI ĐỌC: Chuyên gia công nghệ/kinh doanh Việt Nam, muốn biết cộng đồng đang nghĩ gì, ai nói gì hay, có insight thực tế nào đáng giá.
@@ -191,12 +219,15 @@ Nguồn: ${article.source_name}
 
 <raw_data>
 ${truncate(content, 32000)}
-</raw_data>`;
+</raw_data>
+
+${buildStructuredOutputContract(config)}`;
 }
 
 // Tóm tắt hàng loạt articles chưa có summary
 export async function summarizePendingArticles(): Promise<{ processed: number; succeeded: number; failed: number }> {
   const maxCalls = parseInt(process.env.MAX_AI_CALLS_PER_RUN || '30');
+  const promptConfig = await getPromptConfig();
 
   const pendingArticles = await claimPendingArticles(maxCalls);
 
@@ -205,14 +236,21 @@ export async function summarizePendingArticles(): Promise<{ processed: number; s
 
   for (const article of pendingArticles) {
     try {
-      const summary = await summarizeArticle(article);
-      if (summary) {
-        const tldr = normalizeTldr(extractTldr(summary));
-        const cleanedSummary = cleanSummaryText(summary);
+      const parsed = await summarizeArticle(article, promptConfig);
+      if (parsed) {
+        const tldr = normalizeTldr(parsed.tldr || extractTldr(parsed.editorialMarkdown));
+        const cleanedSummary = cleanSummaryText(parsed.editorialMarkdown);
 
         await query(
-          'UPDATE articles SET summary_text = $1, summary_status = $2, tldr = $3 WHERE id = $4',
-          [cleanedSummary, 'done', tldr || null, article.id]
+          `UPDATE articles
+           SET summary_text = $1,
+               summary_status = $2,
+               tldr = $3,
+               summary_short = $4,
+               hot_score = $5,
+               tags = $6
+           WHERE id = $7`,
+          [cleanedSummary, 'done', tldr || null, parsed.summaryShort, parsed.hotScore, parsed.tags, article.id]
         );
         succeeded++;
       } else {
@@ -233,19 +271,20 @@ export async function summarizePendingArticles(): Promise<{ processed: number; s
 
 // Tạo digest từ các articles đã có summary
 export async function generateDigest(): Promise<string | null> {
+  const promptConfig = await getPromptConfig();
   const now = new Date();
   const periodEnd = now.toISOString();
   const periodStart = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
 
   const articlesForDigest = await getMany(
-    `SELECT a.id, a.title, a.summary_text, a.url, a.published_at,
+    `SELECT a.id, a.title, a.summary_text, a.summary_short, a.hot_score, a.tags, a.url, a.published_at,
             s.name as source_name, s.category
      FROM articles a
      LEFT JOIN sources s ON s.id = a.source_id
      WHERE a.summary_status = 'done'
        AND a.created_at >= $1
        AND a.created_at <= $2
-     ORDER BY a.published_at DESC NULLS LAST
+     ORDER BY a.hot_score DESC NULLS LAST, a.published_at DESC NULLS LAST
      LIMIT 50`,
     [periodStart, periodEnd]
   );
@@ -256,11 +295,20 @@ export async function generateDigest(): Promise<string | null> {
   }
 
   const articleSummaries = articlesForDigest
-    .map((a, i) => `${i + 1}. [${a.source_name}] ${a.title}\n   ${a.summary_text || 'Chưa có tóm tắt'}`)
+    .map((a, i) => {
+      const score = a.hot_score ? ` | score ${a.hot_score}` : '';
+      const tags = Array.isArray(a.tags) && a.tags.length > 0 ? ` | tags: ${a.tags.join(', ')}` : '';
+      return `${i + 1}. [${a.source_name}${score}${tags}] ${a.title}\n   ${a.summary_short || a.summary_text || 'Chưa có tóm tắt'}`;
+    })
     .join('\n\n');
 
   const digestDateStr = now.toISOString().split('T')[0];
+  const customContext = promptConfig.custom_context ? `\nNgữ cảnh tùy chỉnh: ${promptConfig.custom_context}` : '';
   const prompt = `Bạn là tổng biên tập bản tin hằng ngày cho một chuyên gia công nghệ/kinh doanh Việt Nam bận rộn. Nhiệm vụ: tổng hợp các bài viết dưới đây thành một bản tin CHUYÊN SÂU, viết hay, có chiều sâu phân tích — không chỉ liệt kê mà phải KỂ CHUYỆN.
+
+Ngôn ngữ output: ${promptConfig.output_language}
+Chủ đề ưu tiên: ${promptConfig.topic_priorities.join(', ')}
+Gợi ý nhóm heading: ${promptConfig.digest_headings.join(', ')}${customContext}
 
 QUY TẮC:
 1. Nhóm tin theo chủ đề lớn nhưng HEADING phải mô tả cụ thể nội dung:

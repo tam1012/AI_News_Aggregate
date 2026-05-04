@@ -3,7 +3,7 @@ import { Context, Next } from 'hono';
 const WEAK_ADMIN_TOKENS = new Set(['', 'change-me', 'change-me-to-a-random-string']);
 
 // Routes that require auth for ALL methods (including GET)
-const PROTECTED_PREFIXES = ['/api/ai-providers', '/api/health'];
+const PROTECTED_PREFIXES = ['/api/ai-providers', '/api/health', '/api/settings'];
 const PUBLIC_GET_PATHS = new Set(['/api/health/live']);
 
 function extractBearerToken(value?: string): string {
@@ -27,19 +27,24 @@ export function hasValidAdminToken(authHeader?: string): boolean {
   return extractBearerToken(authHeader) === adminToken;
 }
 
+export function requiresAdminTokenForRequest(method: string, path: string): boolean {
+  if (method.toUpperCase() === 'GET' && PUBLIC_GET_PATHS.has(path)) {
+    return false;
+  }
+
+  const isFullyProtected = PROTECTED_PREFIXES.some(prefix => path.startsWith(prefix));
+  if (method.toUpperCase() === 'GET' && !isFullyProtected) {
+    return false;
+  }
+
+  return true;
+}
+
 export async function authMiddleware(c: Context, next: Next) {
   const path = c.req.path;
   const method = c.req.method;
 
-  if (method === 'GET' && PUBLIC_GET_PATHS.has(path)) {
-    return next();
-  }
-
-  // Check if this route requires auth for ALL methods
-  const isFullyProtected = PROTECTED_PREFIXES.some(prefix => path.startsWith(prefix));
-
-  // Public: only GET on non-protected routes (articles, sources list, digests)
-  if (method === 'GET' && !isFullyProtected) {
+  if (!requiresAdminTokenForRequest(method, path)) {
     return next();
   }
 

@@ -13,6 +13,7 @@ import { articles } from './routes/articles.js';
 import { digests } from './routes/digests.js';
 import { health } from './routes/health.js';
 import { aiProviders } from './routes/ai-providers.js';
+import { settings } from './routes/settings.js';
 import { assertAdminTokenConfigured, authMiddleware } from './lib/auth.js';
 import { getOne } from './db/index.js';
 import { startCronJobs } from './jobs/scheduler.js';
@@ -50,6 +51,7 @@ app.route('/api/sources', sources);
 app.route('/api/articles', articles);
 app.route('/api/digests', digests);
 app.route('/api/ai-providers', aiProviders);
+app.route('/api/settings', settings);
 
 // Serve static frontend (production)
 const publicDir = join(__dirname, '..', 'public');

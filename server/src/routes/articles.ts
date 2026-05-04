@@ -1,9 +1,8 @@
 import { Hono } from 'hono';
 import { getMany, getOne, query } from '../db/index.js';
+import { LOCAL_DATE_SQL, LOCAL_DATE_TEXT_SQL, buildArticleListFilters } from '../lib/articleFilters.js';
 
 const articles = new Hono();
-const LOCAL_DATE_SQL = `DATE(COALESCE(a.published_at, a.created_at) AT TIME ZONE 'Asia/Ho_Chi_Minh')`;
-const LOCAL_DATE_TEXT_SQL = `TO_CHAR(${LOCAL_DATE_SQL}, 'YYYY-MM-DD')`;
 
 function parseBoundedInt(value: string | undefined, fallback: number, min: number, max: number): number {
   const parsed = parseInt(value || '', 10);
@@ -44,49 +43,36 @@ articles.get('/', async (c) => {
   const sourceId = c.req.query('sourceId');
   const status = c.req.query('status');
   const date = c.req.query('date'); // YYYY-MM-DD local VN date
+  const tag = c.req.query('tag');
+  const minScore = c.req.query('minScore');
   const offset = (page - 1) * limit;
 
-  if (status && !['pending', 'processing', 'done', 'failed', 'skipped'].includes(status)) {
-    return c.json({ success: false, error: { code: 'VALIDATION', message: 'Invalid status' } }, 400);
-  }
-
-  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return c.json({ success: false, error: { code: 'VALIDATION', message: 'date must be YYYY-MM-DD' } }, 400);
-  }
-
-  let where = 'WHERE 1=1';
-  const params: any[] = [];
-  let paramIndex = 1;
-
-  if (sourceId) {
-    where += ` AND a.source_id = $${paramIndex++}`;
-    params.push(sourceId);
-  }
-  if (status) {
-    where += ` AND a.summary_status = $${paramIndex++}`;
-    params.push(status);
-  }
-  if (date) {
-    where += ` AND ${LOCAL_DATE_SQL} = $${paramIndex++}`;
-    params.push(date);
+  let filters;
+  try {
+    filters = buildArticleListFilters({ sourceId, status, date, tag, minScore });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'VALIDATION', message: err.message } }, 400);
   }
 
   const countResult = await getOne<{ count: string }>(
-    `SELECT COUNT(*) as count FROM articles a ${where}`,
-    params
+    `SELECT COUNT(*) as count FROM articles a ${filters.where}`,
+    filters.params
   );
   const total = parseInt(countResult?.count || '0');
 
+  const params = [...filters.params];
+  let paramIndex = filters.nextParamIndex;
   params.push(limit, offset);
   const rows = await getMany(
     `SELECT a.id, a.source_id, a.url, a.title, a.author, a.published_at,
             a.content_type, a.language, a.raw_excerpt, a.summary_text, a.tldr,
+            a.summary_short, a.hot_score, a.tags,
             a.summary_status, a.image_url, a.created_at,
             s.name as source_name, s.type as source_type,
             ${LOCAL_DATE_SQL} as local_date
      FROM articles a
      LEFT JOIN sources s ON s.id = a.source_id
-     ${where}
+     ${filters.where}
      ORDER BY COALESCE(a.published_at, a.created_at) DESC
      LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
     params
@@ -95,7 +81,7 @@ articles.get('/', async (c) => {
   return c.json({
     success: true,
     data: rows,
-    meta: { page, limit, total, totalPages: Math.ceil(total / limit), date: date || null },
+    meta: { page, limit, total, totalPages: Math.ceil(total / limit), date: date || null, tag: tag || null, minScore: minScore || null },
   });
 });
 
@@ -108,7 +94,7 @@ articles.post('/:id/reset-summary', async (c) => {
 
   await query(
     `UPDATE articles
-     SET summary_text = NULL, summary_status = 'pending'
+     SET summary_text = NULL, tldr = NULL, summary_short = NULL, hot_score = NULL, tags = '{}'::TEXT[], summary_status = 'pending'
      WHERE id = $1`,
     [id]
   );
@@ -146,6 +132,7 @@ articles.get('/:id', async (c) => {
   const row = await getOne(
     `SELECT a.id, a.source_id, a.url, a.title, a.author, a.published_at,
             a.content_type, a.language, a.raw_excerpt, a.summary_text, a.tldr,
+            a.summary_short, a.hot_score, a.tags,
             a.summary_status, a.image_url, a.created_at, a.updated_at,
             s.name as source_name, s.type as source_type
      FROM articles a

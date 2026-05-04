@@ -77,13 +77,15 @@ export const api = {
   detectSource: (url: string) => request<any>('/sources/detect', { method: 'POST', body: JSON.stringify({ url }) }),
 
   // Articles
-  getArticles: (params?: { page?: number; limit?: number; sourceId?: string; status?: string; date?: string }) => {
+  getArticles: (params?: { page?: number; limit?: number; sourceId?: string; status?: string; date?: string; tag?: string; minScore?: number }) => {
     const qs = new URLSearchParams();
     if (params?.page) qs.set('page', String(params.page));
     if (params?.limit) qs.set('limit', String(params.limit));
     if (params?.sourceId) qs.set('sourceId', params.sourceId);
     if (params?.status) qs.set('status', params.status);
     if (params?.date) qs.set('date', params.date);
+    if (params?.tag) qs.set('tag', params.tag);
+    if (params?.minScore) qs.set('minScore', String(params.minScore));
     return request<any>(`/articles?${qs}`);
   },
   getArticleDates: (sourceId?: string) => {
@@ -110,6 +112,10 @@ export const api = {
   deleteAiProvider: (id: string) => request<any>(`/ai-providers/${id}`, { method: 'DELETE' }),
   activateAiProvider: (id: string) => request<any>(`/ai-providers/${id}/activate`, { method: 'POST' }),
   testAiProvider: (id: string) => request<any>(`/ai-providers/${id}/test`, { method: 'POST' }),
+
+  // Settings
+  getPromptConfig: () => request<any>('/settings/prompt'),
+  updatePromptConfig: (data: any) => request<any>('/settings/prompt', { method: 'PATCH', body: JSON.stringify(data) }),
 
   // Admin triggers
   triggerScrape: () => request<any>('/health/trigger/scrape', { method: 'POST' }),
