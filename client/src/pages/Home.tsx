@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { api } from '../services/api';
 import { useFetchRaw } from '../hooks/useApi';
@@ -298,12 +298,12 @@ export function Home() {
     return () => window.clearTimeout(timeoutId);
   }, [copyToast]);
 
-  // Navigate helper: sync tab to URL
+  // Navigate helper: sync tab to URL (no React Router re-render)
   const navigateTab = useCallback((t: 'news' | 'voz' | 'reddit' | 'digest') => {
     setTab(t);
     const path = t === 'news' ? '/' : `/${t}`;
-    navigate(path, { replace: true });
-  }, [navigate]);
+    window.history.replaceState(null, '', path);
+  }, []);
 
   // Load article from URL deep link (/article/:id)
   useEffect(() => {
@@ -318,18 +318,18 @@ export function Home() {
       }
     }).catch(() => {
       // Article not found, go to news
-      navigate('/', { replace: true });
+      window.history.replaceState(null, '', '/');
     });
   }, [urlArticleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelectArticle = useCallback((article: any) => {
     setSelected(article);
     setReadArticleIds(prev => (prev.includes(article.id) ? prev : [article.id, ...prev]));
-    // Update URL to article deep link
-    navigate(`/article/${article.id}`, { replace: true });
+    // Update URL to article deep link (no re-render)
+    window.history.replaceState(null, '', `/article/${article.id}`);
     // Stay on current feed tab, just make sure we're not on digest
     if (tab === 'digest') setTab('news');
-  }, [tab, navigate]);
+  }, [tab]);
 
   const handleCopyLink = useCallback(async (url: string) => {
     try {
@@ -500,9 +500,9 @@ export function Home() {
               article={selected}
               onClose={() => {
                 setSelected(null);
-                // Navigate back to current tab URL
+                // Navigate back to current tab URL (no re-render)
                 const path = tab === 'news' ? '/' : `/${tab}`;
-                navigate(path, { replace: true });
+                window.history.replaceState(null, '', path);
               }}
               onCopyLink={handleCopyLink}
             />
