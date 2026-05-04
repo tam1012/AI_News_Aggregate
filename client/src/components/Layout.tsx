@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useSettings } from '../hooks/useApi';
+import { usesFluidShell } from './layoutShell';
 
 const ADMIN_TOKEN_STORAGE_KEY = 'admin_token';
 
@@ -9,6 +10,7 @@ export function Layout() {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith('/admin');
   const isSources = location.pathname.startsWith('/sources');
+  const shellClassName = usesFluidShell(location.pathname) ? 'container-fluid' : 'container';
   const [hasAdminToken, setHasAdminToken] = useState(false);
 
   useEffect(() => {
@@ -27,7 +29,7 @@ export function Layout() {
   return (
     <>
       <header className="header">
-        <div className={(location.pathname === '/' || location.pathname.startsWith('/admin') || location.pathname.startsWith('/sources') ? 'container-fluid' : 'container') + ' header-inner'}>
+        <div className={`${shellClassName} header-inner`}>
           <div className="header-left">
             <NavLink to="/" className="header-logo">SynthNews</NavLink>
             <span className="header-date">{todayStr}</span>
@@ -72,7 +74,7 @@ export function Layout() {
         </div>
       </header>
 
-      <main className={location.pathname === '/' || location.pathname.startsWith('/admin') || location.pathname.startsWith('/sources') ? 'container-fluid' : 'container'}>
+      <main className={shellClassName}>
         <Outlet />
       </main>
     </>
