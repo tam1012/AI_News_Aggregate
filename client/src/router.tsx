@@ -10,6 +10,10 @@ export function Router() {
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
+          <Route path="/voz" element={<Home />} />
+          <Route path="/reddit" element={<Home />} />
+          <Route path="/digest" element={<Home />} />
+          <Route path="/article/:articleId" element={<Home />} />
           <Route path="/sources" element={<Sources />} />
           <Route path="/admin" element={<Admin />} />
         </Route>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { api } from '../services/api';
 import { useFetchRaw } from '../hooks/useApi';
@@ -192,8 +193,21 @@ function classifyArticle(article: any): FeedTab {
 }
 
 export function Home() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { articleId: urlArticleId } = useParams<{ articleId?: string }>();
+
+  // Derive initial tab from URL path
+  const initialTab = useMemo(() => {
+    const path = location.pathname;
+    if (path === '/voz') return 'voz' as const;
+    if (path === '/reddit') return 'reddit' as const;
+    if (path === '/digest') return 'digest' as const;
+    return 'news' as const;
+  }, []); // only on mount
+
   const [selected, setSelected] = useState<any | null>(null);
-  const [tab, setTab] = useState<'news' | 'voz' | 'reddit' | 'digest'>('news');
+  const [tab, setTab] = useState<'news' | 'voz' | 'reddit' | 'digest'>(initialTab);
   const [filterSource, setFilterSource] = useState<string>('all');
   const [showFilter, setShowFilter] = useState(false);
   const [readArticleIds, setReadArticleIds] = useState<string[]>(() => loadReadArticles());
@@ -284,12 +298,38 @@ export function Home() {
     return () => window.clearTimeout(timeoutId);
   }, [copyToast]);
 
+  // Navigate helper: sync tab to URL
+  const navigateTab = useCallback((t: 'news' | 'voz' | 'reddit' | 'digest') => {
+    setTab(t);
+    const path = t === 'news' ? '/' : `/${t}`;
+    navigate(path, { replace: true });
+  }, [navigate]);
+
+  // Load article from URL deep link (/article/:id)
+  useEffect(() => {
+    if (!urlArticleId) return;
+    api.getArticle(urlArticleId).then((res: any) => {
+      if (res?.data) {
+        setSelected(res.data);
+        setReadArticleIds(prev => (prev.includes(res.data.id) ? prev : [res.data.id, ...prev]));
+        // Set tab based on article type
+        const articleTab = classifyArticle(res.data);
+        setTab(articleTab);
+      }
+    }).catch(() => {
+      // Article not found, go to news
+      navigate('/', { replace: true });
+    });
+  }, [urlArticleId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSelectArticle = useCallback((article: any) => {
     setSelected(article);
     setReadArticleIds(prev => (prev.includes(article.id) ? prev : [article.id, ...prev]));
+    // Update URL to article deep link
+    navigate(`/article/${article.id}`, { replace: true });
     // Stay on current feed tab, just make sure we're not on digest
     if (tab === 'digest') setTab('news');
-  }, [tab]);
+  }, [tab, navigate]);
 
   const handleCopyLink = useCallback(async (url: string) => {
     try {
@@ -330,10 +370,10 @@ export function Home() {
       {/* Mobile-only tab bar — visible when digest tab is active (split-left is hidden) */}
       {tab === 'digest' && (
         <div className="feed-tabs visible-on-mobile-only">
-          <button className="feed-tab" onClick={() => setTab('news')}>News</button>
-          <button className="feed-tab" onClick={() => setTab('voz')}>VOZ</button>
-          <button className="feed-tab" onClick={() => setTab('reddit')}>Reddit</button>
-          <button className={`feed-tab active`} onClick={() => setTab('digest')}>Bản tin</button>
+          <button className="feed-tab" onClick={() => navigateTab('news')}>News</button>
+          <button className="feed-tab" onClick={() => navigateTab('voz')}>VOZ</button>
+          <button className="feed-tab" onClick={() => navigateTab('reddit')}>Reddit</button>
+          <button className={`feed-tab active`} onClick={() => navigateTab('digest')}>Bản tin</button>
         </div>
       )}
 
@@ -350,7 +390,7 @@ export function Home() {
                     splitLeftRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }
-                  setTab(t);
+                  navigateTab(t);
                   setSelected(null);
                 }}
               >
@@ -359,7 +399,7 @@ export function Home() {
             ))}
             <button
               className={`feed-tab ${tab === 'digest' ? 'active' : ''}`}
-              onClick={() => setTab('digest')}
+              onClick={() => navigateTab('digest')}
             >
               Bản tin
             </button>
@@ -458,7 +498,12 @@ export function Home() {
           ) : selected ? (
             <ArticleDetail
               article={selected}
-              onClose={() => setSelected(null)}
+              onClose={() => {
+                setSelected(null);
+                // Navigate back to current tab URL
+                const path = tab === 'news' ? '/' : `/${tab}`;
+                navigate(path, { replace: true });
+              }}
               onCopyLink={handleCopyLink}
             />
           ) : (
