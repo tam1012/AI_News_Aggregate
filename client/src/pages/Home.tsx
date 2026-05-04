@@ -180,9 +180,20 @@ function ReadmeWelcome() {
   );
 }
 
+type FeedTab = 'news' | 'voz' | 'reddit';
+
+function classifyArticle(article: any): FeedTab {
+  const name = (article.source_name || '').toLowerCase();
+  const url = (article.url || '').toLowerCase();
+  const title = (article.title || '').toLowerCase();
+  if (name.includes('reddit') || url.includes('reddit.com') || title.startsWith('[r/')) return 'reddit';
+  if (name.includes('voz') || url.includes('voz.vn')) return 'voz';
+  return 'news';
+}
+
 export function Home() {
   const [selected, setSelected] = useState<any | null>(null);
-  const [tab, setTab] = useState<'news' | 'digest'>('news');
+  const [tab, setTab] = useState<'news' | 'voz' | 'reddit' | 'digest'>('news');
   const [filterSource, setFilterSource] = useState<string>('all');
   const [showFilter, setShowFilter] = useState(false);
   const [readArticleIds, setReadArticleIds] = useState<string[]>(() => loadReadArticles());
@@ -214,7 +225,14 @@ export function Home() {
     [selectedDate, filterSource, availableDates.length]
   );
 
-  const articles: any[] = useMemo(() => raw?.data || [], [raw]);
+  const allArticles: any[] = useMemo(() => raw?.data || [], [raw]);
+
+  // Classify and filter articles by feed tab
+  const feedTab: FeedTab = (tab === 'digest') ? 'news' : tab;
+  const articles: any[] = useMemo(() => {
+    if (filterSource !== 'all') return allArticles; // source filter overrides tab filter
+    return allArticles.filter(a => classifyArticle(a) === feedTab);
+  }, [allArticles, feedTab, filterSource]);
 
   // Unique sources for filter (fetch all sources to be safe, but since we are filtering by date, we might miss sources. Ideally we fetch from a sources list)
   // We'll use api.getSources() for a full list, but for now we keep using the current articles if we don't have a separate fetch.
@@ -269,8 +287,9 @@ export function Home() {
   const handleSelectArticle = useCallback((article: any) => {
     setSelected(article);
     setReadArticleIds(prev => (prev.includes(article.id) ? prev : [article.id, ...prev]));
-    setTab('news');
-  }, []);
+    // Stay on current feed tab, just make sure we're not on digest
+    if (tab === 'digest') setTab('news');
+  }, [tab]);
 
   const handleCopyLink = useCallback(async (url: string) => {
     try {
@@ -311,18 +330,10 @@ export function Home() {
       {/* Mobile-only tab bar — visible when digest tab is active (split-left is hidden) */}
       {tab === 'digest' && (
         <div className="feed-tabs visible-on-mobile-only">
-          <button
-            className="feed-tab"
-            onClick={() => setTab('news')}
-          >
-            News
-          </button>
-          <button
-            className={`feed-tab ${tab === 'digest' ? 'active' : ''}`}
-            onClick={() => setTab('digest')}
-          >
-            Bản tin
-          </button>
+          <button className="feed-tab" onClick={() => setTab('news')}>News</button>
+          <button className="feed-tab" onClick={() => setTab('voz')}>VOZ</button>
+          <button className="feed-tab" onClick={() => setTab('reddit')}>Reddit</button>
+          <button className={`feed-tab active`} onClick={() => setTab('digest')}>Bản tin</button>
         </div>
       )}
 
@@ -330,19 +341,22 @@ export function Home() {
         <div className={`split-left ${tab === 'digest' ? 'hidden-on-mobile' : ''}`} ref={splitLeftRef}>
           {/* Tab bar inside left pane */}
           <div className="feed-tabs">
-            <button
-              className={`feed-tab ${tab === 'news' ? 'active' : ''}`}
-              onClick={() => {
-                if (tab === 'news') {
-                  // Already on News — scroll to top
-                  splitLeftRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
-                setTab('news');
-              }}
-            >
-              News
-            </button>
+            {(['news', 'voz', 'reddit'] as const).map(t => (
+              <button
+                key={t}
+                className={`feed-tab ${tab === t ? 'active' : ''}`}
+                onClick={() => {
+                  if (tab === t) {
+                    splitLeftRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }
+                  setTab(t);
+                  setSelected(null);
+                }}
+              >
+                {t === 'news' ? 'News' : t === 'voz' ? 'VOZ' : 'Reddit'}
+              </button>
+            ))}
             <button
               className={`feed-tab ${tab === 'digest' ? 'active' : ''}`}
               onClick={() => setTab('digest')}
@@ -438,7 +452,7 @@ export function Home() {
           </div>
         </div>
       
-        <div className={`split-right ${tab === 'news' && !selected ? 'hidden-on-mobile' : ''}`}>
+        <div className={`split-right ${tab !== 'digest' && !selected ? 'hidden-on-mobile' : ''}`}>
           {tab === 'digest' ? (
             <DigestTab />
           ) : selected ? (
