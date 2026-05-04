@@ -1,117 +1,148 @@
 # SynthNews
 
-SynthNews là một hệ thống đọc tin cá nhân theo mô hình full-stack monorepo. Ứng dụng tự động lấy bài viết từ RSS, web và forum, lưu vào PostgreSQL, gọi AI để tóm tắt bằng tiếng Việt, rồi hiển thị dưới dạng giao diện đọc nhanh tối ưu cho desktop lẫn mobile.
+SynthNews là hệ thống đọc tin cá nhân dạng full-stack monorepo. Ứng dụng lấy bài từ RSS, web, Reddit và VOZ, lưu vào PostgreSQL, dùng AI để tóm tắt tiếng Việt, rồi hiển thị trong giao diện đọc nhanh cho desktop và mobile.
 
-Trọng tâm của project này không phải là một cổng tin tức công cộng quy mô lớn. Nó được thiết kế cho nhu cầu cá nhân: mở lên là đọc nhanh, lọc theo nguồn, xem lại theo ngày, và có một khu quản trị gọn để vận hành scraper, AI provider, cùng các job nền.
+Project này được thiết kế cho nhu cầu tự host cá nhân: ít thao tác, đọc nhanh, có khu quản trị gọn, có cron nền, có deploy Docker Compose trên VPS.
 
-## Mục lục
+## Mục Lục
 
+- [Hiện trạng vận hành](#hiện-trạng-vận-hành)
 - [Tính năng chính](#tính-năng-chính)
-- [Kiến trúc tổng thể](#kiến-trúc-tổng-thể)
+- [Kiến trúc](#kiến-trúc)
 - [Tech stack](#tech-stack)
-- [Cấu trúc thư mục](#cấu-trúc-thư-mục)
-- [Luồng xử lý dữ liệu](#luồng-xử-lý-dữ-liệu)
+- [Cấu trúc repo](#cấu-trúc-repo)
+- [Luồng dữ liệu](#luồng-dữ-liệu)
 - [Frontend](#frontend)
 - [Backend API](#backend-api)
 - [Database](#database)
-- [AI providers được hỗ trợ](#ai-providers-được-hỗ-trợ)
-- [Cài đặt môi trường local](#cài-đặt-môi-trường-local)
-- [Chạy project ở chế độ development](#chạy-project-ở-chế-độ-development)
-- [Build production](#build-production)
-- [Deploy VPS với Docker Compose](#deploy-vps-với-docker-compose)
+- [AI providers](#ai-providers)
 - [Biến môi trường](#biến-môi-trường)
-- [Cron jobs và vận hành](#cron-jobs-và-vận-hành)
-- [Bảo mật và auth](#bảo-mật-và-auth)
-- [Ghi chú vận hành thực tế](#ghi-chú-vận-hành-thực-tế)
-- [Các cải tiến gần đây](#các-cải-tiến-gần-đây)
-- [Scraping Strategies](#scraping-strategies)
+- [Chạy local](#chạy-local)
+- [Test và build](#test-và-build)
+- [Deploy production](#deploy-production)
+- [Nginx, gzip và cache](#nginx-gzip-và-cache)
+- [GitHub Actions](#github-actions)
+- [Cron jobs](#cron-jobs)
+- [Scraping Reddit và VOZ](#scraping-reddit-và-voz)
+- [Auth và bảo mật](#auth-và-bảo-mật)
+- [Ghi chú vận hành](#ghi-chú-vận-hành)
 
-## Tính năng chính
+## Hiện Trạng Vận Hành
 
-### 1. Tự động thu thập tin tức
+- Public site hiện tại: [https://synthnews.site](https://synthnews.site)
+- Domain production dùng config: `nginx-synthnews.conf`
+- `nginx-newstamhv.conf` là config domain cũ `newstamhv.duckdns.org`, nên chỉ xem như legacy/reference nếu không còn dùng domain đó.
+- Production chạy bằng `docker compose up -d --build`.
+- Docker expose app nội bộ tại `127.0.0.1:3001`, Nginx reverse proxy ra HTTPS.
+- Backend serve luôn frontend build từ `server/public`, đồng thời expose API dưới `/api/*`.
+- Deep link đang có route thật trong SPA:
+  - `/article/:articleId`
+  - `/voz`
+  - `/reddit`
+  - `/digest`
+- `/article/:id` có Open Graph meta server-side khi chạy production build, dùng `PUBLIC_SITE_URL` để sinh URL chia sẻ.
+- Static assets trong `/assets/*` có `Cache-Control: public, max-age=31536000, immutable`.
+- API/static text được nén bởi Hono `compress()`, phía Nginx cũng bật gzip.
 
-- Hỗ trợ nguồn **RSS** chuẩn.
-- Hỗ trợ **web scraping** với selector cấu hình theo từng nguồn.
-- Hỗ trợ **Reddit** theo hướng RSS + enrich thêm nội dung, comment top-level và reply nổi bật qua JSON khi khả dụng.
-- Hỗ trợ **VOZ forum** theo hướng riêng: lấy thread từ RSS rồi vào trang thread thật để bóc tách bài gốc và bình luận thành viên trên nhiều page (tối đa 15 page).
+## Tính Năng Chính
 
-### 2. Tóm tắt bài viết bằng AI
+### Đọc tin
 
-- Mỗi bài mới được đưa vào hàng đợi `pending`.
-- Backend chọn provider AI đang active và sinh tóm tắt tiếng Việt.
-- Có prompt riêng, được tinh chỉnh cho từng loại bài:
-  - **Tin báo**: prompt biên tập viên cấp cao — yêu cầu 3-6 sections, 400-800 từ, trích dẫn quotes và số liệu cụ thể, phân tích tác động.
-  - **Forum (Reddit, VOZ)**: prompt phóng viên cộng đồng — trích dẫn ít nhất 2-3 comment nổi bật kèm tên user, phân tích sentiment, 400-700 từ.
-- TLDR tự động được trích xuất từ tag `<tldr>` trong output AI, chuẩn hóa tối đa 200 ký tự.
-- Có retry cho bài lỗi hoặc bài bị kẹt ở trạng thái `processing`.
+- Tab `News`, `VOZ`, `Reddit`, `Bản tin`.
+- Split view trên desktop: danh sách bên trái, nội dung bên phải.
+- Detail overlay trên mobile, có gesture kéo xuống để đóng.
+- Deep link bài viết qua `/article/:id`.
+- Lọc theo nguồn tin.
+- Điều hướng theo ngày có bài.
+- Đánh dấu bài đã đọc bằng `localStorage`.
+- Thumbnail trong feed khi ảnh đủ hữu ích.
+- Copy link bài gốc và mở bài gốc.
+- Dark mode/light mode.
+- Chỉnh cỡ chữ bằng nút `Aa`.
+- Skeleton riêng cho feed và article detail, giúp hard refresh deep link không bị nhảy layout.
 
-### 3. Tạo bản tin tổng hợp
+### Thu thập và xử lý tin
 
-- Gom các bài đã tóm tắt thành một digest định kỳ.
-- Digest viết theo phong cách editorial: nhóm tin theo chủ đề, viết liền mạch, có section "Điểm nhấn trong ngày" cuối bản tin.
-- Digest được hiển thị ngay trong app ở tab **Bản tin**.
+- RSS parser cho nguồn RSS chuẩn.
+- Web scraper dùng selector cấu hình theo từng source.
+- Reddit scraper theo hướng RSS + enrich comment theo nhiều fallback.
+- VOZ scraper riêng: lấy RSS thread, mở thread thật, đọc nhiều page, chọn comment nổi bật.
+- Forum rescrape cho Reddit/VOZ trong vài giờ đầu để cập nhật comment mới.
+- AI tóm tắt theo prompt riêng cho tin báo và forum.
+- TLDR được trích từ tag `<tldr>` trong output AI.
+- Digest định kỳ gom các bài đã tóm tắt trong 24 giờ gần nhất.
 
-### 4. Giao diện đọc nhanh
+### Quản trị
 
-- Split view trên desktop: list bên trái, nội dung bên phải.
-- Overlay chi tiết trên mobile, có gesture kéo xuống để đóng.
-- Lọc theo nguồn.
-- Điều hướng theo ngày.
-- Thumbnail trong feed.
-- Đánh dấu bài đã đọc bằng localStorage.
-- Copy link bài gốc ngay trong khung chi tiết.
-- Dark mode / light mode.
+- Trang `/sources` quản lý nguồn tin.
+- Trang `/admin` xem health, log gần đây, trigger job thủ công, quản lý AI provider và bài viết.
+- Token admin lưu ở `localStorage` key `admin_token` khi nhập qua prompt.
 
-### 5. Khu quản trị vận hành
+## Kiến Trúc
 
-- Quản lý nguồn tin.
-- Quản lý bài viết.
-- Quản lý AI provider.
-- Kích hoạt thủ công các job scrape / summarize / digest / cleanup.
+Repo là monorepo npm workspaces:
 
-## Kiến trúc tổng thể
+- `client/`: React + Vite SPA.
+- `server/`: Hono API, PostgreSQL, cron jobs, scraper, summarizer.
+- `Dockerfile`: multi-stage build client và server.
+- `docker-compose.yml`: PostgreSQL + app container.
+- `nginx-synthnews.conf`: reverse proxy production cho `synthnews.site`.
 
-Project được tổ chức theo mô hình monorepo:
+Production flow:
 
-- `client/`: ứng dụng React + Vite.
-- `server/`: API Hono + PostgreSQL + scheduler.
-- `docker-compose.yml`: khởi chạy app + database trên VPS.
-- `Dockerfile`: multi-stage build cho frontend và backend.
+```text
+Browser
+  -> Nginx HTTPS
+  -> 127.0.0.1:3001
+  -> Hono app container
+  -> /api/* hoặc static frontend
+  -> PostgreSQL container
+```
 
-Ở production, backend phục vụ luôn static frontend đã build sẵn từ thư mục `server/public`, đồng thời expose API dưới prefix `/api/*`.
+Dockerfile build flow:
 
-## Tech stack
+```text
+client/src -> Vite build -> client/dist
+server/src -> TypeScript build -> server/dist
+client/dist -> copy vào server/public
+container start -> node dist/db/migrate.js && node dist/index.js
+```
 
-### Frontend
+## Tech Stack
+
+Frontend:
 
 - React 19
+- React Router 7
 - Vite 6
 - TypeScript
-- React Router 7
 - react-markdown
-- CSS thuần tùy biến trong `client/src/styles/global.css`
+- CSS thuần trong `client/src/styles/global.css`
 
-### Backend
+Backend:
 
 - Node.js 22
 - Hono
 - PostgreSQL qua `pg`
-- `node-cron` cho background jobs
-- `rss-parser`
-- `cheerio`
+- node-cron
+- rss-parser
+- cheerio
+- puppeteer-core
 
-### DevOps / Deploy
+DevOps:
 
 - Docker
 - Docker Compose
-- Nginx reverse proxy
-- Ubuntu VPS
+- Nginx
+- GitHub Actions SSH deploy
 
-## Cấu trúc thư mục
+## Cấu Trúc Repo
 
 ```text
 .
+├── .github/workflows/deploy.yml
 ├── client/
+│   ├── index.html
 │   ├── public/
 │   ├── src/
 │   │   ├── components/
@@ -121,215 +152,191 @@ Project được tổ chức theo mô hình monorepo:
 │   │   ├── styles/
 │   │   ├── main.tsx
 │   │   └── router.tsx
-│   ├── package.json
-│   └── tsconfig.json
+│   └── tests/
 ├── server/
 │   ├── src/
 │   │   ├── db/
-│   │   │   ├── migrations/
-│   │   │   ├── index.ts
-│   │   │   └── migrate.ts
+│   │   │   └── migrations/
 │   │   ├── jobs/
 │   │   ├── lib/
 │   │   ├── routes/
 │   │   ├── services/
 │   │   └── index.ts
-│   ├── package.json
-│   └── tsconfig.json
-├── .env.example
-├── .dockerignore
-├── docker-compose.yml
+│   └── tests/
 ├── Dockerfile
+├── docker-compose.yml
+├── nginx-synthnews.conf
 ├── nginx-newstamhv.conf
 ├── package.json
 └── README.md
 ```
 
-## Luồng xử lý dữ liệu
+Một số file `.sql`, script test/debug, ảnh và tài liệu review ở root là artifact vận hành cục bộ, đã được `.gitignore` loại khỏi runtime chính.
 
-### Bước 1: Thu thập nguồn
+## Luồng Dữ Liệu
 
-Scheduler chạy `runScrapeJob()` để quét tất cả source đang `is_enabled = true`.
+### 1. Scrape
 
-Tùy loại nguồn, hệ thống đi theo một trong các nhánh:
+`startCronJobs()` gọi `runScrapeJob()` theo chu kỳ `SCRAPE_INTERVAL_HOURS`.
 
-- `scrapeRssSource()`
-- `scrapeWebSource()`
-- `scrapeRedditSource()`
-- `scrapeVozSource()`
+`runScrapeJob()` lấy tất cả source đang bật:
 
-Mỗi bài sau khi lấy được sẽ được lưu vào bảng `articles` với:
+```sql
+SELECT id, type, name, url, language, category, fetch_interval_minutes, parser_config
+FROM sources
+WHERE is_enabled = true
+ORDER BY name ASC
+```
 
-- `raw_excerpt`
-- `raw_content`
-- `image_url`
-- `content_hash`
-- `summary_status = 'pending'`
+Sau đó `scrapeSource()` chọn nhánh xử lý:
 
-### Bước 2: Tóm tắt bằng AI
+- URL Reddit -> `scrapeRedditSource()`
+- URL VOZ -> `scrapeVozSource()`
+- `type = rss` -> `scrapeRssSource()`
+- `type = web` -> `scrapeWebSource()`
 
-Scheduler hoặc manual trigger gọi `summarizePendingArticles()`.
+Bài mới được insert vào `articles` với `summary_status = 'pending'`. Insert dùng `ON CONFLICT (url) DO NOTHING RETURNING id`, nên metric `itemsInserted` chỉ tính bài thực sự mới.
 
-Cơ chế hiện tại đã được sửa để tránh race condition:
+### 2. Summarize
 
-- batch bài `pending` được claim theo kiểu atomic,
-- chuyển ngay sang `processing`,
-- dùng `FOR UPDATE SKIP LOCKED` để tránh 2 worker cùng lấy 1 bài.
+`summarizePendingArticles()` claim bài pending bằng query atomic:
 
-Sau đó:
+```sql
+FOR UPDATE SKIP LOCKED
+```
 
-- thành công → `summary_status = 'done'`
-- không đủ dữ liệu → `summary_status = 'skipped'`
-- lỗi AI / timeout → `summary_status = 'failed'`
+Bài được chuyển ngay sang `processing` trước khi gọi AI. Trạng thái sau xử lý:
 
-### Bước 3: Tạo digest
+- `done`: có summary.
+- `skipped`: bài thường quá ngắn, không đủ dữ liệu.
+- `failed`: lỗi AI/provider/timeout.
+- `pending`: chờ xử lý hoặc được reset retry.
+- `processing`: đang được worker xử lý.
 
-`generateDigest()` lấy các bài đã `done` trong khoảng thời gian gần nhất, ghép thành prompt lớn rồi yêu cầu AI sinh ra bản tin tổng hợp markdown. Kết quả được lưu vào bảng `digests` và map quan hệ qua `digest_items`.
+### 3. Digest
 
-## Frontend ứng dụng
+`generateDigest()` lấy tối đa 50 bài `done` trong 24 giờ gần nhất, gọi AI tạo bản tin markdown, lưu vào `digests` và map qua `digest_items`.
 
-### Các route chính
+## Frontend
 
-- `/` → trang đọc tin chính
-- `/sources` → quản lý nguồn tin
-- `/admin` → dashboard quản trị
+Routes chính trong `client/src/router.tsx`:
 
-### Home page
+| Route | Mục đích |
+|---|---|
+| `/` | Tab News |
+| `/voz` | Tab VOZ |
+| `/reddit` | Tab Reddit |
+| `/digest` | Tab Bản tin |
+| `/article/:articleId` | Deep link bài viết |
+| `/sources` | Quản lý nguồn |
+| `/admin` | Quản trị hệ thống |
 
-Trang chủ là trung tâm trải nghiệm đọc:
+Layout shell dùng `container-fluid` cho các route đọc tin, admin và sources để tránh lỗi co layout khi hard refresh. Logic nằm ở `client/src/components/layoutShell.ts`.
 
-- tab **News**
-- tab **Bản tin**
-- lọc theo nguồn
-- đổi ngày
-- chọn bài từ feed
-- xem chi tiết bài với markdown render
+Client API cache ngắn hạn nằm ở `client/src/services/apiCache.ts`:
 
-Một số hành vi UI đáng chú ý:
-
-- Desktop dùng split layout.
-- Mobile dùng overlay detail.
-- Feed item có thumbnail nếu bài có `image_url`.
-- Khi click bài, ID bài được lưu vào localStorage để đánh dấu đã đọc.
-- Trong chi tiết bài có nút **Copy link** và nút **Đọc bài gốc**.
-- Header công khai được giản lược: icon Admin/Sources chỉ hiện khi đã có `admin_token` trong localStorage hoặc đang ở route quản trị.
-
-### Sources page
-
-Trang này cho phép:
-
-- thêm nguồn mới,
-- auto-detect RSS / web source,
-- bật / tắt nguồn,
-- chỉnh sửa selector với web scraping,
-- xóa nguồn.
-
-### Admin page
-
-Trang quản trị tập trung vào vận hành:
-
-- xem health tổng quan,
-- trigger job thủ công,
-- reset summary của bài,
-- xóa bài,
-- quản lý AI provider active.
+- `/articles*`: 60 giây.
+- `/sources`: 300 giây.
+- `/digests/latest*`: 60 giây.
+- Endpoint mutate/admin không cache.
 
 ## Backend API
 
-### Nhóm route chính
+API response dùng format chung:
 
-- `/api/health`
-- `/api/sources`
-- `/api/articles`
-- `/api/digests`
-- `/api/ai-providers`
+```json
+{
+  "success": true,
+  "data": {},
+  "meta": {}
+}
+```
 
-### Health
+Khi lỗi:
 
-`GET /api/health/live` (public)
+```json
+{
+  "success": false,
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Error message"
+  }
+}
+```
 
-Kiểm tra nhanh kết nối DB, trả `{ success: true }`.
+Endpoint chính:
 
-`GET /api/health` (cần auth)
+| Nhóm | Endpoint | Auth |
+|---|---|---|
+| Health | `GET /api/health/live` | Public |
+| Health | `GET /api/health` | Admin |
+| Health | `POST /api/health/trigger/scrape` | Admin |
+| Health | `POST /api/health/trigger/summarize` | Admin |
+| Health | `POST /api/health/trigger/digest` | Admin |
+| Health | `POST /api/health/trigger/cleanup` | Admin |
+| Sources | `GET /api/sources` | Public |
+| Sources | `GET /api/sources/:id` | Public |
+| Sources | `POST /api/sources` | Admin |
+| Sources | `PATCH /api/sources/:id` | Admin |
+| Sources | `DELETE /api/sources/:id` | Admin |
+| Sources | `POST /api/sources/:id/toggle` | Admin |
+| Sources | `POST /api/sources/detect` | Admin |
+| Articles | `GET /api/articles/dates` | Public |
+| Articles | `GET /api/articles` | Public |
+| Articles | `GET /api/articles/:id` | Public |
+| Articles | `POST /api/articles/:id/reset-summary` | Admin |
+| Articles | `POST /api/articles/:id/rescrape` | Admin |
+| Articles | `DELETE /api/articles/:id` | Admin |
+| Digests | `GET /api/digests/latest` | Public |
+| Digests | `GET /api/digests` | Public |
+| Digests | `GET /api/digests/:id` | Public |
+| Digests | `DELETE /api/digests/:id` | Admin |
+| AI Providers | `/api/ai-providers/*` | Admin |
 
-Trả về:
+Query đáng dùng:
 
-- tình trạng DB,
-- số lượng sources,
-- số lượng articles theo trạng thái,
-- digest mới nhất,
-- scrape logs gần đây.
-
-Ngoài ra có các endpoint trigger thủ công:
-
-- `POST /api/health/trigger/scrape`
-- `POST /api/health/trigger/summarize`
-- `POST /api/health/trigger/digest`
-- `POST /api/health/trigger/cleanup`
-
-### Sources
-
-Chức năng chính:
-
-- CRUD nguồn tin,
-- detect feed / parser config,
-- bật tắt nguồn.
-
-### Articles
-
-Chức năng chính:
-
-- lấy danh sách bài theo ngày,
-- lấy danh sách ngày có bài,
-- lấy chi tiết bài,
-- reset summary,
-- xóa bài.
-
-### AI Providers
-
-Hỗ trợ:
-
-- tạo provider,
-- cập nhật provider,
-- xóa provider,
-- activate provider,
-- test provider.
-
-Thông tin nhạy cảm như `api_key` hoặc `service_account_json` không được trả nguyên văn cho frontend.
+```bash
+curl https://synthnews.site/api/health/live
+curl "https://synthnews.site/api/articles?limit=3&status=done"
+curl "https://synthnews.site/api/articles/dates"
+curl "https://synthnews.site/api/digests/latest?lang=vi"
+```
 
 ## Database
 
-Database migrations hiện có trong:
+Migrations hiện có:
 
 - `server/src/db/migrations/001_initial.sql`
 - `server/src/db/migrations/002_ai_providers.sql`
 - `server/src/db/migrations/003_add_tldr.sql`
 - `server/src/db/migrations/004_add_rescraped_count.sql`
 
-Migrations tự động chạy khi server khởi động.
-
-Các nhóm bảng quan trọng:
+Bảng chính:
 
 - `sources`
-- `articles` (có cột `tldr`, `rescraped_count`)
+- `articles`
 - `scrape_logs`
 - `digests`
 - `digest_items`
 - `ai_providers`
+- `app_settings`
+- `_migrations`
 
-### Trạng thái summary của bài
+Local migrate:
 
-Các trạng thái thường gặp:
+```bash
+npm run db:migrate
+```
 
-- `pending`
-- `processing`
-- `done`
-- `failed`
-- `skipped`
+Production container tự chạy migrate trước khi start server:
 
-## AI providers được hỗ trợ
+```bash
+node dist/db/migrate.js && node dist/index.js
+```
 
-Theo backend hiện tại, project hỗ trợ các kiểu provider sau:
+## AI Providers
+
+Các `provider_type` hợp lệ trong backend:
 
 - `vertex_ai`
 - `openai`
@@ -341,64 +348,62 @@ Theo backend hiện tại, project hỗ trợ các kiểu provider sau:
 - `groq`
 - `custom`
 
-Mỗi provider có thể cấu hình:
+Provider active được lấy từ bảng `ai_providers`:
 
-- model
-- endpoint
-- api key
-- project / region
-- temperature
-- max tokens
-- extra config
-
-Provider active sẽ được dùng cho mọi tác vụ tóm tắt / digest mới.
-
-## Cài đặt môi trường local
-
-### Yêu cầu
-
-- Node.js 22+ được khuyến nghị
-- npm
-- PostgreSQL 16+ hoặc Docker
-
-### 1. Clone project
-
-```bash
-git clone <repo-url>
-cd newstamhv
+```sql
+SELECT * FROM ai_providers WHERE is_active = true LIMIT 1
 ```
 
-### 2. Cài dependencies
+Lưu ý:
 
-Ở root:
+- `openai`, `xai`, `deepseek`, `groq`, `mimo` dùng format OpenAI-compatible.
+- `custom` hỗ trợ format `openai` hoặc `gemini` qua `extra_config.format`.
+- `api_key` và `service_account_json` không trả nguyên văn về frontend.
+- Mỗi lần gọi AI cập nhật `total_calls`, `total_errors`, `last_used_at`, `last_error_message`.
 
-```bash
-npm install
-```
+## Biến Môi Trường
 
-Hoặc cài riêng từng workspace:
+Root `.env.example` dùng cho Docker/production style. `server/.env.example` dùng cho local backend dev.
 
-```bash
-cd server && npm install
-cd ../client && npm install
-```
+Biến quan trọng:
 
-### 3. Tạo file môi trường
+| Biến | Mục đích |
+|---|---|
+| `DB_PASSWORD` | Mật khẩu PostgreSQL trong Docker Compose |
+| `PORT` | Cổng Hono server, mặc định `3000` |
+| `NODE_ENV` | `development` hoặc `production` |
+| `DATABASE_URL` | Connection string PostgreSQL cho server |
+| `ADMIN_TOKEN` | Token admin cho endpoint mutate/protected |
+| `PUBLIC_SITE_URL` | Base URL public để sinh Open Graph link |
+| `CORS_ORIGIN` | Origin được phép gọi API |
+| `SCRAPE_INTERVAL_HOURS` | Chu kỳ scrape/summarize/digest chính |
+| `MAX_ARTICLES_PER_SOURCE` | Số bài tối đa lấy từ mỗi source mỗi lượt |
+| `MAX_AI_CALLS_PER_RUN` | Số bài tối đa tóm tắt mỗi lượt |
+| `VOZ_MAX_THREAD_PAGES` | Số page VOZ tối đa đọc mỗi thread |
+| `FORUM_MAX_COMMENTS` | Số comment forum tối đa đưa vào raw content |
+| `FORUM_RAW_CONTENT_MAX_LENGTH` | Trần độ dài raw content forum |
+| `REDDIT_COMMENT_LIMIT` | Số comment Reddit tối đa giữ lại |
+| `REDDIT_COMMENT_DEPTH` | Độ sâu reply tree Reddit |
+| `REDDIT_CLIENT_ID` | Reddit OAuth app client ID, optional |
+| `REDDIT_CLIENT_SECRET` | Reddit OAuth app secret, optional |
+| `REDDIT_USERNAME` | Reddit username, optional |
+| `REDDIT_PASSWORD` | Reddit password, optional |
+| `REDDIT_PROXY_URL` | Cloudflare Worker proxy URL, optional |
+| `PUPPETEER_EXECUTABLE_PATH` | Chromium path trong container |
 
-Tạo `.env` ở root cho môi trường Docker hoặc production style, và/hoặc `.env` trong `server/` cho môi trường dev backend.
+Default cần chú ý:
 
-Có thể bắt đầu từ:
+- `docker-compose.yml` fallback production: `VOZ_MAX_THREAD_PAGES=15`, `FORUM_MAX_COMMENTS=70`, `FORUM_RAW_CONTENT_MAX_LENGTH=80000`.
+- `.env.example` hiện để giá trị thận trọng hơn: `4`, `40`, `60000`. Nếu copy `.env.example` sang `.env`, giá trị trong `.env` sẽ override fallback của Compose.
+- Production yêu cầu `ADMIN_TOKEN` không được rỗng hoặc là token mẫu yếu. Nếu yếu, server sẽ crash khi `NODE_ENV=production`.
 
-- `.env.example`
-- `server/.env.example`
-
-Ví dụ `server/.env` cho local dev:
+Ví dụ `.env` cho Docker:
 
 ```env
-PORT=3000
-NODE_ENV=development
-DATABASE_URL=postgresql://newstamhv:newstamhv@localhost:5432/newstamhv
-ADMIN_TOKEN=change-me-to-a-random-string
+DB_PASSWORD=thay-bang-mat-khau-manh
+ADMIN_TOKEN=thay-bang-token-dai-ngau-nhien
+PUBLIC_SITE_URL=https://synthnews.site
+CORS_ORIGIN=https://synthnews.site
 SCRAPE_INTERVAL_HOURS=3
 MAX_ARTICLES_PER_SOURCE=20
 MAX_AI_CALLS_PER_RUN=30
@@ -409,15 +414,33 @@ REDDIT_COMMENT_LIMIT=30
 REDDIT_COMMENT_DEPTH=3
 ```
 
-### 4. Tạo database và migrate
+Ví dụ `server/.env` cho local dev:
 
-Nếu dùng PostgreSQL local, tạo DB trước rồi chạy:
-
-```bash
-npm run db:migrate
+```env
+PORT=3000
+NODE_ENV=development
+DATABASE_URL=postgresql://newstamhv:newstamhv@localhost:5432/newstamhv
+ADMIN_TOKEN=dev-admin-token-change-this
+SCRAPE_INTERVAL_HOURS=3
+MAX_ARTICLES_PER_SOURCE=20
+MAX_AI_CALLS_PER_RUN=30
 ```
 
-Nếu muốn chạy DB nhanh bằng Docker:
+## Chạy Local
+
+Yêu cầu:
+
+- Node.js 22+
+- npm
+- PostgreSQL local hoặc Docker
+
+Cài dependencies:
+
+```bash
+npm install
+```
+
+Chạy PostgreSQL nhanh bằng Docker:
 
 ```bash
 docker run --name newstamhv-db \
@@ -428,350 +451,241 @@ docker run --name newstamhv-db \
   -d postgres:16-alpine
 ```
 
-Khi đó `DATABASE_URL` cần trỏ tới cổng `5433`.
+Khi dùng cổng `5433`, đặt:
 
-## Chạy project ở chế độ development
+```env
+DATABASE_URL=postgresql://newstamhv:newstamhv@localhost:5433/newstamhv
+```
 
-### Cách 1: chạy cả 2 workspace từ root
+Migrate:
+
+```bash
+npm run db:migrate
+```
+
+Chạy full dev:
 
 ```bash
 npm run dev
 ```
 
-### Cách 2: chạy riêng
-
-Backend:
+Chạy riêng:
 
 ```bash
 npm run dev --workspace=server
-```
-
-Frontend:
-
-```bash
 npm run dev --workspace=client
 ```
 
-Frontend thường chạy qua Vite dev server, backend chạy Hono trên cổng cấu hình trong `server/.env`.
+## Test Và Build
 
-## Build production
+Client tests:
 
-Build toàn bộ project:
+```bash
+npm test --workspace=client
+```
+
+Server tests:
+
+```bash
+npm test --workspace=server
+```
+
+Build toàn bộ:
 
 ```bash
 npm run build
 ```
 
-Hoặc build từng phần:
+Build riêng:
 
 ```bash
 npm run build --workspace=client
 npm run build --workspace=server
 ```
 
-### Lưu ý production runtime
+Root scripts hiện tại:
 
-Dockerfile hiện tại đã được chỉnh để chạy backend theo kiểu compile trước:
+| Script | Lệnh |
+|---|---|
+| `npm run dev` | Chạy server và client song song |
+| `npm run build` | Build client rồi server |
+| `npm run start` | Start server dist |
+| `npm run db:migrate` | Chạy migrations server |
 
-- build frontend ra `client/dist`
-- build backend TypeScript ra `server/dist`
-- production container chạy bằng:
+## Deploy Production
 
-```bash
-node dist/index.js
-```
-
-Cách này ổn định hơn so với chạy `tsx` trực tiếp trong container production.
-
-## Deploy VPS với Docker Compose
-
-### 1. Chuẩn bị file `.env` ở thư mục project trên VPS
-
-Ví dụ:
-
-```env
-DB_PASSWORD=thay-bang-mat-khau-manh
-ADMIN_TOKEN=thay-bang-chuoi-ngau-nhien-dai
-SCRAPE_INTERVAL_HOURS=3
-MAX_ARTICLES_PER_SOURCE=20
-MAX_AI_CALLS_PER_RUN=30
-VOZ_MAX_THREAD_PAGES=15
-FORUM_MAX_COMMENTS=70
-FORUM_RAW_CONTENT_MAX_LENGTH=80000
-REDDIT_COMMENT_LIMIT=30
-REDDIT_COMMENT_DEPTH=3
-CORS_ORIGIN=https://synthnews.site
-```
-
-### 2. Build và chạy
+Trên VPS:
 
 ```bash
+cd /home/ubuntu/newstamhv
+git pull origin main
 docker compose up -d --build
-```
-
-### 3. Kiểm tra container
-
-```bash
 docker compose ps
 docker compose logs -f app
 ```
 
-### 4. Reverse proxy bằng Nginx
+Compose services:
 
-Sử dụng `nginx-newstamhv.conf` làm mẫu để trỏ domain public vào app đang map cục bộ qua `127.0.0.1:3001`.
+- `db`: PostgreSQL 16 Alpine, volume `pgdata`, bind local `127.0.0.1:5433`.
+- `app`: SynthNews app, bind local `127.0.0.1:3001`, depends on DB healthcheck.
 
-## Biến môi trường
+Healthcheck app:
 
-### Root `.env.example`
-
-```env
-DB_PASSWORD=thay-bang-mat-khau-manh
-ADMIN_TOKEN=thay-bang-chuoi-ngau-nhien-dai
-SCRAPE_INTERVAL_HOURS=3
-MAX_ARTICLES_PER_SOURCE=20
-MAX_AI_CALLS_PER_RUN=30
-CORS_ORIGIN=https://synthnews.site
+```bash
+curl -fsS http://127.0.0.1:3001/api/health/live
 ```
 
-### `server/.env.example`
+Public healthcheck:
 
-```env
-PORT=3000
-NODE_ENV=development
-DATABASE_URL=postgresql://newstamhv:newstamhv@localhost:5432/newstamhv
-ADMIN_TOKEN=change-me-to-a-random-string
-SCRAPE_INTERVAL_HOURS=3
-MAX_ARTICLES_PER_SOURCE=20
-MAX_AI_CALLS_PER_RUN=30
-VOZ_MAX_THREAD_PAGES=15
-FORUM_MAX_COMMENTS=70
-FORUM_RAW_CONTENT_MAX_LENGTH=80000
-REDDIT_COMMENT_LIMIT=30
-REDDIT_COMMENT_DEPTH=3
+```bash
+curl -fsS https://synthnews.site/api/health/live
 ```
 
-### Ý nghĩa chính
+## Nginx, Gzip Và Cache
 
-- `PORT`: cổng backend
-- `NODE_ENV`: môi trường chạy
-- `DATABASE_URL`: chuỗi kết nối PostgreSQL
-- `ADMIN_TOKEN`: token cho thao tác quản trị. **Bắt buộc phải đặt giá trị mạnh khi `NODE_ENV=production`** — server sẽ crash nếu token yếu hoặc mặc định.
-- `SCRAPE_INTERVAL_HOURS`: chu kỳ scrape / summarize / digest
-- `MAX_ARTICLES_PER_SOURCE`: số bài tối đa lấy từ mỗi nguồn mỗi đợt
-- `MAX_AI_CALLS_PER_RUN`: số bài tối đa được tóm tắt mỗi lần job chạy
-- `VOZ_MAX_THREAD_PAGES`: số page VOZ tối đa được đọc cho mỗi thread
-- `FORUM_MAX_COMMENTS`: số comment/reply forum tối đa được chọn đưa vào `raw_content`
-- `FORUM_RAW_CONTENT_MAX_LENGTH`: trần độ dài `raw_content` cho Reddit/VOZ sau khi enrich discussion
-- `REDDIT_COMMENT_LIMIT`: số comment/reply Reddit tối đa được giữ lại sau khi chọn lọc
-- `REDDIT_COMMENT_DEPTH`: độ sâu reply tree Reddit tối đa được flatten
-- `CORS_ORIGIN`: origin được phép gọi API
+Config chính:
 
-## Cron jobs và vận hành
+```text
+nginx-synthnews.conf
+```
 
-Các job chính trong `server/src/jobs/scheduler.ts`:
+Nginx:
 
-### Scrape & Summarize
+- server_name `synthnews.site www.synthnews.site`
+- HTTPS qua Let’s Encrypt path `/etc/letsencrypt/live/synthnews.site/...`
+- reverse proxy tới `http://127.0.0.1:3001`
+- bật gzip cho text, CSS, JS, JSON, XML, RSS
+- thêm security headers cơ bản
+- redirect HTTP -> HTTPS
+- redirect `www.synthnews.site` -> `synthnews.site`
 
-- Chạy mỗi `SCRAPE_INTERVAL_HOURS` tại phút `00`
-- Luồng:
-  - scrape source
-  - insert bài mới
-  - summarize ngay sau đó
+Backend cũng có:
 
-### Digest
+- `compress()` của Hono cho response.
+- `Cache-Control: public, max-age=31536000, immutable` cho `/assets/*`.
 
-- Chạy mỗi `SCRAPE_INTERVAL_HOURS` tại phút `30`
-- Sinh bản tin tổng hợp từ các bài đã `done`
+## GitHub Actions
 
-### Retry job
+Workflow:
 
-- Chạy mỗi 10 phút
-- Reset:
-  - bài `processing` bị kẹt quá lâu,
-  - bài `failed` đủ điều kiện retry
+```text
+.github/workflows/deploy.yml
+```
 
-### Cleanup job
+Trigger:
 
-- Chạy hằng ngày lúc `02:43`
-- Xóa log cũ và làm gọn `raw_content` của bài quá cũ
+```text
+push vào main
+```
 
-## Bảo mật và auth
+Các bước chính:
 
-Middleware auth đang hoạt động theo nguyên tắc đơn giản:
+- SSH vào VPS bằng `appleboy/ssh-action`.
+- `cd /home/ubuntu/newstamhv`
+- `git pull origin main`
+- `docker compose up -d --build`
+- smoke test local API `127.0.0.1:3001`
+- smoke test frontend bằng Puppeteer trong app container
+- `docker compose ps`
 
-- phần lớn `GET` public để frontend đọc dữ liệu,
-- các thao tác thay đổi dữ liệu cần `Authorization: Bearer <ADMIN_TOKEN>`.
+Caveat hiện tại: workflow vẫn còn public smoke test tới `https://newstamhv.duckdns.org`. Nếu domain production chỉ còn dùng `synthnews.site`, nên đổi 2 URL smoke test public trong `.github/workflows/deploy.yml` sang `https://synthnews.site`.
 
-Ở frontend:
+## Cron Jobs
 
-- khi gặp `401`, app có thể prompt yêu cầu nhập token admin,
-- token được lưu ở `localStorage` dưới key `admin_token`.
+`server/src/jobs/scheduler.ts` đăng ký các job khi server start:
 
-Đây là mô hình phù hợp cho tool cá nhân nội bộ hoặc self-hosted nhỏ. Nếu muốn public rộng hơn, nên nâng cấp lên session auth hoặc một cơ chế xác thực chặt chẽ hơn.
+| Job | Lịch | Việc làm |
+|---|---|---|
+| Scrape & Summarize | `0 */SCRAPE_INTERVAL_HOURS * * *` | Scrape tất cả source bật, rồi summarize bài mới |
+| Forum Rescrape | `0,30 * * * *` | Cào lại Reddit/VOZ mới, bỏ qua phút `00` nếu trùng giờ scrape chính |
+| Digest | `30 */SCRAPE_INTERVAL_HOURS * * *` | Tạo bản tin sau scrape chính |
+| Retry | `*/10 * * * *` | Reset bài kẹt/failed và retry comment Reddit |
+| Cleanup | `43 2 * * *` | Xóa scrape logs cũ, dọn raw_content bài cũ, reset processing kẹt |
 
-## Ghi chú vận hành thực tế
+Cleanup hiện tại:
 
-### 1. VPS hiện tại có thể không phải git clone sạch
+- Xóa `scrape_logs` cũ hơn 14 ngày.
+- Set `raw_content = NULL` cho bài cũ hơn 60 ngày.
+- Reset bài `processing` quá 5 phút về `pending`.
 
-Trong quá trình deploy thực tế, môi trường VPS từng có trạng thái không phải working tree git chuẩn. Khi đó deploy bằng cách copy file + rebuild Docker là phương án an toàn hơn so với giả định `git pull` luôn chạy được.
+Forum rescrape:
 
-### 2. Không nên để artifact build lẫn trong `src/`
+- Chỉ xét source name có `reddit` hoặc `voz`.
+- Chỉ xét bài tạo trong 4 giờ gần nhất.
+- Mỗi bài rescrape tối đa 2 lần qua `rescraped_count`.
+- Nếu content đổi, reset `summary_status = 'pending'` để AI tóm tắt lại.
 
-Trước đây từng phát sinh lỗi build khi có các file `.js`, `.map`, `.d.ts` nằm trong `client/src/`. Vite có thể resolve nhầm file build artifact thay vì file TypeScript gốc.
+## Scraping Reddit Và VOZ
 
-### 3. VOZ cần scraper riêng
+### Reddit
 
-Nếu chỉ đọc RSS của VOZ, hệ thống sẽ thiếu phần bình luận. Cách đúng hiện tại là:
+Source Reddit được add qua `/sources`. Nếu nhập URL dạng `https://www.reddit.com/r/<subreddit>`, backend tự đổi thành RSS ổn định:
 
-- lấy danh sách thread từ RSS,
-- fetch trang thread thật,
-- parse bài gốc + comment,
-- đưa vào `raw_content` để AI có đủ ngữ cảnh.
+```text
+https://www.reddit.com/r/<subreddit>/.rss
+```
 
-## Các cải tiến gần đây
+Khi scrape, backend nhận diện host Reddit và dùng `scrapeRedditSource()`:
 
-### UI/UX
+1. Lấy danh sách thread hot qua RSS.
+2. Nếu có OAuth env, gọi `oauth.reddit.com`.
+3. Nếu không có OAuth, enrich tối đa 8 bài mỗi lượt theo waterfall:
+   - Puppeteer vào `old.reddit.com/...json`
+   - Reddit comment RSS `reddit.com/{postPath}.rss`
+   - Cloudflare Worker proxy qua `REDDIT_PROXY_URL`
+   - Pullpush archive API
+4. Flatten comment tree, lọc `[deleted]`, `[removed]`, comment quá ngắn.
+5. Score comment theo reaction/length/độ sớm/depth.
+6. Chọn top comment, rồi sắp lại theo thứ tự xuất hiện để đưa vào `raw_content`.
 
-- Thu gọn layout desktop để đỡ bị tràn ngang.
-- Giảm độ rộng list bài bên trái.
-- Feed item có thumbnail.
-- Bài đã đọc được làm dịu màu để quét nhanh hơn.
-- Thêm nút copy link bài gốc.
-- Ẩn icon Admin/Sources khỏi header public để giao diện sạch hơn.
-- Auto-scroll lên đầu khi chọn bài mới.
-- Font chữ DM Sans cho cả tiêu đề và nội dung.
-- Dark mode dịu mắt, giảm tương phản.
-- Welcome card với GitHub link và danh sách tính năng.
+Retry Reddit mỗi 10 phút tìm bài trong 48 giờ gần nhất có raw content chứa `Đã trích 0 comment`, thử Pullpush lại, rồi reset summary nếu enrich được comment.
 
-### Hạ tầng backend
+### VOZ
 
-- Sửa race condition của summarizer bằng cơ chế claim atomic với `FOR UPDATE SKIP LOCKED`.
-- Dockerfile production chuyển sang runtime từ `dist/` thay vì chạy `tsx` trực tiếp.
-- Tăng max_tokens AI provider lên 4096 để tóm tắt không bị cắt.
+VOZ dùng `scrapeVozSource()`:
 
-### AI Summarization
+1. Lấy danh sách thread từ RSS.
+2. Mở trang thread thật bằng `curlFetch()` để tránh một số lỗi TLS/fingerprint của Node fetch.
+3. Parse HTML bằng Cheerio.
+4. Đọc pagination tối đa `VOZ_MAX_THREAD_PAGES`.
+5. Tách OP và comment thành viên.
+6. Score, dedupe, chọn `FORUM_MAX_COMMENTS` comment nổi bật.
+7. Ghép raw content gồm bài gốc, metadata thread và bình luận tiêu biểu.
 
-- Prompt editorial chuyên sâu cho tin báo: yêu cầu 3-6 sections, 400-800 từ, trích dẫn trực tiếp quotes và số liệu, phân tích tác động.
-- Prompt phóng viên cộng đồng cho forum: trích dẫn 2-3 comment cụ thể kèm tên user, phân tích sentiment, xu hướng community.
-- Digest viết liền mạch như bản tin editorial, 800-1500 từ, có section "Điểm nhấn trong ngày".
-- TLDR tự động trích xuất từ tag `<tldr>` trong output AI, chuẩn hóa tối đa 200 ký tự, hiển thị trong list preview.
-- Scraper metrics chính xác: dùng `RETURNING id` để chỉ đếm bài thực sự được insert (không đếm sai khi `ON CONFLICT DO NOTHING`).
+Sleep mặc định giữa các page VOZ là 500ms.
 
-### Scraping
+## Auth Và Bảo Mật
 
-- Đã có scraper riêng cho VOZ để lấy nội dung thread và bình luận thành viên tốt hơn so với RSS thuần.
-- Tăng VOZ_MAX_THREAD_PAGES lên 15, FORUM_MAX_COMMENTS lên 70, FORUM_RAW_CONTENT_MAX_LENGTH lên 80000.
-- Giảm sleep giữa các page VOZ từ 800ms xuống 500ms.
+Middleware auth nằm ở `server/src/lib/auth.ts`.
 
----
+Luật hiện tại:
 
-Nếu dùng đúng theo mục tiêu ban đầu của project này, SynthNews hoạt động tốt nhất như một hệ thống đọc tin cá nhân self-hosted: ít thao tác, dễ vận hành, và tập trung vào tốc độ đọc hơn là bề mặt tính năng quá rộng.
+- `GET /api/health/live` public.
+- `GET` public cho articles, sources, digests.
+- `/api/health` và `/api/ai-providers` cần auth cho mọi method, kể cả GET.
+- Mọi method không phải GET đều cần `Authorization: Bearer <ADMIN_TOKEN>`.
 
-## Lịch trình Scraping (Cron Jobs)
-- **Đại cào toàn bộ (Mỗi 3 giờ):** Hệ thống tự động quét tất cả các nguồn tin (RSS, web, Voz, Reddit) theo các khung giờ cố định: 00h, 03h, 06h, 09h... Mục đích để tối ưu hoá máy chủ và đảm bảo chu kỳ nhận tin ổn định.
-- **Tiểu cào Forum (Mỗi 30 phút):** Để theo dõi thảo luận (comment) nóng từ các nguồn Reddit và Voz, hệ thống có cron job phụ chạy vào phút :00 (nếu không trùng giờ đại cào) và phút :30. Nó sẽ cào lại những bài Reddit/Voz mới nhất tối đa 2 lần để cập nhật bình luận mới, sau đó tự động kích hoạt AI tóm tắt lại.
-- **Bản tin tổng hợp (Mỗi 3 giờ):** Sau mỗi đợt đại cào 30 phút (tại phút :30), hệ thống sẽ tổng hợp "Bản tin thời sự" gộp tất cả các bài đã xử lý.
+Frontend sẽ prompt token khi gặp `UNAUTHORIZED`, rồi lưu vào `localStorage`.
 
-## CI/CD Deployment
-This project uses GitHub Actions for automatic deployment to the Oracle VPS.
-- **Lưu ý:** Quy trình này sẽ tự động chạy lệnh git pull và docker compose up -d --build trên VPS. Do đó, KHÔNG CẦN SSH vào VPS để restart service thủ công.
+Không đưa các file này lên repo:
 
-## Scraping Strategies
+- `.env`
+- `.env.*` trừ `.env.example`
+- `*.pem`
+- `*.key`
+- file SQL thủ công ngoài migrations
 
-### Reddit — Waterfall 4-layer Comment Extraction
+`.gitignore` hiện đã chặn các nhóm file trên.
 
-Reddit chặn API gắt gao (rate-limit, Cloudflare, Data API yêu cầu trả phí). Project giải quyết bằng cơ chế **waterfall**: thử từng strategy theo thứ tự ưu tiên, strategy đầu tiên thành công sẽ được dùng, nếu thất bại thì tự động fallback xuống strategy tiếp theo.
+## Ghi Chú Vận Hành
 
-#### Bước 1: Lấy danh sách bài mới
-
-Dùng **Subreddit RSS Feed** (`/r/{sub}/hot/.rss`) để lấy danh sách thread hot. RSS feed là endpoint ổn định nhất của Reddit, hiếm khi bị block.
-
-#### Bước 2: Lấy comment cho từng bài (Waterfall)
-
-Với mỗi bài mới, hệ thống thử lấy comment theo thứ tự:
-
-| # | Strategy | Endpoint | Ưu điểm | Nhược điểm |
-|---|----------|----------|----------|------------|
-| 0 | **Reddit OAuth API** | `oauth.reddit.com` | Full data (score, replies, selftext) | Cần Reddit app credentials |
-| 1 | **Puppeteer Headless** | `old.reddit.com/.json` | Bypass Cloudflare, full JSON | Chậm (~25s), tốn RAM |
-| 2 | **Comment RSS Feed** | `reddit.com/{path}.rss` | Nhẹ, nhanh, không bị block | Không có score, giới hạn số comment |
-| 3 | **Cloudflare Worker Proxy** | Custom proxy URL | Truy cập API từ IP sạch | Cần deploy Worker riêng |
-| 4 | **Pullpush Archive** | `api.pullpush.io` | Backup cuối cùng | Data có thể chậm index vài giờ |
-
-**Thứ tự ưu tiên thực tế:**
-- Nếu có OAuth credentials (`REDDIT_CLIENT_ID`, etc.) → dùng **Strategy 0** trực tiếp, bỏ qua waterfall.
-- Nếu không có OAuth → chạy waterfall **1 → 2 → 3 → 4**, dừng ngay khi strategy nào trả comment thành công.
-- Giới hạn tối đa **8 bài được enrich** mỗi lần cào (tránh quá tải Puppeteer/proxy).
-
-> **📌 Trạng thái production (05/2026):** Hiện tại OAuth chưa được cấu hình. Trong waterfall, Puppeteer (old.reddit.com chặn headless) fail đầu tiên → **RSS Comment Feed (Strategy 2) là strategy đang hoạt động thành công**. RSS Comment ghép đuôi `.rss` vào URL từng bài Reddit (`reddit.com/{postPath}.rss`) để lấy trọn bộ comment mà không cần API key hay headless browser. Nhược điểm duy nhất: RSS không cung cấp upvote score nên tất cả comment hiển thị `(0 điểm)` — tuy nhiên nội dung comment vẫn đầy đủ cho AI tóm tắt. Proxy và Pullpush hầu như không cần dùng tới vì RSS Comment đã cover được.
-
-#### Chi tiết từng strategy
-
-**Strategy 0 — Reddit OAuth API** (`hasRedditOAuth()`)
-- Gọi `oauth.reddit.com/{postPath}.json` với Bearer token.
-- Token lấy qua Reddit OAuth password grant, tự cache và refresh.
-- Trả về full JSON: selftext, outbound URL, comments tree với score.
-- Env vars: `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USERNAME`, `REDDIT_PASSWORD`.
-
-**Strategy 1 — Puppeteer Headless Browser** (`browserFetch()`)
-- Dùng Chromium headless (Puppeteer) truy cập `old.reddit.com/{postPath}.json`.
-- Anti-detection: xóa `navigator.webdriver`, set user agent Chrome thật, viewport 1920×1080.
-- Tự dismiss cookie consent wall nếu có.
-- Parse JSON từ `document.body.innerText` (rawText mode).
-- Timeout: 25 giây.
-
-**Strategy 2 — Comment RSS Feed**
-- Fetch `reddit.com/{postPath}.rss` — endpoint RSS của chính thread đó.
-- Reddit cung cấp RSS cho cả comment (ít người biết), không bị Cloudflare block.
-- Hạn chế: không có score/upvote, chỉ lấy được ~25 comment gần nhất.
-- Dù vậy đủ để AI có ngữ cảnh thảo luận cho tóm tắt.
-
-**Strategy 3 — Cloudflare Worker Proxy**
-- Gửi request qua proxy URL tự deploy (`REDDIT_PROXY_URL`).
-- Proxy fetch Reddit API từ IP Cloudflare sạch, trả JSON nguyên bản.
-- Chỉ active nếu env `REDDIT_PROXY_URL` được set.
-
-**Strategy 4 — Pullpush Archive API**
-- Gọi `api.pullpush.io/reddit/comment/search?link_id={postId}`.
-- Pullpush lưu trữ Reddit data nhưng index chậm (có thể vài giờ sau khi post).
-- Sort theo score, trả về comment kèm score.
-
-#### Comment Processing Pipeline
-
-Sau khi lấy được raw comments từ bất kỳ strategy nào:
-
-1. **Flatten**: Comments tree (nested replies) được flatten thành mảng phẳng, giữ lại depth info.
-2. **Filter**: Loại `[deleted]`, `[removed]`, comment < 20 ký tự.
-3. **Score**: Tính điểm dựa trên `upvote score × 0.35 + length bonus + early thread bonus + depth bonus`.
-4. **Dedupe**: Loại comment trùng nội dung (normalize text → lowercase → remove punctuation).
-5. **Select**: Chọn top N comment (mặc định 30), sort lại theo thứ tự xuất hiện gốc.
-6. **Build content**: Ghép thành `raw_content` cấu trúc: `[Nội dung bài viết] + [Link chia sẻ] + [Dữ liệu thảo luận] + [Bình luận cộng đồng]`.
-
-#### Retry cơ chế (mỗi 10 phút)
-
-Bài Reddit tạo trong 48 giờ qua mà vẫn có "Đã trích 0 comment" sẽ được retry tự động:
-- Dùng **Pullpush API** để lấy comment (vì lúc này Pullpush đã index xong).
-- Nếu lấy được → cập nhật `raw_content`, reset `summary_status = 'pending'` → AI tóm tắt lại.
-- Tối đa 10 bài mỗi lần retry.
-
-#### Env vars liên quan
-
-| Biến | Mặc định | Mô tả |
-|------|----------|-------|
-| `REDDIT_COMMENT_LIMIT` | `30` | Số comment tối đa được giữ lại |
-| `REDDIT_COMMENT_DEPTH` | `3` | Độ sâu reply tree tối đa |
-| `REDDIT_CLIENT_ID` | *(trống)* | Reddit OAuth app client ID |
-| `REDDIT_CLIENT_SECRET` | *(trống)* | Reddit OAuth app secret |
-| `REDDIT_USERNAME` | *(trống)* | Reddit account username |
-| `REDDIT_PASSWORD` | *(trống)* | Reddit account password |
-| `REDDIT_PROXY_URL` | *(trống)* | URL Cloudflare Worker proxy |
-
-### VOZ — Multi-page Thread Crawler
-
-- Lấy danh sách thread mới từ **VOZ RSS feed**.
-- Với mỗi thread, fetch trang HTML thật bằng `curl` (bypass Cloudflare TLS fingerprinting).
-- Parse bài gốc (OP) + bình luận thành viên bằng **Cheerio**.
-- Tự phát hiện và duyệt pagination (tối đa `VOZ_MAX_THREAD_PAGES` trang, mặc định 15).
-- Comment được scoring, dedup, chọn lọc top `FORUM_MAX_COMMENTS` (mặc định 70).
-- Sleep 500ms giữa các page để tránh rate-limit.
-
+- Nếu sửa frontend layout đọc tin, kiểm tra hard refresh các route `/`, `/voz`, `/reddit`, `/digest`, `/article/:id`.
+- Nếu sửa Open Graph hoặc deep link, kiểm tra production build vì server chỉ inject meta khi có `server/public/index.html`.
+- Nếu đổi domain public, cập nhật đồng bộ:
+  - `PUBLIC_SITE_URL`
+  - `CORS_ORIGIN`
+  - `nginx-synthnews.conf`
+  - smoke test public trong `.github/workflows/deploy.yml`
+- Nếu dùng cache assets 1 năm, file build phải có hash như Vite mặc định. Không cache immutable cho HTML.
+- Nếu AI provider trả summary không có `<tldr>`, bài vẫn có summary nhưng list preview sẽ fallback sang excerpt/summary.
+- Nếu source Reddit/VOZ thiếu comment lúc mới scrape, forum rescrape và retry job sẽ có cơ hội cập nhật lại trong vài giờ đầu.
