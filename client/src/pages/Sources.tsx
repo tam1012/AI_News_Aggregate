@@ -4,6 +4,7 @@ import { useFetch } from '../hooks/useApi';
 
 export function Sources() {
   const { data: sources, loading, error, reload } = useFetch(() => api.getSources());
+  const sourceList = Array.isArray(sources) ? sources : [];
   const [showForm, setShowForm] = useState(false);
   const [detectUrl, setDetectUrl] = useState('');
   const [detecting, setDetecting] = useState(false);
@@ -124,7 +125,7 @@ export function Sources() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Nguồn tin ({(sources || []).length})</h1>
+        <h1 className="page-title">Nguồn tin ({sourceList.length})</h1>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
@@ -271,10 +272,10 @@ export function Sources() {
       )}
 
       <div className="article-list">
-        {(sources || []).length === 0 ? (
+        {sourceList.length === 0 ? (
           <div className="empty-state">Chưa có nguồn tin nào. Dán link vào ô trên để bắt đầu.</div>
         ) : (
-          (sources || []).map((source: any) => (
+          sourceList.map((source: any) => (
             <div key={source.id} className="card source-item">
               <div className="source-info">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>

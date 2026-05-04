@@ -194,7 +194,6 @@ function classifyArticle(article: any): FeedTab {
 
 export function Home() {
   const location = useLocation();
-  const navigate = useNavigate();
   const { articleId: urlArticleId } = useParams<{ articleId?: string }>();
 
   // Derive initial tab from URL path
