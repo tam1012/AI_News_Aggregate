@@ -500,7 +500,7 @@ FORUM_MAX_COMMENTS=70
 FORUM_RAW_CONTENT_MAX_LENGTH=80000
 REDDIT_COMMENT_LIMIT=30
 REDDIT_COMMENT_DEPTH=3
-CORS_ORIGIN=https://newstamhv.duckdns.org
+CORS_ORIGIN=https://synthnews.site
 ```
 
 ### 2. Build và chạy
@@ -530,7 +530,7 @@ ADMIN_TOKEN=thay-bang-chuoi-ngau-nhien-dai
 SCRAPE_INTERVAL_HOURS=3
 MAX_ARTICLES_PER_SOURCE=20
 MAX_AI_CALLS_PER_RUN=30
-CORS_ORIGIN=https://newstamhv.duckdns.org
+CORS_ORIGIN=https://synthnews.site
 ```
 
 ### `server/.env.example`
