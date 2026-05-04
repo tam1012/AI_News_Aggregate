@@ -119,6 +119,7 @@ export const api = {
 
   // Admin triggers
   triggerScrape: () => request<any>('/health/trigger/scrape', { method: 'POST' }),
+  triggerFetchArticles: () => request<any>('/health/trigger/fetch-articles', { method: 'POST' }),
   triggerSummarize: () => request<any>('/health/trigger/summarize', { method: 'POST' }),
   triggerDigest: () => request<any>('/health/trigger/digest', { method: 'POST' }),
 };

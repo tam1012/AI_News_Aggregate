@@ -129,6 +129,12 @@ export function Admin() {
                   </div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>Chờ xử lý</div>
                 </div>
+                <div className="card" style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: health.articleFetchJobs?.failed > 0 ? 'var(--color-error)' : health.articleFetchJobs?.discovered > 0 ? 'var(--color-warning)' : 'inherit' }}>
+                    {health.articleFetchJobs?.discovered || 0}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>URL chờ fetch</div>
+                </div>
               </div>
 
               <div className="card">
@@ -136,6 +142,9 @@ export function Admin() {
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button className="btn btn-sm" onClick={() => trigger('scrape', api.triggerScrape)} disabled={!!actionLoading}>
                     {actionLoading === 'scrape' ? 'Đang chạy...' : '🔄 Cào tin'}
+                  </button>
+                  <button className="btn btn-sm" onClick={() => trigger('fetch-articles', api.triggerFetchArticles)} disabled={!!actionLoading}>
+                    {actionLoading === 'fetch-articles' ? 'Đang chạy...' : '📥 Fetch bài'}
                   </button>
                   <button className="btn btn-sm" onClick={() => trigger('summarize', api.triggerSummarize)} disabled={!!actionLoading}>
                     {actionLoading === 'summarize' ? 'Đang chạy...' : '📝 Tóm tắt'}
@@ -146,6 +155,27 @@ export function Admin() {
                   <button className="btn btn-sm" onClick={reload}>Tải lại</button>
                 </div>
               </div>
+
+              {health.articleFetchJobs && (
+                <div className="card">
+                  <div style={{ fontWeight: 600, marginBottom: 10 }}>Article Fetch Queue</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8 }}>
+                    {[
+                      ['Tổng', health.articleFetchJobs.total],
+                      ['Discovered', health.articleFetchJobs.discovered],
+                      ['Fetching', health.articleFetchJobs.fetching],
+                      ['Done', health.articleFetchJobs.done],
+                      ['Failed', health.articleFetchJobs.failed],
+                      ['Retryable', health.articleFetchJobs.retryable_failed],
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ padding: '8px 10px', border: '1px solid var(--color-border-light)', borderRadius: 6 }}>
+                        <div style={{ fontSize: '1rem', fontWeight: 700 }}>{value || 0}</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {health.recentLogs?.length > 0 && (
                 <div className="card">
