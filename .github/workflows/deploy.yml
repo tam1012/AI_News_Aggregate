@@ -74,12 +74,12 @@ jobs:
           }
           NODE
 
-          if ! curl -fsS https://newstamhv.duckdns.org/api/health/live >/dev/null; then
+          if ! curl -fsS https://synthnews.site/api/health/live >/dev/null; then
             echo "public live health smoke failed"
             exit 1
           fi
 
-          if ! curl -fsS https://newstamhv.duckdns.org/api/articles?limit=3\&status=done | grep -q '"success":true'; then
+          if ! curl -fsS https://synthnews.site/api/articles?limit=3\&status=done | grep -q '"success":true'; then
             echo "public articles smoke failed"
             exit 1
           fi

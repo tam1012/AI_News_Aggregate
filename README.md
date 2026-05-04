@@ -6,7 +6,6 @@ Project này được thiết kế cho nhu cầu tự host cá nhân: ít thao t
 
 ## Mục Lục
 
-- [Hiện trạng vận hành](#hiện-trạng-vận-hành)
 - [Tính năng chính](#tính-năng-chính)
 - [Kiến trúc](#kiến-trúc)
 - [Tech stack](#tech-stack)
@@ -20,29 +19,25 @@ Project này được thiết kế cho nhu cầu tự host cá nhân: ít thao t
 - [Chạy local](#chạy-local)
 - [Test và build](#test-và-build)
 - [Deploy production](#deploy-production)
-- [Nginx, gzip và cache](#nginx-gzip-và-cache)
+- [Thiết lập lần đầu](#thiết-lập-lần-đầu)
+- [Nginx, HTTPS và cache](#nginx-https-và-cache)
 - [GitHub Actions](#github-actions)
 - [Cron jobs](#cron-jobs)
 - [Scraping Reddit và VOZ](#scraping-reddit-và-voz)
 - [Auth và bảo mật](#auth-và-bảo-mật)
+- [Tùy chỉnh domain](#tùy-chỉnh-domain)
 - [Ghi chú vận hành](#ghi-chú-vận-hành)
 
-## Hiện Trạng Vận Hành
+## Tổng Quan Vận Hành
 
-- Public site hiện tại: [https://synthnews.site](https://synthnews.site)
-- Domain production dùng config: `nginx-synthnews.conf`
-- `nginx-newstamhv.conf` là config domain cũ `newstamhv.duckdns.org`, nên chỉ xem như legacy/reference nếu không còn dùng domain đó.
 - Production chạy bằng `docker compose up -d --build`.
 - Docker expose app nội bộ tại `127.0.0.1:3001`, Nginx reverse proxy ra HTTPS.
 - Backend serve luôn frontend build từ `server/public`, đồng thời expose API dưới `/api/*`.
-- Deep link đang có route thật trong SPA:
-  - `/article/:articleId`
-  - `/voz`
-  - `/reddit`
-  - `/digest`
+- Deep link đang có route thật trong SPA: `/article/:articleId`, `/voz`, `/reddit`, `/digest`.
 - `/article/:id` có Open Graph meta server-side khi chạy production build, dùng `PUBLIC_SITE_URL` để sinh URL chia sẻ.
 - Static assets trong `/assets/*` có `Cache-Control: public, max-age=31536000, immutable`.
 - API/static text được nén bởi Hono `compress()`, phía Nginx cũng bật gzip.
+- **Timezone**: Container chạy `Asia/Ho_Chi_Minh` (set qua `TZ` trong `docker-compose.yml` + `tzdata` trong Dockerfile). Mọi cron schedule đọc theo giờ Việt Nam.
 
 ## Tính Năng Chính
 
@@ -146,32 +141,56 @@ DevOps:
 │   ├── public/
 │   ├── src/
 │   │   ├── components/
-│   │   ├── hooks/
+│   │   │   ├── Layout.tsx          # Layout chính
+│   │   │   └── layoutShell.ts      # Helper xác định layout mode
+│   │   ├── hooks/useApi.ts         # Hook gọi API + cache
 │   │   ├── pages/
+│   │   │   ├── Home.tsx            # Trang đọc tin chính
+│   │   │   ├── Admin.tsx           # Trang quản trị
+│   │   │   ├── Sources.tsx         # Quản lý nguồn tin
+│   │   │   └── homeUx.ts           # UX helper cho Home
 │   │   ├── services/
-│   │   ├── styles/
+│   │   │   ├── api.ts              # API client
+│   │   │   └── apiCache.ts         # Cache policy
+│   │   ├── styles/global.css       # Toàn bộ CSS
 │   │   ├── main.tsx
 │   │   └── router.tsx
 │   └── tests/
 ├── server/
 │   ├── src/
 │   │   ├── db/
-│   │   │   └── migrations/
-│   │   ├── jobs/
+│   │   │   ├── index.ts            # PostgreSQL connection
+│   │   │   ├── migrate.ts          # Migration runner
+│   │   │   └── migrations/         # SQL migration files
+│   │   ├── jobs/scheduler.ts       # Cron scheduler
 │   │   ├── lib/
+│   │   │   ├── auth.ts             # Auth middleware
+│   │   │   ├── openGraph.ts        # OG meta injection
+│   │   │   ├── tldr.ts             # TL;DR extraction
+│   │   │   └── utils.ts
 │   │   ├── routes/
+│   │   │   ├── health.ts           # Health + manual trigger
+│   │   │   ├── articles.ts
+│   │   │   ├── sources.ts
+│   │   │   ├── digests.ts
+│   │   │   └── ai-providers.ts
 │   │   ├── services/
-│   │   └── index.ts
+│   │   │   ├── scraper.ts          # Scraping logic
+│   │   │   ├── summarizer.ts       # AI summarization
+│   │   │   ├── rescrape.ts         # Forum rescrape
+│   │   │   └── ai-client.ts        # Multi-provider AI client
+│   │   └── index.ts                # Server entry point
 │   └── tests/
 ├── Dockerfile
 ├── docker-compose.yml
-├── nginx-synthnews.conf
-├── nginx-newstamhv.conf
+├── nginx-synthnews.conf            # Nginx config mẫu
+├── reddit-proxy-worker.js          # Cloudflare Worker cho Reddit proxy
+├── .env.example
 ├── package.json
 └── README.md
 ```
 
-Một số file `.sql`, script test/debug, ảnh và tài liệu review ở root là artifact vận hành cục bộ, đã được `.gitignore` loại khỏi runtime chính.
+Một số file `.sql`, script test/debug, ảnh và tài liệu review ở root là artifact vận hành cục bộ, đã được `.gitignore` loại khỏi repo.
 
 ## Luồng Dữ Liệu
 
@@ -231,7 +250,7 @@ Routes chính trong `client/src/router.tsx`:
 | `/sources` | Quản lý nguồn |
 | `/admin` | Quản trị hệ thống |
 
-Layout shell dùng `container-fluid` cho các route đọc tin, admin và sources để tránh lỗi co layout khi hard refresh. Logic nằm ở `client/src/components/layoutShell.ts`.
+Layout chính nằm ở `client/src/components/Layout.tsx`, dùng `container-fluid` cho các route đọc tin, admin và sources để tránh lỗi co layout khi hard refresh. `client/src/components/layoutShell.ts` là helper xác định route nào dùng layout nào.
 
 Client API cache ngắn hạn nằm ở `client/src/services/apiCache.ts`:
 
@@ -402,8 +421,8 @@ Ví dụ `.env` cho Docker:
 ```env
 DB_PASSWORD=thay-bang-mat-khau-manh
 ADMIN_TOKEN=thay-bang-token-dai-ngau-nhien
-PUBLIC_SITE_URL=https://synthnews.site
-CORS_ORIGIN=https://synthnews.site
+PUBLIC_SITE_URL=https://your-domain.example.com
+CORS_ORIGIN=https://your-domain.example.com
 SCRAPE_INTERVAL_HOURS=3
 MAX_ARTICLES_PER_SOURCE=20
 MAX_AI_CALLS_PER_RUN=30
@@ -538,26 +557,47 @@ curl -fsS http://127.0.0.1:3001/api/health/live
 Public healthcheck:
 
 ```bash
-curl -fsS https://synthnews.site/api/health/live
+curl -fsS https://your-domain.example.com/api/health/live
 ```
 
-## Nginx, Gzip Và Cache
+## Thiết Lập Lần Đầu
 
-Config chính:
+Sau khi `docker compose up -d --build` thành công:
 
-```text
-nginx-synthnews.conf
+1. **Cấu hình AI provider** — Mở `https://your-domain/admin`, nhập `ADMIN_TOKEN` khi được hỏi, rồi vào tab AI Providers. Thêm ít nhất 1 provider (ví dụ Gemini API key miễn phí). Nếu không có AI provider, hệ thống vẫn scrape nhưng mọi bài sẽ stuck ở `pending` — không có summary.
+
+2. **Thêm nguồn tin** — Mở `https://your-domain/sources`, thêm nguồn RSS hoặc web. Backend tự nhận diện URL Reddit/VOZ và chuyển sang scraper riêng.
+
+3. **Chờ cron hoặc trigger thủ công** — Cron scrape sẽ chạy mỗi `SCRAPE_INTERVAL_HOURS` giờ. Để test ngay, vào `/admin` → bấm nút "Cào tin" và "Tóm tắt".
+
+4. **Kiểm tra** — Sau khi scrape + summarize xong, bài sẽ hiện trên trang chủ với TL;DR preview.
+
+## Nginx, HTTPS Và Cache
+
+File mẫu Nginx reverse proxy nằm ở `nginx-synthnews.conf`. Để thiết lập trên VPS mới:
+
+```bash
+# Cài Nginx + Certbot
+sudo apt install -y nginx certbot python3-certbot-nginx
+
+# Copy config mẫu (đổi server_name trong file trước khi copy)
+sudo cp nginx-synthnews.conf /etc/nginx/sites-available/myapp
+sudo ln -s /etc/nginx/sites-available/myapp /etc/nginx/sites-enabled/
+sudo rm /etc/nginx/sites-enabled/default
+
+# Lấy SSL certificate
+sudo certbot --nginx -d your-domain.example.com
+
+# Test và reload
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-Nginx:
+Config mẫu bao gồm:
 
-- server_name `synthnews.site www.synthnews.site`
-- HTTPS qua Let’s Encrypt path `/etc/letsencrypt/live/synthnews.site/...`
-- reverse proxy tới `http://127.0.0.1:3001`
-- bật gzip cho text, CSS, JS, JSON, XML, RSS
-- thêm security headers cơ bản
-- redirect HTTP -> HTTPS
-- redirect `www.synthnews.site` -> `synthnews.site`
+- Reverse proxy tới `http://127.0.0.1:3001`
+- Gzip cho text, CSS, JS, JSON, XML, RSS
+- Security headers (HSTS, X-Frame-Options, X-Content-Type-Options)
+- Redirect HTTP → HTTPS và www → non-www
 
 Backend cũng có:
 
@@ -586,13 +626,22 @@ Các bước chính:
 - `docker compose up -d --build`
 - smoke test local API `127.0.0.1:3001`
 - smoke test frontend bằng Puppeteer trong app container
+- smoke test public qua domain HTTPS
 - `docker compose ps`
 
-Caveat hiện tại: workflow vẫn còn public smoke test tới `https://newstamhv.duckdns.org`. Nếu domain production chỉ còn dùng `synthnews.site`, nên đổi 2 URL smoke test public trong `.github/workflows/deploy.yml` sang `https://synthnews.site`.
+Workflow cần 3 secrets trong repo GitHub (Settings → Secrets → Actions):
+
+| Secret | Giá trị |
+|---|---|
+| `VPS_HOST` | IP hoặc hostname VPS |
+| `VPS_USERNAME` | User SSH (thường `ubuntu`) |
+| `VPS_SSH_KEY` | Private key SSH (nội dung file `.pem`) |
+
+Lưu ý: đổi URL smoke test public trong `deploy.yml` nếu dùng domain khác.
 
 ## Cron Jobs
 
-`server/src/jobs/scheduler.ts` đăng ký các job khi server start:
+`server/src/jobs/scheduler.ts` đăng ký các job khi server start. Lịch chạy theo giờ Việt Nam (container set `TZ=Asia/Ho_Chi_Minh`):
 
 | Job | Lịch | Việc làm |
 |---|---|---|
@@ -628,15 +677,17 @@ https://www.reddit.com/r/<subreddit>/.rss
 Khi scrape, backend nhận diện host Reddit và dùng `scrapeRedditSource()`:
 
 1. Lấy danh sách thread hot qua RSS.
-2. Nếu có OAuth env, gọi `oauth.reddit.com`.
-3. Nếu không có OAuth, enrich tối đa 8 bài mỗi lượt theo waterfall:
-   - Puppeteer vào `old.reddit.com/...json`
-   - Reddit comment RSS `reddit.com/{postPath}.rss`
-   - Cloudflare Worker proxy qua `REDDIT_PROXY_URL`
-   - Pullpush archive API
+2. Nếu có OAuth env (`REDDIT_CLIENT_ID`, ...), gọi `oauth.reddit.com` — truy cập đầy đủ comment + score.
+3. Nếu không có OAuth, enrich tối đa 8 bài mỗi lượt theo waterfall (dừng ngay khi 1 strategy thành công):
+   1. **Puppeteer** vào `old.reddit.com/...json` — lấy được JSON đầy đủ, nhưng nhiều VPS bị Reddit chặn IP.
+   2. **RSS Comment Feed** `reddit.com/{postPath}.rss` — **strategy đáng tin nhất** trên hầu hết môi trường. Lấy được nội dung comment đầy đủ, tuy không có upvote score (mặc định `0 điểm`).
+   3. **Cloudflare Worker proxy** qua `REDDIT_PROXY_URL` — chỉ dùng nếu cả 2 trên fail. Cần deploy `reddit-proxy-worker.js` lên Workers trước.
+   4. **Pullpush archive API** — fallback cuối, data thường bị delay hoặc stale.
 4. Flatten comment tree, lọc `[deleted]`, `[removed]`, comment quá ngắn.
 5. Score comment theo reaction/length/độ sớm/depth.
 6. Chọn top comment, rồi sắp lại theo thứ tự xuất hiện để đưa vào `raw_content`.
+
+> **Lưu ý thực tế:** Trên máy cá nhân hoặc VPS không bị chặn, Puppeteer thường work luôn. Trên VPS bị chặn (ví dụ Oracle Cloud), RSS Comment Feed tự động kick in và đủ dùng. Proxy và Pullpush hiếm khi cần thiết.
 
 Retry Reddit mỗi 10 phút tìm bài trong 48 giờ gần nhất có raw content chứa `Đã trích 0 comment`, thử Pullpush lại, rồi reset summary nếu enrich được comment.
 
@@ -677,15 +728,21 @@ Không đưa các file này lên repo:
 
 `.gitignore` hiện đã chặn các nhóm file trên.
 
+## Tùy Chỉnh Domain
+
+Nếu dùng domain riêng (không phải domain mẫu trong repo), cập nhật đồng bộ:
+
+1. `.env` → `PUBLIC_SITE_URL` và `CORS_ORIGIN`
+2. `nginx-synthnews.conf` → `server_name` (hoặc tạo file config riêng)
+3. `.github/workflows/deploy.yml` → URL smoke test public (dòng cuối)
+4. Chạy `certbot` lấy SSL cho domain mới
+5. Reload Nginx: `sudo nginx -t && sudo systemctl reload nginx`
+
 ## Ghi Chú Vận Hành
 
 - Nếu sửa frontend layout đọc tin, kiểm tra hard refresh các route `/`, `/voz`, `/reddit`, `/digest`, `/article/:id`.
 - Nếu sửa Open Graph hoặc deep link, kiểm tra production build vì server chỉ inject meta khi có `server/public/index.html`.
-- Nếu đổi domain public, cập nhật đồng bộ:
-  - `PUBLIC_SITE_URL`
-  - `CORS_ORIGIN`
-  - `nginx-synthnews.conf`
-  - smoke test public trong `.github/workflows/deploy.yml`
 - Nếu dùng cache assets 1 năm, file build phải có hash như Vite mặc định. Không cache immutable cho HTML.
 - Nếu AI provider trả summary không có `<tldr>`, bài vẫn có summary nhưng list preview sẽ fallback sang excerpt/summary.
 - Nếu source Reddit/VOZ thiếu comment lúc mới scrape, forum rescrape và retry job sẽ có cơ hội cập nhật lại trong vài giờ đầu.
+- `reddit-proxy-worker.js` trong repo là Cloudflare Worker dùng bypass Reddit IP block. Deploy lên Cloudflare Workers rồi set `REDDIT_PROXY_URL` nếu cần.
