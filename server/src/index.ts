@@ -21,16 +21,25 @@ import { buildArticleMeta, injectArticleMeta } from './lib/openGraph.js';
 dotenv.config();
 assertAdminTokenConfigured();
 
+import { compress } from 'hono/compress';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = new Hono();
 
 // Middleware
+app.use('*', compress());
 app.use('*', logger());
 app.use('*', cors({
   origin: process.env.CORS_ORIGIN || '*',
   allowMethods: ['GET', 'POST', 'PATCH', 'DELETE'],
   allowHeaders: ['Content-Type', 'Authorization'],
 }));
+
+// Add long-term caching for static assets built by Vite
+app.use('/assets/*', async (c, next) => {
+  await next();
+  c.header('Cache-Control', 'public, max-age=31536000, immutable');
+});
 
 // Auth cho write operations
 app.use('/api/*', authMiddleware);
