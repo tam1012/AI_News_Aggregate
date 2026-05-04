@@ -67,7 +67,7 @@ articles.get('/', async (c) => {
     `SELECT a.id, a.source_id, a.url, a.title, a.author, a.published_at,
             a.content_type, a.language, a.raw_excerpt, a.summary_text, a.tldr,
             a.summary_short, a.hot_score, a.tags,
-            a.summary_status, a.image_url, a.created_at,
+            a.summary_status, a.retry_count, a.last_summary_error, a.image_url, a.created_at,
             s.name as source_name, s.type as source_type,
             ${LOCAL_DATE_SQL} as local_date
      FROM articles a
@@ -94,7 +94,8 @@ articles.post('/:id/reset-summary', async (c) => {
 
   await query(
     `UPDATE articles
-     SET summary_text = NULL, tldr = NULL, summary_short = NULL, hot_score = NULL, tags = '{}'::TEXT[], summary_status = 'pending'
+     SET summary_text = NULL, tldr = NULL, summary_short = NULL, hot_score = NULL,
+         tags = '{}'::TEXT[], summary_status = 'pending', retry_count = 0, last_summary_error = NULL
      WHERE id = $1`,
     [id]
   );
@@ -133,7 +134,7 @@ articles.get('/:id', async (c) => {
     `SELECT a.id, a.source_id, a.url, a.title, a.author, a.published_at,
             a.content_type, a.language, a.raw_excerpt, a.summary_text, a.tldr,
             a.summary_short, a.hot_score, a.tags,
-            a.summary_status, a.image_url, a.created_at, a.updated_at,
+            a.summary_status, a.retry_count, a.last_summary_error, a.image_url, a.created_at, a.updated_at,
             s.name as source_name, s.type as source_type
      FROM articles a
      LEFT JOIN sources s ON s.id = a.source_id
