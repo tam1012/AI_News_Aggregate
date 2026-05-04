@@ -1,5 +1,5 @@
 import { isRedditSource } from './registry.js';
-import { scrapeRedditSource } from './legacy.js';
+import { scrapeRedditSource } from './forum-fetchers.js';
 import { SourceFetcher } from './types.js';
 
 export const redditFetcher: SourceFetcher = {

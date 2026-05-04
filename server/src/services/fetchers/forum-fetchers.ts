@@ -1,9 +1,23 @@
 import RssParser from 'rss-parser';
 import * as cheerio from 'cheerio';
-import { execFile } from 'child_process';
-import puppeteer from 'puppeteer-core';
 import { query, getOne, getMany } from '../../db/index.js';
 import { generateId, createContentHash, normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
+import { BROWSER_UA, browserFetch, curlFetch } from './http-utils.js';
+import {
+  ForumComment,
+  VozPost,
+  normalizeWhitespace,
+  scoreForumComment,
+  selectForumComments,
+} from './forum-utils.js';
+
+export { BROWSER_UA, browserFetch, curlFetch } from './http-utils.js';
+export {
+  normalizeWhitespace,
+  scoreForumComment,
+  selectForumComments,
+} from './forum-utils.js';
+export type { ForumComment, VozPost } from './forum-utils.js';
 
 const rssParser = new RssParser({
   timeout: 15000,
@@ -13,7 +27,6 @@ const rssParser = new RssParser({
   },
 });
 
-const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 const FORUM_RAW_CONTENT_MAX_LENGTH = parseInt(process.env.FORUM_RAW_CONTENT_MAX_LENGTH || '80000');
 const FORUM_MAX_COMMENTS = parseInt(process.env.FORUM_MAX_COMMENTS || '70');
 const VOZ_MAX_THREAD_PAGES = parseInt(process.env.VOZ_MAX_THREAD_PAGES || '15');
@@ -132,156 +145,9 @@ interface ScrapeResult {
   errors: string[];
 }
 
-export interface ForumComment {
-  author: string;
-  body: string;
-  reactions: number;
-  page: number;
-  order: number;
-  score: number;
-}
-
-export interface VozPost {
-  author: string;
-  body: string;
-  reactions: number;
-  isOp: boolean;
-  page: number;
-  order: number;
-}
-
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = parseInt(value || '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-export function normalizeWhitespace(text: string): string {
-  return text.replace(/\s+/g, ' ').trim();
-}
-
-function dedupeTextKey(text: string): string {
-  return normalizeWhitespace(text).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').trim();
-}
-
-export function scoreForumComment(body: string, reactions: number, page: number, order: number): number {
-  const lengthBonus = Math.min(body.length / 140, 4);
-  const reactionBonus = Math.min(reactions, 50) * 0.35;
-  const earlyThreadBonus = page === 1 ? 1.2 : 0;
-  const earlyReplyBonus = order < 8 ? 0.6 : 0;
-  return reactionBonus + lengthBonus + earlyThreadBonus + earlyReplyBonus;
-}
-
-export function selectForumComments(comments: ForumComment[], maxComments: number): ForumComment[] {
-  const seen = new Set<string>();
-  const unique = comments.filter((comment) => {
-    const key = dedupeTextKey(comment.body);
-    if (!key || key.length < 12 || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  return unique
-    .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (b.reactions !== a.reactions) return b.reactions - a.reactions;
-      if (a.page !== b.page) return a.page - b.page;
-      return a.order - b.order;
-    })
-    .slice(0, maxComments)
-    .sort((a, b) => {
-      if (a.page !== b.page) return a.page - b.page;
-      return a.order - b.order;
-    });
-}
-
-// Use curl to bypass Cloudflare TLS fingerprinting that blocks Node.js fetch()
-export function curlFetch(url: string, accept: string, timeoutSec: number): Promise<{ ok: boolean; status: number; text: () => Promise<string>; json: () => Promise<any> }> {
-  return new Promise((resolve, reject) => {
-    const safeUrl = normalizePublicHttpUrl(url);
-    if (!safeUrl) {
-      reject(new Error('URL must be a public http(s) URL'));
-      return;
-    }
-
-    const safeTimeout = Math.max(1, Math.min(timeoutSec, 60));
-    const args = [
-      '-s',
-      '-L',
-      '--max-time', String(safeTimeout),
-      '-H', `User-Agent: ${BROWSER_UA}`,
-      '-H', `Accept: ${accept}`,
-      '-H', 'Accept-Language: vi-VN,vi;q=0.9,en;q=0.8',
-      safeUrl,
-    ];
-    execFile('curl', args, { timeout: (safeTimeout + 2) * 1000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      const body = stdout || '';
-      // Detect Cloudflare challenge or blocked pages
-      const isBlocked = body.includes('Just a moment...') || body.includes('<title>Blocked</title>');
-      resolve({
-        ok: !isBlocked && body.length > 100,
-        status: isBlocked ? 403 : 200,
-        text: async () => body,
-        json: async () => JSON.parse(body),
-      });
-    });
-  });
-}
-
-// Headless browser for sites that block curl/fetch (Reddit)
-let browserInstance: any = null;
-
-async function getBrowser(): Promise<any> {
-  if (browserInstance && browserInstance.connected) return browserInstance;
-  browserInstance = await puppeteer.launch({
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
-    headless: true,
-    args: [
-      '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu',
-      '--disable-blink-features=AutomationControlled',
-      '--window-size=1920,1080',
-    ],
-  });
-  return browserInstance;
-}
-
-export async function browserFetch(url: string, timeoutMs: number = 30000, rawText: boolean = false): Promise<string> {
-  const safeUrl = normalizePublicHttpUrl(url);
-  if (!safeUrl) throw new Error('URL must be a public http(s) URL');
-
-  const browser = await getBrowser();
-  const page = await browser.newPage();
-  try {
-    // Anti-detection: remove webdriver flag, set realistic properties
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => false });
-      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-      (window as any).chrome = { runtime: {} };
-    });
-    await page.setUserAgent(BROWSER_UA);
-    await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
-    await page.setViewport({ width: 1920, height: 1080 });
-    await page.goto(safeUrl, { waitUntil: 'networkidle2', timeout: timeoutMs });
-
-    // Try to dismiss Reddit cookie/consent wall if present
-    try {
-      const acceptBtn = await page.$('button[aria-label="Accept all cookies"], button:has-text("Accept")');
-      if (acceptBtn) await acceptBtn.click();
-      await new Promise(r => setTimeout(r, 500));
-    } catch {}
-
-    if (rawText) {
-      // For JSON endpoints: get raw text from body, not HTML wrapper
-      return await page.evaluate(() => document.body?.innerText || document.documentElement?.textContent || '');
-    }
-    return await page.content();
-  } finally {
-    await page.close();
-  }
 }
 
 export function parseVozPosts(html: string, page: number): VozPost[] {
@@ -761,203 +627,6 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
   }
 
   return result;
-}
-
-export async function scrapeRssSource(source: SourceRow): Promise<ScrapeResult> {
-  const result: ScrapeResult = { itemsFound: 0, itemsInserted: 0, errors: [] };
-
-  try {
-    const sourceUrl = normalizePublicHttpUrl(source.url);
-    if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
-
-    const response = await fetch(sourceUrl, {
-      headers: {
-        'User-Agent': BROWSER_UA,
-        Accept: 'application/rss+xml, application/xml, text/xml, application/atom+xml;q=0.9, */*;q=0.8',
-      },
-      signal: AbortSignal.timeout(15000),
-    });
-
-    if (!response.ok) throw new Error(`Status code ${response.status}`);
-
-    const xml = await response.text();
-    const feed = await rssParser.parseString(xml);
-    const items = feed.items.slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 20));
-    result.itemsFound = items.length;
-
-    for (const item of items) {
-      if (!item.link || !item.title) continue;
-
-      const url = normalizePublicHttpUrl(item.link);
-      if (!url) continue;
-      const existing = await getOne('SELECT id FROM articles WHERE url = $1', [url]);
-      if (existing) continue;
-
-      const rawExcerpt = item.contentSnippet || item.content || '';
-      const rawContent = item.content || item['content:encoded'] || '';
-      const contentHash = createContentHash(item.title + rawExcerpt);
-
-      const hashExists = await getOne('SELECT id FROM articles WHERE content_hash = $1', [contentHash]);
-      if (hashExists) continue;
-
-      const id = generateId('art');
-      const publishedAt = item.pubDate ? new Date(item.pubDate).toISOString() : null;
-
-      let imageUrl: string | null = null;
-      if (item.enclosure?.url) {
-        imageUrl = item.enclosure.url;
-      } else if (rawContent) {
-        const $ = cheerio.load(rawContent);
-        imageUrl = $('img').first().attr('src') || null;
-      }
-
-      const insertResult = await query(
-        `INSERT INTO articles (id, source_id, external_id, url, title, author, published_at,
-                               content_type, language, raw_excerpt, raw_content, content_hash,
-                               image_url, summary_status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'article', $8, $9, $10, $11, $12, 'pending')
-         ON CONFLICT (url) DO NOTHING
-         RETURNING id`,
-        [
-          id, source.id, item.guid || null, url, item.title.trim(),
-          item.creator || item.author || null, publishedAt,
-          source.language, truncate(stripHtml(rawExcerpt), 500),
-          truncate(stripHtml(rawContent), 30000), contentHash, imageUrl,
-        ]
-      );
-      if (insertResult.rowCount && insertResult.rowCount > 0) result.itemsInserted++;
-    }
-  } catch (err: any) {
-    result.errors.push(err.message);
-  }
-
-  return result;
-}
-
-export async function scrapeWebSource(source: SourceRow): Promise<ScrapeResult> {
-  const result: ScrapeResult = { itemsFound: 0, itemsInserted: 0, errors: [] };
-  const config = source.parser_config;
-
-  if (!config || !config.articleLinkSelector) {
-    result.errors.push('parser_config with articleLinkSelector is required for web sources');
-    return result;
-  }
-
-  try {
-    const sourceUrl = normalizePublicHttpUrl(source.url);
-    if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
-
-    const response = await fetch(sourceUrl, {
-      headers: { 'User-Agent': BROWSER_UA },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!response.ok) throw new Error(`Status code ${response.status}`);
-    const html = await response.text();
-    const $ = cheerio.load(html);
-
-    const links: string[] = [];
-    $(config.articleLinkSelector).each((_: number, el: any) => {
-      const href = $(el).attr('href');
-      if (href) {
-        try {
-          const absoluteUrl = new URL(href, sourceUrl).toString();
-          const publicUrl = normalizePublicHttpUrl(absoluteUrl);
-          if (publicUrl) links.push(publicUrl);
-        } catch {}
-      }
-    });
-
-    const maxArticles = parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 20);
-    const uniqueLinks = [...new Set(links)].slice(0, maxArticles);
-    result.itemsFound = uniqueLinks.length;
-
-    for (const articleUrl of uniqueLinks) {
-      const existing = await getOne('SELECT id FROM articles WHERE url = $1', [articleUrl]);
-      if (existing) continue;
-
-      try {
-        await sleep(500);
-        const articleRes = await fetch(articleUrl, {
-          headers: { 'User-Agent': BROWSER_UA },
-          signal: AbortSignal.timeout(15000),
-        });
-        if (!articleRes.ok) throw new Error(`Status code ${articleRes.status}`);
-        const articleHtml = await articleRes.text();
-        const $article = cheerio.load(articleHtml);
-
-        if (config.removeSelectors) {
-          for (const sel of config.removeSelectors) $article(sel).remove();
-        }
-
-        const title = $article(config.titleSelector || 'h1').first().text().trim();
-        if (!title) continue;
-
-        const content = $article(config.contentSelector || 'article').text().trim();
-        const excerpt = truncate(content, 500);
-        const contentHash = createContentHash(title + excerpt);
-
-        const hashExists = await getOne('SELECT id FROM articles WHERE content_hash = $1', [contentHash]);
-        if (hashExists) continue;
-
-        let imageUrl: string | null = null;
-        const imgSrc = $article(config.imageSelector || 'article img, .article img, .content img').first().attr('src');
-        if (imgSrc) {
-          try {
-            imageUrl = new URL(imgSrc, articleUrl).toString();
-            imageUrl = normalizePublicHttpUrl(imageUrl);
-          } catch {}
-        }
-
-        let publishedAt: string | null = null;
-        if (config.publishedAtSelector) {
-          const dateText = $article(config.publishedAtSelector).attr('datetime') ||
-            $article(config.publishedAtSelector).text().trim();
-          if (dateText) {
-            try {
-              publishedAt = new Date(dateText).toISOString();
-            } catch {}
-          }
-        }
-
-        const id = generateId('art');
-        const insertResult = await query(
-          `INSERT INTO articles (id, source_id, url, title, published_at, content_type, language,
-                                 raw_excerpt, raw_content, content_hash, image_url, summary_status)
-           VALUES ($1, $2, $3, $4, $5, 'article', $6, $7, $8, $9, $10, 'pending')
-           ON CONFLICT (url) DO NOTHING
-           RETURNING id`,
-          [id, source.id, articleUrl, title, publishedAt, source.language,
-            excerpt, truncate(content, 30000), contentHash, imageUrl]
-        );
-        if (insertResult.rowCount && insertResult.rowCount > 0) result.itemsInserted++;
-      } catch (err: any) {
-        result.errors.push(`Failed to fetch ${articleUrl}: ${err.message}`);
-      }
-    }
-  } catch (err: any) {
-    result.errors.push(err.message);
-  }
-
-  return result;
-}
-
-export async function scrapeSource(source: SourceRow): Promise<ScrapeResult> {
-  if (isRedditUrl(source.url)) {
-    return scrapeRedditSource(source);
-  }
-
-  if (isVozUrl(source.url)) {
-    return scrapeVozSource(source);
-  }
-
-  switch (source.type) {
-    case 'rss':
-      return scrapeRssSource(source);
-    case 'web':
-      return scrapeWebSource(source);
-    default:
-      return { itemsFound: 0, itemsInserted: 0, errors: [`Unknown source type: ${source.type}`] };
-  }
 }
 
 function stripHtml(html: string): string {

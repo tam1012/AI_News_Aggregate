@@ -17,5 +17,5 @@ export {
   parseVozPosts,
   scoreForumComment,
   selectForumComments,
-} from './fetchers/legacy.js';
-export type { ForumComment, VozPost } from './fetchers/legacy.js';
+} from './fetchers/forum-fetchers.js';
+export type { ForumComment, VozPost } from './fetchers/forum-fetchers.js';
