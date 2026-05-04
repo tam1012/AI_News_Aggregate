@@ -32,6 +32,7 @@ services:
       TZ: Asia/Ho_Chi_Minh
       PORT: 3000
       NODE_ENV: production
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-https://synthnews.site}
       DATABASE_URL: postgresql://newstamhv:${DB_PASSWORD:-newstamhv_secret}@db:5432/newstamhv
       ADMIN_TOKEN: ${ADMIN_TOKEN:?ADMIN_TOKEN is required}
       SCRAPE_INTERVAL_HOURS: ${SCRAPE_INTERVAL_HOURS:-3}

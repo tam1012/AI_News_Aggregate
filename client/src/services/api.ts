@@ -1,7 +1,21 @@
+import { getCachePolicy, makeApiCacheKey } from './apiCache';
+
 const API_BASE = '/api';
+const responseCache = new Map<string, { expiresAt: number; data: any }>();
+const inFlightRequests = new Map<string, Promise<any>>();
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   let token = localStorage.getItem('admin_token') || '';
+  const cachePolicy = getCachePolicy(path, options);
+  const cacheKey = makeApiCacheKey(path);
+
+  if (cachePolicy.cacheable) {
+    const cached = responseCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.data as T;
+
+    const inFlight = inFlightRequests.get(cacheKey);
+    if (inFlight) return inFlight as Promise<T>;
+  }
 
   const doFetch = async (authToken: string) => {
     const res = await fetch(`${API_BASE}${path}`, {
@@ -15,22 +29,38 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     return res.json();
   };
 
-  let data = await doFetch(token);
+  const run = async () => {
+    let data = await doFetch(token);
 
-  // If unauthorized, prompt for token and retry once
-  if (!data.success && data.error?.code === 'UNAUTHORIZED') {
-    token = window.prompt('Hành động này cần quyền admin. Vui lòng nhập Admin Token:') || '';
-    if (token) {
-      localStorage.setItem('admin_token', token);
-      data = await doFetch(token);
+    if (!data.success && data.error?.code === 'UNAUTHORIZED') {
+      token = window.prompt('Admin token required:') || '';
+      if (token) {
+        localStorage.setItem('admin_token', token);
+        data = await doFetch(token);
+      }
     }
-  }
 
-  if (!data.success) {
-    throw new Error(data.error?.message || 'API request failed');
-  }
+    if (!data.success) {
+      throw new Error(data.error?.message || 'API request failed');
+    }
 
-  return data;
+    if (cachePolicy.cacheable) {
+      responseCache.set(cacheKey, {
+        data,
+        expiresAt: Date.now() + cachePolicy.ttlMs,
+      });
+    }
+
+    return data;
+  };
+
+  if (!cachePolicy.cacheable) return run();
+
+  const promise = run().finally(() => {
+    inFlightRequests.delete(cacheKey);
+  });
+  inFlightRequests.set(cacheKey, promise);
+  return promise;
 }
 
 export const api = {

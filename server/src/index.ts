@@ -14,7 +14,9 @@ import { digests } from './routes/digests.js';
 import { health } from './routes/health.js';
 import { aiProviders } from './routes/ai-providers.js';
 import { assertAdminTokenConfigured, authMiddleware } from './lib/auth.js';
+import { getOne } from './db/index.js';
 import { startCronJobs } from './jobs/scheduler.js';
+import { buildArticleMeta, injectArticleMeta } from './lib/openGraph.js';
 
 dotenv.config();
 assertAdminTokenConfigured();
@@ -43,16 +45,40 @@ app.route('/api/ai-providers', aiProviders);
 // Serve static frontend (production)
 const publicDir = join(__dirname, '..', 'public');
 if (existsSync(publicDir)) {
+  const indexHtmlPath = join(publicDir, 'index.html');
+  const renderSpaHtml = async (path: string, requestUrl: string) => {
+    const indexHtml = readFileSync(indexHtmlPath, 'utf-8');
+    const articleId = path.match(/^\/article\/([^/]+)$/)?.[1];
+    if (!articleId) return indexHtml;
+
+    try {
+      const article = await getOne(
+        `SELECT id, title, tldr, summary_text, raw_excerpt, image_url
+         FROM articles
+         WHERE id = $1`,
+        [decodeURIComponent(articleId)]
+      );
+      if (!article) return indexHtml;
+
+      const siteUrl = process.env.PUBLIC_SITE_URL || process.env.SITE_URL || new URL(requestUrl).origin;
+      const articleUrl = `${siteUrl.replace(/\/$/, '')}/article/${encodeURIComponent(article.id)}`;
+      return injectArticleMeta(indexHtml, buildArticleMeta({ article, articleUrl }));
+    } catch (err) {
+      console.error('Failed to render article metadata:', err);
+      return indexHtml;
+    }
+  };
+
   app.use('/*', serveStatic({ root: publicDir }));
   // SPA fallback: routes without a file extension return index.html; missing assets return 404.
-  app.get('*', (c) => {
+  app.get('*', async (c) => {
     if (c.req.path.startsWith('/api')) {
       return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'API route not found' } }, 404);
     }
     if (extname(c.req.path)) {
       return c.notFound();
     }
-    return c.html(readFileSync(join(publicDir, 'index.html'), 'utf-8'));
+    return c.html(await renderSpaHtml(c.req.path, c.req.url));
   });
 } else {
   app.get('/', (c) => c.json({ name: 'News Digest V2 API', version: '1.0.0' }));

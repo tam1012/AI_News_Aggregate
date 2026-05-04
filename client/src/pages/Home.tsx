@@ -3,6 +3,7 @@ import { useLocation, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { api } from '../services/api';
 import { useFetchRaw } from '../hooks/useApi';
+import { getReaderLoadingState, shouldShowDetailPane } from './homeUx';
 
 const READ_ARTICLES_STORAGE_KEY = 'read_articles';
 const FEED_PREVIEW_MAX_CHARS = 180;
@@ -37,7 +38,7 @@ function stripPreviewMarkup(text: string): string {
     .replace(/^#+\s+/gm, '')
     .replace(/\*\*(.*?)\*\*/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/[*_`>#-]/g, '')
+    .replace(/[*_`>#]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -195,6 +196,7 @@ function classifyArticle(article: any): FeedTab {
 export function Home() {
   const location = useLocation();
   const { articleId: urlArticleId } = useParams<{ articleId?: string }>();
+  const hasArticleDeepLink = Boolean(urlArticleId);
 
   // Derive initial tab from URL path
   const initialTab = useMemo(() => {
@@ -211,6 +213,7 @@ export function Home() {
   const [showFilter, setShowFilter] = useState(false);
   const [readArticleIds, setReadArticleIds] = useState<string[]>(() => loadReadArticles());
   const [copyToast, setCopyToast] = useState<string | null>(null);
+  const [deepLinkLoading, setDeepLinkLoading] = useState(hasArticleDeepLink);
   const splitLeftRef = useRef<HTMLDivElement>(null);
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -252,6 +255,12 @@ export function Home() {
   // Actually, to make filter work properly across dates, we should fetch /sources.
   const { data: sourcesRaw } = useFetchRaw(() => api.getSources(), []);
   const sources = useMemo(() => (sourcesRaw?.data || []).filter((s: any) => s.is_enabled), [sourcesRaw]);
+  const readerLoadingState = getReaderLoadingState({ isFeedLoading: loading, hasArticleDeepLink });
+  const detailPaneVisible = shouldShowDetailPane({
+    tab,
+    hasSelectedArticle: Boolean(selected),
+    hasArticleDeepLink,
+  });
 
   // Date navigation handlers
   const handlePrevDate = () => {
@@ -277,9 +286,9 @@ export function Home() {
 
   // Lock body scroll when detail open (handled via CSS class for mobile only)
   useEffect(() => {
-    document.body.classList.toggle('detail-open', !!selected);
+    document.body.classList.toggle('detail-open', detailPaneVisible);
     return () => { document.body.classList.remove('detail-open'); };
-  }, [selected]);
+  }, [detailPaneVisible]);
 
   // Add split-view-active class for desktop body overflow lock
   useEffect(() => {
@@ -297,6 +306,12 @@ export function Home() {
     return () => window.clearTimeout(timeoutId);
   }, [copyToast]);
 
+  useEffect(() => {
+    document.title = selected
+      ? `${cleanTitle(selected.title)} | SynthNews`
+      : 'SynthNews — Tin tức tổng hợp AI';
+  }, [selected]);
+
   // Navigate helper: sync tab to URL (no React Router re-render)
   const navigateTab = useCallback((t: 'news' | 'voz' | 'reddit' | 'digest') => {
     setTab(t);
@@ -306,8 +321,15 @@ export function Home() {
 
   // Load article from URL deep link (/article/:id)
   useEffect(() => {
-    if (!urlArticleId) return;
+    if (!urlArticleId) {
+      setDeepLinkLoading(false);
+      return;
+    }
+
+    let isActive = true;
+    setDeepLinkLoading(true);
     api.getArticle(urlArticleId).then((res: any) => {
+      if (!isActive) return;
       if (res?.data) {
         setSelected(res.data);
         setReadArticleIds(prev => (prev.includes(res.data.id) ? prev : [res.data.id, ...prev]));
@@ -316,9 +338,13 @@ export function Home() {
         setTab(articleTab);
       }
     }).catch(() => {
+      if (!isActive) return;
       // Article not found, go to news
       window.history.replaceState(null, '', '/');
+    }).finally(() => {
+      if (isActive) setDeepLinkLoading(false);
     });
+    return () => { isActive = false; };
   }, [urlArticleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelectArticle = useCallback((article: any) => {
@@ -339,23 +365,15 @@ export function Home() {
     }
   }, []);
 
-  if (loading) {
+  if (loading && readerLoadingState === 'feed-only') {
     return (
       <div className="feed-container">
-        {[1, 2, 3, 4].map(i => (
-          <div key={i} className="feed-item-skeleton">
-            <div className="skeleton" style={{ height: 14, width: '30%', marginBottom: 10 }} />
-            <div className="skeleton" style={{ height: 22, width: '85%', marginBottom: 8 }} />
-            <div className="skeleton" style={{ height: 14, width: '100%', marginBottom: 4 }} />
-            <div className="skeleton" style={{ height: 14, width: '90%', marginBottom: 4 }} />
-            <div className="skeleton" style={{ height: 14, width: '60%' }} />
-          </div>
-        ))}
+        <FeedListSkeleton />
       </div>
     );
   }
 
-  if (error) {
+  if (error && !hasArticleDeepLink) {
     return (
       <div className="empty-state">
         <p style={{ color: 'var(--color-error)' }}>Lỗi: {error}</p>
@@ -465,7 +483,14 @@ export function Home() {
               </div>
             )}
 
-            {articles.length === 0 && !loading ? (
+            {loading ? (
+              <FeedListSkeleton />
+            ) : error ? (
+              <div className="empty-state">
+                <p style={{ color: 'var(--color-error)' }}>Loi: {error}</p>
+                <button className="btn btn-primary" onClick={reload} style={{ marginTop: 12 }}>Thu lai</button>
+              </div>
+            ) : articles.length === 0 ? (
               <div className="empty-state">
                 <h2>Chưa có tin tức</h2>
                 <p style={{ marginTop: 8 }}>Hệ thống đang cào và tóm tắt tin. Hãy quay lại sau.</p>
@@ -491,7 +516,7 @@ export function Home() {
           </div>
         </div>
       
-        <div className={`split-right ${tab !== 'digest' && !selected ? 'hidden-on-mobile' : ''}`}>
+        <div className={`split-right ${!detailPaneVisible ? 'hidden-on-mobile' : ''}`}>
           {tab === 'digest' ? (
             <DigestTab />
           ) : selected ? (
@@ -505,6 +530,8 @@ export function Home() {
               }}
               onCopyLink={handleCopyLink}
             />
+          ) : hasArticleDeepLink && deepLinkLoading ? (
+            <ArticleDetailSkeleton />
           ) : (
             <ReadmeWelcome />
           )}
@@ -518,6 +545,48 @@ export function Home() {
 }
 
 /* ── Feed Item (list row) ── */
+function FeedListSkeleton() {
+  return (
+    <>
+      {[1, 2, 3, 4].map(i => (
+        <div key={i} className="feed-item-skeleton">
+          <div className="skeleton" style={{ height: 14, width: '30%', marginBottom: 10 }} />
+          <div className="skeleton" style={{ height: 22, width: '85%', marginBottom: 8 }} />
+          <div className="skeleton" style={{ height: 14, width: '100%', marginBottom: 4 }} />
+          <div className="skeleton" style={{ height: 14, width: '90%', marginBottom: 4 }} />
+          <div className="skeleton" style={{ height: 14, width: '60%' }} />
+        </div>
+      ))}
+    </>
+  );
+}
+
+function ArticleDetailSkeleton() {
+  return (
+    <div className="detail-overlay" aria-busy="true">
+      <div className="detail-panel">
+        <div className="detail-pull-bar">
+          <div className="detail-pull-indicator" />
+        </div>
+        <div className="detail-content detail-skeleton">
+          <div className="skeleton" style={{ width: 96, height: 12, margin: '14px auto 10px' }} />
+          <div className="skeleton" style={{ width: 160, height: 12, margin: '0 auto 28px' }} />
+          <div className="skeleton" style={{ width: '78%', height: 42, margin: '0 auto 12px' }} />
+          <div className="skeleton" style={{ width: '52%', height: 42, margin: '0 auto 36px' }} />
+          <div className="detail-image-skeleton skeleton" />
+          <div className="detail-body-skeleton">
+            <div className="skeleton" style={{ width: '60%', height: 24, marginBottom: 24 }} />
+            <div className="skeleton" style={{ width: '100%', height: 16, marginBottom: 10 }} />
+            <div className="skeleton" style={{ width: '94%', height: 16, marginBottom: 10 }} />
+            <div className="skeleton" style={{ width: '88%', height: 16, marginBottom: 10 }} />
+            <div className="skeleton" style={{ width: '72%', height: 16 }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FeedItem({
   article,
   isActive,
@@ -662,6 +731,16 @@ function ArticleDetail({
           <div className="detail-pull-indicator" />
         </div>
 
+        <div className="detail-mobile-header">
+          <button className="detail-mobile-close" onClick={onClose} title="Close">x</button>
+          <div className="detail-mobile-meta">
+            <span className={`feed-item-source source-${sourceLabel.toLowerCase().replace(/[^a-z0-9]/g, '')}`}>
+              {sourceLabel}
+            </span>
+            <span className="detail-mobile-title">{title}</span>
+          </div>
+        </div>
+
         {/* Close button */}
         <button className="detail-close" onClick={onClose} title="Đóng (Esc)">✕</button>
 
@@ -688,6 +767,8 @@ function ArticleDetail({
               src={article.image_url}
               alt=""
               className="detail-image"
+              loading="lazy"
+              decoding="async"
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
           )}
