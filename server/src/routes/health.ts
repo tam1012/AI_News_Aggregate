@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { getOne, getMany, query } from '../db/index.js';
-import { runScrapeJob, runSummarizeJob, runDigestJob, runCleanupJob } from '../jobs/scheduler.js';
+import { getOne, getMany } from '../db/index.js';
+import { runScrapeJob, runArticleFetchJob, runSummarizeJob, runDigestJob, runCleanupJob } from '../jobs/scheduler.js';
 
 const health = new Hono();
 
@@ -32,6 +32,16 @@ health.get('/', async (c) => {
        FROM articles`
     );
 
+    const articleFetchJobsCount = await getOne<{ total: string; discovered: string; fetching: string; done: string; failed: string; retryable_failed: string }>(
+      `SELECT COUNT(*) as total,
+              COUNT(*) FILTER (WHERE status = 'discovered') as discovered,
+              COUNT(*) FILTER (WHERE status = 'fetching') as fetching,
+              COUNT(*) FILTER (WHERE status = 'done') as done,
+              COUNT(*) FILTER (WHERE status = 'failed') as failed,
+              COUNT(*) FILTER (WHERE status = 'failed' AND retry_count < 3) as retryable_failed
+       FROM article_fetch_jobs`
+    );
+
     const lastDigest = await getOne(
       `SELECT digest_date, title, article_count FROM digests WHERE status = 'done' ORDER BY digest_date DESC LIMIT 1`
     );
@@ -59,6 +69,14 @@ health.get('/', async (c) => {
           skipped: parseInt(articlesCount?.skipped || '0'),
           retryable_failed: parseInt(articlesCount?.retryable_failed || '0'),
         },
+        articleFetchJobs: {
+          total: parseInt(articleFetchJobsCount?.total || '0'),
+          discovered: parseInt(articleFetchJobsCount?.discovered || '0'),
+          fetching: parseInt(articleFetchJobsCount?.fetching || '0'),
+          done: parseInt(articleFetchJobsCount?.done || '0'),
+          failed: parseInt(articleFetchJobsCount?.failed || '0'),
+          retryable_failed: parseInt(articleFetchJobsCount?.retryable_failed || '0'),
+        },
         lastDigest: lastDigest || null,
         recentLogs,
       },
@@ -73,27 +91,28 @@ health.get('/', async (c) => {
 
 // Manual trigger endpoints (POST, can auth)
 health.post('/trigger/scrape', async (c) => {
-  // Fire scrape then auto-summarize new articles
-  (async () => {
-    await runScrapeJob();
-    await runSummarizeJob();
-  })().catch(console.error);
-  return c.json({ success: true, data: { message: 'Đã kích hoạt job scrape + tóm tắt' } });
+  runScrapeJob().catch(console.error);
+  return c.json({ success: true, data: { message: 'Triggered scrape discovery job' } });
+});
+
+health.post('/trigger/fetch-articles', async (c) => {
+  runArticleFetchJob().catch(console.error);
+  return c.json({ success: true, data: { message: 'Triggered article fetch job' } });
 });
 
 health.post('/trigger/summarize', async (c) => {
   runSummarizeJob().catch(console.error);
-  return c.json({ success: true, data: { message: 'Đã kích hoạt job tóm tắt' } });
+  return c.json({ success: true, data: { message: 'Triggered summarize job' } });
 });
 
 health.post('/trigger/digest', async (c) => {
   runDigestJob().catch(console.error);
-  return c.json({ success: true, data: { message: 'Đã kích hoạt job tạo bản tin' } });
+  return c.json({ success: true, data: { message: 'Triggered digest job' } });
 });
 
 health.post('/trigger/cleanup', async (c) => {
   runCleanupJob().catch(console.error);
-  return c.json({ success: true, data: { message: 'Đã kích hoạt job dọn dẹp' } });
+  return c.json({ success: true, data: { message: 'Triggered cleanup job' } });
 });
 
 export { health };

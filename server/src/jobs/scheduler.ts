@@ -4,6 +4,17 @@ import { scrapeSource, retryRedditComments } from '../services/scraper.js';
 import { summarizePendingArticles, generateDigest } from '../services/summarizer.js';
 import { generateId } from '../lib/utils.js';
 import { rescrapeArticle, runForumRescrapeJob } from '../services/rescrape.js';
+import { getFetcherForSource } from '../services/fetchers/registry.js';
+import { sourceFetchers, SourceRow } from '../services/fetchers/index.js';
+import { insertArticleIfNew } from '../services/fetchers/article-writer.js';
+import {
+  buildResetRetryableArticleFetchJobsSql,
+  buildResetStuckArticleFetchJobsSql,
+  claimArticleFetchJobs,
+  enqueueDiscoveredArticles,
+  markArticleFetchJobDone,
+  markArticleFetchJobFailed,
+} from '../services/article-fetch-queue.js';
 import {
   buildResetRetryableFailedSummariesSql,
   buildResetStuckProcessingSummariesSql,
@@ -28,7 +39,15 @@ async function runScrapeJob() {
 
     try {
       console.log(`  Scraping [${source.type}] ${source.name}...`);
-      const result = await scrapeSource(source);
+      const fetcher = getFetcherForSource(source, sourceFetchers);
+      let result;
+      if (fetcher.discover) {
+        const discovered = await fetcher.discover(source);
+        const enqueued = await enqueueDiscoveredArticles(discovered);
+        result = { itemsFound: discovered.length, itemsInserted: enqueued, errors: [] as string[] };
+      } else {
+        result = await scrapeSource(source);
+      }
 
       // Update source status
       await query(
@@ -69,6 +88,46 @@ async function runScrapeJob() {
   }
 
   console.log(`[${new Date().toISOString()}] Scrape job complete.`);
+}
+
+async function runArticleFetchJob() {
+  console.log(`[${new Date().toISOString()}] Starting article fetch job...`);
+  const limit = parseInt(process.env.MAX_ARTICLE_FETCH_JOBS_PER_RUN || '30');
+  const jobs = await claimArticleFetchJobs(limit);
+  let succeeded = 0;
+  let failed = 0;
+
+  for (const job of jobs) {
+    const source: SourceRow = {
+      id: job.source_id,
+      type: job.source_type,
+      name: job.source_name,
+      url: job.source_url,
+      language: job.source_language,
+      category: job.source_category,
+      fetch_interval_minutes: job.source_fetch_interval_minutes,
+      parser_config: job.source_parser_config,
+    };
+
+    try {
+      const fetcher = getFetcherForSource(source, sourceFetchers);
+      if (!fetcher.fetchArticle) {
+        throw new Error(`Fetcher ${fetcher.key} does not support article fetch jobs`);
+      }
+
+      const articleInput = await fetcher.fetchArticle(job, source);
+      if (articleInput) {
+        await insertArticleIfNew(articleInput);
+      }
+      await markArticleFetchJobDone(job.id);
+      succeeded++;
+    } catch (err) {
+      await markArticleFetchJobFailed(job.id, err);
+      failed++;
+    }
+  }
+
+  console.log(`  Article fetch jobs: processed=${jobs.length}, succeeded=${succeeded}, failed=${failed}`);
 }
 
 // Summarize articles pending
@@ -118,6 +177,10 @@ async function runCleanupJob() {
     const stuckStatement = buildResetStuckProcessingSummariesSql();
     const stuckResult = await query(stuckStatement.sql, stuckStatement.params);
     console.log(`  Reset ${stuckResult.rowCount} stuck articles`);
+
+    const fetchStuckStatement = buildResetStuckArticleFetchJobsSql();
+    const fetchStuckResult = await query(fetchStuckStatement.sql, fetchStuckStatement.params);
+    console.log(`  Reset ${fetchStuckResult.rowCount} stuck article fetch jobs`);
   } catch (err: any) {
     console.error(`  Cleanup error: ${err.message}`);
   }
@@ -140,6 +203,10 @@ async function runRetryJob() {
     const failedStatement = buildResetRetryableFailedSummariesSql(15);
     const failedResult = await query(failedStatement.sql, failedStatement.params);
     console.log(`  Reset ${failedResult.rowCount} failed articles for retry`);
+
+    const fetchFailedStatement = buildResetRetryableArticleFetchJobsSql(15);
+    const fetchFailedResult = await query(fetchFailedStatement.sql, fetchFailedStatement.params);
+    console.log(`  Reset ${fetchFailedResult.rowCount} failed article fetch jobs for retry`);
     
     // Retry lấy comment Reddit cho bài chưa có comment (Pullpush chậm index)
     let redditEnriched = 0;
@@ -179,6 +246,11 @@ export function startCronJobs() {
     runSummarizeJob().catch(console.error);
   });
 
+  // Fetch discovered article URLs independently from source discovery.
+  cron.schedule('*/5 * * * *', () => {
+    runArticleFetchJob().catch(console.error);
+  });
+
   // Re-scrape active forum threads every 30 minutes (at :30 and :00 of non-scrape hours)
   cron.schedule(`0,30 * * * *`, async () => {
     const currentHour = new Date().getHours();
@@ -216,6 +288,7 @@ export function startCronJobs() {
 
   console.log(`Cron jobs scheduled:`);
   console.log(`  - Scrape: every ${intervalHours}h at :00`);
+  console.log(`  - Article Fetch: every 5 minutes`);
   console.log(`  - Summarize: every 10 minutes`);
   console.log(`  - Forum Rescrape: every 30 mins (max 2 times per article)`);
   console.log(`  - Digest: every ${intervalHours}h at :30`);
@@ -224,4 +297,4 @@ export function startCronJobs() {
 }
 
 // Export de co the goi thu cong qua API
-export { runScrapeJob, runSummarizeJob, runDigestJob, runCleanupJob, rescrapeArticle, runForumRescrapeJob };
+export { runScrapeJob, runArticleFetchJob, runSummarizeJob, runDigestJob, runCleanupJob, rescrapeArticle, runForumRescrapeJob };
