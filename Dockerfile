@@ -19,7 +19,7 @@ RUN cd server && npm run build
 
 # --- Production ---
 FROM node:22-alpine AS production
-RUN apk add --no-cache curl chromium nss freetype harfbuzz ca-certificates ttf-freefont
+RUN apk add --no-cache curl chromium nss freetype harfbuzz ca-certificates ttf-freefont tzdata
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 WORKDIR /app
 
