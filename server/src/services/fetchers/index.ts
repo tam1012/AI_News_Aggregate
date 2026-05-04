@@ -12,4 +12,4 @@ export const sourceFetchers: SourceFetcher[] = [
 ];
 
 export * from './types.js';
-export * from './legacy.js';
+export * from './forum-fetchers.js';
