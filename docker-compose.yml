@@ -29,6 +29,7 @@ services:
     ports:
       - "127.0.0.1:3001:3000"
     environment:
+      TZ: Asia/Ho_Chi_Minh
       PORT: 3000
       NODE_ENV: production
       DATABASE_URL: postgresql://newstamhv:${DB_PASSWORD:-newstamhv_secret}@db:5432/newstamhv
