@@ -703,6 +703,8 @@ Với mỗi bài mới, hệ thống thử lấy comment theo thứ tự:
 - Nếu không có OAuth → chạy waterfall **1 → 2 → 3 → 4**, dừng ngay khi strategy nào trả comment thành công.
 - Giới hạn tối đa **8 bài được enrich** mỗi lần cào (tránh quá tải Puppeteer/proxy).
 
+> **📌 Trạng thái production (05/2026):** Hiện tại OAuth chưa được cấu hình. Trong waterfall, cả Puppeteer (old.reddit.com chặn headless), RSS Comment (thường trả rỗng), và Cloudflare Worker Proxy đều fail → **Pullpush Archive API (Strategy 4) là strategy duy nhất đang hoạt động thành công**. Pullpush trả comment kèm score nhưng là flat list (không có nested replies). Bài mới đăng có thể chưa có comment trên Pullpush (chậm index vài giờ) → retry job mỗi 10 phút sẽ bổ sung sau.
+
 #### Chi tiết từng strategy
 
 **Strategy 0 — Reddit OAuth API** (`hasRedditOAuth()`)
