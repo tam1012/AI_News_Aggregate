@@ -16,6 +16,7 @@ export function Sources() {
     language: 'vi',
     category: '',
     fetch_interval_minutes: 180,
+    parser_config: undefined as any,
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -29,12 +30,18 @@ export function Sources() {
     try {
       const result = await api.detectSource(detectUrl.trim());
       setDetectResult(result.data);
+      if (result.data.supported === false) {
+        setFormError(result.data.warnings?.[0] || 'Nguồn này chưa được hỗ trợ.');
+        setShowForm(false);
+        return;
+      }
       setFormData({
         ...formData,
         type: result.data.type || 'web',
         name: result.data.name || '',
         url: result.data.suggested_url || result.data.url || detectUrl.trim(),
         language: result.data.preview?.language?.substring(0, 2) || 'vi',
+        parser_config: result.data.parser_config,
       });
       setShowForm(true);
     } catch (err: any) {
@@ -57,6 +64,7 @@ export function Sources() {
       type: 'rss',
       url: feedUrl,
       name: feedTitle || formData.name,
+      parser_config: undefined,
     });
   };
 
@@ -70,7 +78,7 @@ export function Sources() {
       } else {
         await api.createSource(formData);
       }
-      setFormData({ type: 'rss', name: '', url: '', language: 'vi', category: '', fetch_interval_minutes: 180 });
+      setFormData({ type: 'rss', name: '', url: '', language: 'vi', category: '', fetch_interval_minutes: 180, parser_config: undefined });
       setEditingId(null);
       setShowForm(false);
       setDetectUrl('');
@@ -91,6 +99,7 @@ export function Sources() {
       language: source.language,
       category: source.category || '',
       fetch_interval_minutes: source.fetch_interval_minutes || 180,
+      parser_config: source.parser_config,
     });
     setEditingId(source.id);
     setShowForm(true);
@@ -166,6 +175,12 @@ export function Sources() {
               <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: 8 }}>
                 {detectResult.preview.description.substring(0, 200)}
               </p>
+            )}
+
+            {detectResult.supported === false && detectResult.warnings?.length > 0 && (
+              <div style={{ color: 'var(--color-error)', fontSize: '0.85rem', marginBottom: 8 }}>
+                {detectResult.warnings[0]}
+              </div>
             )}
 
             {detectResult.rss_feeds && detectResult.rss_feeds.length > 0 && (

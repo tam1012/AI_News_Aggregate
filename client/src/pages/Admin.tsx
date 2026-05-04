@@ -1,5 +1,6 @@
 ﻿import { useState } from 'react';
 import { api } from '../services/api';
+import { useEffect } from 'react';
 import { useFetch, useFetchRaw } from '../hooks/useApi';
 
 type AiProviderFormData = {
@@ -14,6 +15,14 @@ type AiProviderFormData = {
   max_tokens: number;
   temperature: string;
   extra_config: string;
+};
+
+type PromptConfigFormData = {
+  output_language: string;
+  topic_priorities: string;
+  allowed_tags: string;
+  digest_headings: string;
+  custom_context: string;
 };
 
 const AI_PROVIDER_TYPES = ['vertex_ai', 'openai', 'gemini', 'xai', 'mimo', 'anthropic', 'deepseek', 'groq', 'custom'];
@@ -51,7 +60,7 @@ function formatExtraConfig(value: unknown): string {
 }
 
 export function Admin() {
-  const [tab, setTab] = useState<'overview' | 'ai' | 'articles'>('overview');
+  const [tab, setTab] = useState<'overview' | 'ai' | 'prompt' | 'articles'>('overview');
   const { data: health, loading, error, reload } = useFetch<any>(() => api.getHealth());
   const [actionLoading, setActionLoading] = useState('');
 
@@ -77,6 +86,7 @@ export function Admin() {
         {[
           { key: 'overview', label: '📊 Tổng quan' },
           { key: 'ai', label: '🤖 AI Providers' },
+          { key: 'prompt', label: 'Prompt' },
           { key: 'articles', label: '📄 Bài viết' },
         ].map(t => (
           <button
@@ -165,8 +175,135 @@ export function Admin() {
       )}
 
       {tab === 'ai' && <AiProvidersTab />}
+      {tab === 'prompt' && <PromptConfigTab />}
       {tab === 'articles' && <ArticlesTab />}
     </div>
+  );
+}
+
+function splitLines(value: string): string[] {
+  return value
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function joinLines(value: unknown): string {
+  return Array.isArray(value) ? value.join('\n') : '';
+}
+
+function PromptConfigTab() {
+  const { data: config, loading, error, reload } = useFetch<any>(() => api.getPromptConfig());
+  const [formData, setFormData] = useState<PromptConfigFormData>({
+    output_language: '',
+    topic_priorities: '',
+    allowed_tags: '',
+    digest_headings: '',
+    custom_context: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+
+  useEffect(() => {
+    if (!config) return;
+    setFormData({
+      output_language: config.output_language || '',
+      topic_priorities: joinLines(config.topic_priorities),
+      allowed_tags: joinLines(config.allowed_tags),
+      digest_headings: joinLines(config.digest_headings),
+      custom_context: config.custom_context || '',
+    });
+  }, [config]);
+
+  const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setSaveMessage('');
+    try {
+      await api.updatePromptConfig({
+        output_language: formData.output_language.trim(),
+        topic_priorities: splitLines(formData.topic_priorities),
+        allowed_tags: splitLines(formData.allowed_tags),
+        digest_headings: splitLines(formData.digest_headings),
+        custom_context: formData.custom_context.trim(),
+      });
+      setSaveMessage('Đã lưu cấu hình prompt.');
+      reload();
+    } catch (err: any) {
+      setSaveMessage(`Lỗi: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <div className="loading">Đang tải...</div>;
+  if (error) return <div className="empty-state" style={{ color: 'var(--color-error)' }}>{error}</div>;
+
+  return (
+    <form className="card" onSubmit={handleSubmit}>
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>Prompt config</div>
+      <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', marginBottom: 12 }}>
+        Cấu hình này áp dụng cho bài tóm tắt mới và digest mới. Mỗi dòng là một giá trị.
+      </div>
+
+      <div className="form-group">
+        <label>Ngôn ngữ output</label>
+        <input
+          type="text"
+          value={formData.output_language}
+          placeholder="Vietnamese"
+          onChange={(e) => setFormData({ ...formData, output_language: e.target.value })}
+        />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+        <div className="form-group">
+          <label>Topic priorities</label>
+          <textarea
+            rows={7}
+            value={formData.topic_priorities}
+            onChange={(e) => setFormData({ ...formData, topic_priorities: e.target.value })}
+          />
+        </div>
+        <div className="form-group">
+          <label>Allowed tags</label>
+          <textarea
+            rows={7}
+            value={formData.allowed_tags}
+            onChange={(e) => setFormData({ ...formData, allowed_tags: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label>Digest headings</label>
+        <textarea
+          rows={5}
+          value={formData.digest_headings}
+          onChange={(e) => setFormData({ ...formData, digest_headings: e.target.value })}
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Custom context</label>
+        <textarea
+          rows={5}
+          value={formData.custom_context}
+          placeholder="Không dùng XML tags hoặc markup đặc biệt."
+          onChange={(e) => setFormData({ ...formData, custom_context: e.target.value })}
+        />
+      </div>
+
+      {saveMessage && (
+        <div style={{ marginBottom: 12, fontSize: '0.85rem', color: saveMessage.startsWith('Lỗi') ? 'var(--color-error)' : 'var(--color-success)' }}>
+          {saveMessage}
+        </div>
+      )}
+
+      <button type="submit" className="btn btn-primary" disabled={saving}>
+        {saving ? 'Đang lưu...' : 'Lưu prompt config'}
+      </button>
+    </form>
   );
 }
 

@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
+import ts from 'typescript';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function loadTsModule(relativePath) {
+  const source = readFileSync(resolve(__dirname, relativePath), 'utf8');
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  });
+  const moduleContext = { exports: {} };
+  vm.runInNewContext(outputText, {
+    exports: moduleContext.exports,
+    module: moduleContext,
+  });
+  return moduleContext.exports;
+}
+
+test('article filters add tag and minimum score SQL predicates', () => {
+  const { buildArticleListFilters } = loadTsModule('../src/lib/articleFilters.ts');
+  const result = buildArticleListFilters({
+    sourceId: 'src_1',
+    status: 'done',
+    date: '2026-05-04',
+    tag: 'AI',
+    minScore: '7',
+  });
+
+  assert.match(result.where, /a\.source_id = \$1/);
+  assert.match(result.where, /a\.summary_status = \$2/);
+  assert.match(result.where, /DATE\(COALESCE\(a\.published_at, a\.created_at\)/);
+  assert.match(result.where, /\$4 = ANY\(a\.tags\)/);
+  assert.match(result.where, /a\.hot_score >= \$5/);
+  assert.deepEqual(Array.from(result.params), ['src_1', 'done', '2026-05-04', 'AI', 7]);
+  assert.equal(result.nextParamIndex, 6);
+});
+
+test('article filters validate score, status, and date', () => {
+  const { buildArticleListFilters } = loadTsModule('../src/lib/articleFilters.ts');
+
+  assert.throws(() => buildArticleListFilters({ status: 'bad' }), /Invalid status/);
+  assert.throws(() => buildArticleListFilters({ date: '04-05-2026' }), /date must be YYYY-MM-DD/);
+  assert.throws(() => buildArticleListFilters({ minScore: '11' }), /minScore must be between 1 and 10/);
+});
