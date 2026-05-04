@@ -2,6 +2,7 @@ import { query, getMany } from '../db/index.js';
 import { generateId, truncate } from '../lib/utils.js';
 import { normalizeTldr } from '../lib/tldr.js';
 import { PromptConfig } from '../lib/promptConfig.js';
+import { truncateSummaryError } from '../lib/summaryRetryPolicy.js';
 import { ParsedSummaryOutput, parseAiSummaryOutput } from '../lib/summaryOutput.js';
 import { callAi } from './ai-client.js';
 import { getPromptConfig } from './prompt-settings.js';
@@ -26,7 +27,8 @@ async function claimPendingArticles(limit: number): Promise<ArticleForSummary[]>
        LIMIT $1
      ), claimed AS (
        UPDATE articles a
-       SET summary_status = 'processing'
+       SET summary_status = 'processing',
+           last_summary_error = NULL
        FROM picked
        WHERE a.id = picked.id
        RETURNING a.id, a.title, a.raw_excerpt, a.raw_content, a.language, picked.source_id
@@ -248,19 +250,30 @@ export async function summarizePendingArticles(): Promise<{ processed: number; s
                tldr = $3,
                summary_short = $4,
                hot_score = $5,
-               tags = $6
+               tags = $6,
+               last_summary_error = NULL
            WHERE id = $7`,
           [cleanedSummary, 'done', tldr || null, parsed.summaryShort, parsed.hotScore, parsed.tags, article.id]
         );
         succeeded++;
       } else {
-        await query('UPDATE articles SET summary_status = $1 WHERE id = $2', ['skipped', article.id]);
+        await query(
+          `UPDATE articles
+           SET summary_status = $1,
+               last_summary_error = NULL
+           WHERE id = $2`,
+          ['skipped', article.id]
+        );
         succeeded++;
       }
     } catch (err: any) {
       await query(
-        `UPDATE articles SET summary_status = 'failed' WHERE id = $1`,
-        [article.id]
+        `UPDATE articles
+         SET summary_status = 'failed',
+             retry_count = retry_count + 1,
+             last_summary_error = $2
+         WHERE id = $1`,
+        [article.id, truncateSummaryError(err)]
       );
       failed++;
     }

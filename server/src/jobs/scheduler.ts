@@ -4,6 +4,10 @@ import { scrapeSource, retryRedditComments } from '../services/scraper.js';
 import { summarizePendingArticles, generateDigest } from '../services/summarizer.js';
 import { generateId } from '../lib/utils.js';
 import { rescrapeArticle, runForumRescrapeJob } from '../services/rescrape.js';
+import {
+  buildResetRetryableFailedSummariesSql,
+  buildResetStuckProcessingSummariesSql,
+} from '../lib/summaryRetryPolicy.js';
 
 // Scrape ALL enabled sources (chay moi gio tai :00)
 async function runScrapeJob() {
@@ -111,10 +115,8 @@ async function runCleanupJob() {
     console.log(`  Cleaned content of ${articlesResult.rowCount} old articles`);
 
     // Reset stuck processing items (> 5 phut = chac chan da timeout)
-    const stuckResult = await query(
-      `UPDATE articles SET summary_status = 'pending'
-       WHERE summary_status = 'processing' AND updated_at < NOW() - INTERVAL '5 minutes'`
-    );
+    const stuckStatement = buildResetStuckProcessingSummariesSql();
+    const stuckResult = await query(stuckStatement.sql, stuckStatement.params);
     console.log(`  Reset ${stuckResult.rowCount} stuck articles`);
   } catch (err: any) {
     console.error(`  Cleanup error: ${err.message}`);
@@ -135,15 +137,8 @@ async function runRetryJob() {
     }
 
     // Reset 'failed' > 10 phút (tối đa 15 bài)
-    const failedResult = await query(
-      `UPDATE articles SET summary_status = 'pending'
-       WHERE id IN (
-         SELECT id FROM articles
-         WHERE summary_status = 'failed'
-           AND updated_at < NOW() - INTERVAL '10 minutes'
-         LIMIT 15
-       )`
-    );
+    const failedStatement = buildResetRetryableFailedSummariesSql(15);
+    const failedResult = await query(failedStatement.sql, failedStatement.params);
     console.log(`  Reset ${failedResult.rowCount} failed articles for retry`);
     
     // Retry lấy comment Reddit cho bài chưa có comment (Pullpush chậm index)
@@ -174,10 +169,14 @@ export function startCronJobs() {
   cron.schedule(`0 */${intervalHours} * * *`, async () => {
     try {
       await runScrapeJob();
-      await runSummarizeJob();
     } catch (err) {
       console.error(err);
     }
+  });
+
+  // Summarize independently so slow AI never blocks source scraping.
+  cron.schedule('*/10 * * * *', () => {
+    runSummarizeJob().catch(console.error);
   });
 
   // Re-scrape active forum threads every 30 minutes (at :30 and :00 of non-scrape hours)
@@ -216,7 +215,8 @@ export function startCronJobs() {
   });
 
   console.log(`Cron jobs scheduled:`);
-  console.log(`  - Scrape & Summarize: every ${intervalHours}h at :00`);
+  console.log(`  - Scrape: every ${intervalHours}h at :00`);
+  console.log(`  - Summarize: every 10 minutes`);
   console.log(`  - Forum Rescrape: every 30 mins (max 2 times per article)`);
   console.log(`  - Digest: every ${intervalHours}h at :30`);
   console.log(`  - Retry: every 10 minutes`);

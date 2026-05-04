@@ -21,11 +21,14 @@ health.get('/', async (c) => {
       `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_enabled = true) as enabled FROM sources`
     );
 
-    const articlesCount = await getOne<{ total: string; pending: string; done: string; failed: string }>(
+    const articlesCount = await getOne<{ total: string; pending: string; processing: string; done: string; failed: string; skipped: string; retryable_failed: string }>(
       `SELECT COUNT(*) as total,
               COUNT(*) FILTER (WHERE summary_status = 'pending') as pending,
+              COUNT(*) FILTER (WHERE summary_status = 'processing') as processing,
               COUNT(*) FILTER (WHERE summary_status = 'done') as done,
-              COUNT(*) FILTER (WHERE summary_status = 'failed') as failed
+              COUNT(*) FILTER (WHERE summary_status = 'failed') as failed,
+              COUNT(*) FILTER (WHERE summary_status = 'skipped') as skipped,
+              COUNT(*) FILTER (WHERE summary_status = 'failed' AND retry_count < 3) as retryable_failed
        FROM articles`
     );
 
@@ -50,8 +53,11 @@ health.get('/', async (c) => {
         articles: {
           total: parseInt(articlesCount?.total || '0'),
           pending: parseInt(articlesCount?.pending || '0'),
+          processing: parseInt(articlesCount?.processing || '0'),
           done: parseInt(articlesCount?.done || '0'),
           failed: parseInt(articlesCount?.failed || '0'),
+          skipped: parseInt(articlesCount?.skipped || '0'),
+          retryable_failed: parseInt(articlesCount?.retryable_failed || '0'),
         },
         lastDigest: lastDigest || null,
         recentLogs,

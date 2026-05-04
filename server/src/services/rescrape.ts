@@ -162,6 +162,8 @@ export async function rescrapeArticle(articleId: string, force: boolean = false)
         `UPDATE articles SET 
            raw_content = $1, 
            summary_status = 'pending', 
+           retry_count = 0,
+           last_summary_error = NULL,
            rescraped_count = rescraped_count + 1,
            updated_at = NOW() 
          WHERE id = $2`,
