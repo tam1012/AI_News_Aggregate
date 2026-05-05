@@ -22,3 +22,14 @@ test('desktop split feed tabs scroll within the left pane instead of overflowing
   assert.match(splitTabsRule, /overflow-x:\s*auto/);
   assert.match(feedTabRule, /white-space:\s*nowrap/);
 });
+
+test('split feed toolbar keeps compact tabs separate from the filter button on narrow panes', () => {
+  const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
+  const toolbarTabsRule = css.match(/\.split-feed-toolbar \.feed-tabs\s*\{([^}]+)\}/)?.[1] || '';
+  const toolbarTabRule = css.match(/\.split-feed-toolbar \.feed-tab\s*\{([^}]+)\}/)?.[1] || '';
+
+  assert.match(toolbarTabsRule, /justify-content:\s*flex-start/);
+  assert.match(toolbarTabsRule, /overflow-x:\s*auto/);
+  assert.match(toolbarTabRule, /padding:\s*6px 8px/);
+  assert.match(toolbarTabRule, /font-size:\s*0\.82rem/);
+});

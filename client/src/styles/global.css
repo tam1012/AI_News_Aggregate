@@ -164,12 +164,26 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .split-feed-toolbar .feed-tabs {
   position: static; top: auto; z-index: auto;
   flex: 1 1 auto; min-width: 0;
+  justify-content: flex-start;
+  gap: 3px;
+  padding: 0;
   border-bottom: none;
   background: transparent;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
 }
 .feed-filter-control {
   position: relative;
   flex: 0 0 auto;
+}
+.split-feed-toolbar .feed-tab {
+  padding: 6px 8px;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+.split-feed-toolbar .feed-tabs::-webkit-scrollbar {
+  display: none;
 }
 .feed-tab {
   padding: 6px 20px; border: 1.5px solid var(--color-border);
@@ -744,10 +758,6 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 
   .split-left .feed-tabs > * {
     flex: 0 0 auto;
-  }
-
-  .split-left .feed-tab {
-    padding: 6px 12px;
   }
 
   .split-left .feed-filter-control {
