@@ -398,7 +398,7 @@ export function Home() {
           <button className="feed-tab" onClick={() => navigateTab('news')}>News</button>
           <button className="feed-tab" onClick={() => navigateTab('voz')}>VOZ</button>
           <button className="feed-tab" onClick={() => navigateTab('reddit')}>Reddit</button>
-          <button className="feed-tab" onClick={() => navigateTab('youtube')}>YouTube</button>
+          <button className="feed-tab" onClick={() => navigateTab('youtube')}>YT</button>
           <button className={`feed-tab active`} onClick={() => navigateTab('digest')}>Bản tin</button>
         </div>
       )}
@@ -406,30 +406,32 @@ export function Home() {
       <div className="home-split-layout">
         <div className={`split-left ${tab === 'digest' ? 'hidden-on-mobile' : ''}`} ref={splitLeftRef}>
           {/* Tab bar inside left pane */}
-          <div className="feed-tabs">
-            {(['news', 'voz', 'reddit', 'youtube'] as const).map(t => (
+          <div className="split-feed-toolbar">
+            <div className="feed-tabs">
+              {(['news', 'voz', 'reddit', 'youtube'] as const).map(t => (
+                <button
+                  key={t}
+                  className={`feed-tab ${tab === t ? 'active' : ''}`}
+                  onClick={() => {
+                    if (tab === t) {
+                      splitLeftRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                    navigateTab(t);
+                    setSelected(null);
+                  }}
+                >
+                  {t === 'news' ? 'News' : t === 'voz' ? 'VOZ' : t === 'reddit' ? 'Reddit' : 'YT'}
+                </button>
+              ))}
               <button
-                key={t}
-                className={`feed-tab ${tab === t ? 'active' : ''}`}
-                onClick={() => {
-                  if (tab === t) {
-                    splitLeftRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }
-                  navigateTab(t);
-                  setSelected(null);
-                }}
+                className={`feed-tab ${tab === 'digest' ? 'active' : ''}`}
+                onClick={() => navigateTab('digest')}
               >
-                {t === 'news' ? 'News' : t === 'voz' ? 'VOZ' : t === 'reddit' ? 'Reddit' : 'YouTube'}
+                Bản tin
               </button>
-            ))}
-            <button
-              className={`feed-tab ${tab === 'digest' ? 'active' : ''}`}
-              onClick={() => navigateTab('digest')}
-            >
-              Bản tin
-            </button>
-            <div style={{ position: 'relative' }}>
+            </div>
+            <div className="feed-filter-control">
               <button
                 className={`icon-btn ${filterSource !== 'all' ? 'active' : ''}`}
                 onClick={() => setShowFilter(!showFilter)}
