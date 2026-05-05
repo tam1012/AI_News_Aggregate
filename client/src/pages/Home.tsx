@@ -263,6 +263,7 @@ export function Home() {
   );
 
   const allArticles: any[] = useMemo(() => raw?.data || [], [raw]);
+  const isShowingOfflineCache = Boolean(raw?.offline || raw?.stale || datesRaw?.offline || datesRaw?.stale);
 
   // Classify and filter articles by feed tab
   const feedTab: FeedTab = (tab === 'digest') ? 'news' : tab;
@@ -488,6 +489,12 @@ export function Home() {
           )}
 
           <div className="feed-container">
+            {isShowingOfflineCache && (
+              <div className="offline-cache-banner">
+                Đang hiển thị dữ liệu đã lưu. Một số tin mới có thể chưa được cập nhật.
+              </div>
+            )}
+
             {availableDates.length > 0 && selectedDate && (
               <div className="date-navigator">
                 <button 

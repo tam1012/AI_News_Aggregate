@@ -36,6 +36,13 @@ function loadApiModule(fetchImpl) {
           makeApiCacheKey: (path) => path,
         };
       }
+      if (name === './persistentCache') {
+        return {
+          loadPersistentApiCache: () => null,
+          markPersistentData: (data) => data,
+          savePersistentApiCache: () => {},
+        };
+      }
       throw new Error(`Unexpected require ${name}`);
     },
   });

@@ -1,0 +1,21 @@
+{
+  "name": "SynthNews",
+  "short_name": "SynthNews",
+  "description": "Tin tức tổng hợp AI, tối ưu cho đọc nhanh trên mobile.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f1419",
+  "orientation": "portrait-primary",
+  "lang": "vi-VN",
+  "categories": ["news", "productivity", "technology"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

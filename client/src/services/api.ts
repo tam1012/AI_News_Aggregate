@@ -1,4 +1,5 @@
 import { getCachePolicy, makeApiCacheKey } from './apiCache';
+import { loadPersistentApiCache, markPersistentData, savePersistentApiCache } from './persistentCache';
 
 const API_BASE = '/api';
 const responseCache = new Map<string, { expiresAt: number; data: any }>();
@@ -18,15 +19,23 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   const doFetch = async (authToken: string) => {
-    const res = await fetch(`${API_BASE}${path}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        ...options?.headers,
-      },
-    });
-    return res.json();
+    try {
+      const res = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          ...options?.headers,
+        },
+      });
+      return res.json();
+    } catch (err) {
+      if (cachePolicy.cacheable) {
+        const cached = loadPersistentApiCache<T>(path);
+        if (cached) return markPersistentData(cached as Record<string, any>) as T;
+      }
+      throw err;
+    }
   };
 
   const run = async () => {
@@ -49,6 +58,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
         data,
         expiresAt: Date.now() + cachePolicy.ttlMs,
       });
+      if (!data.offline) savePersistentApiCache(path, data);
     }
 
     return data;
