@@ -52,7 +52,7 @@ export function getEmptyFeedMessage({
   return 'Hệ thống đang cào và tóm tắt tin. Hãy quay lại sau.';
 }
 
-export function filterArticlesBySelectedDate<T extends { published_at?: string | null }>(articles: T[], selectedDate: string | null): T[] {
+export function filterArticlesBySelectedDate<T extends { local_date?: string | null; published_at?: string | null }>(articles: T[], selectedDate: string | null): T[] {
   if (!selectedDate) return articles;
-  return articles.filter((article) => article.published_at?.slice(0, 10) === selectedDate);
+  return articles.filter((article) => (article.local_date || article.published_at?.slice(0, 10)) === selectedDate);
 }

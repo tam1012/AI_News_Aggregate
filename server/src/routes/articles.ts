@@ -71,7 +71,7 @@ articles.get('/', async (c) => {
             a.summary_short, a.hot_score, a.tags,
             a.summary_status, a.retry_count, a.last_summary_error, a.image_url, a.created_at,
             s.name as source_name, s.type as source_type,
-            ${LOCAL_DATE_SQL} as local_date
+            ${LOCAL_DATE_TEXT_SQL} as local_date
      FROM articles a
      LEFT JOIN sources s ON s.id = a.source_id
      ${filters.where}

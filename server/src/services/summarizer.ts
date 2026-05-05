@@ -117,16 +117,29 @@ function cleanSummaryText(summaryText: string): string {
   return summaryText.replace(/<tldr>[\s\S]*?<\/tldr>/i, '').trim();
 }
 
-export async function summarizeArticle(article: ArticleForSummary, promptConfig?: PromptConfig): Promise<ParsedSummaryOutput | null> {
+export class SummarySkippedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SummarySkippedError';
+  }
+}
+
+function isAiSafetyRejection(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err || '');
+  return /safety|high-risk|rejected/i.test(message);
+}
+
+export async function summarizeArticle(article: ArticleForSummary, promptConfig?: PromptConfig): Promise<ParsedSummaryOutput> {
   const content = article.raw_content || article.raw_excerpt || '';
   const config = promptConfig || await getPromptConfig();
-  
+
   const isForum = article.source_name?.toLowerCase().includes('reddit') ||
                   article.source_name?.toLowerCase().includes('voz') ||
                   article.title?.startsWith('[r/');
 
-  // For normal news, skip if too short. For forums, titles alone might be worth showing.
-  if (!isForum && content.length < 80) return null;
+  if (!isForum && content.length < 80) {
+    throw new SummarySkippedError(`Skipped: source content too short (${content.length} characters)`);
+  }
 
   const prompt = isForum
     ? buildForumPrompt(article, content, config)
@@ -303,34 +316,35 @@ export async function summarizePendingArticles(): Promise<{ processed: number; s
   for (const article of pendingArticles) {
     try {
       const parsed = await summarizeArticle(article, promptConfig);
-      if (parsed) {
-        const tldr = normalizeTldr(parsed.tldr || extractTldr(parsed.editorialMarkdown));
-        const cleanedSummary = cleanSummaryText(parsed.editorialMarkdown);
+      const tldr = normalizeTldr(parsed.tldr || extractTldr(parsed.editorialMarkdown));
+      const cleanedSummary = cleanSummaryText(parsed.editorialMarkdown);
 
-        await query(
-          `UPDATE articles
-           SET summary_text = $1,
-               summary_status = $2,
-               tldr = $3,
-               summary_short = $4,
-               hot_score = $5,
-               tags = $6,
-               last_summary_error = NULL
-           WHERE id = $7`,
-          [cleanedSummary, 'done', tldr || null, parsed.summaryShort, parsed.hotScore, parsed.tags, article.id]
-        );
-        succeeded++;
-      } else {
-        await query(
-          `UPDATE articles
-           SET summary_status = $1,
-               last_summary_error = NULL
-           WHERE id = $2`,
-          ['skipped', article.id]
-        );
-        succeeded++;
-      }
+      await query(
+        `UPDATE articles
+         SET summary_text = $1,
+             summary_status = $2,
+             tldr = $3,
+             summary_short = $4,
+             hot_score = $5,
+             tags = $6,
+             last_summary_error = NULL
+         WHERE id = $7`,
+        [cleanedSummary, 'done', tldr || null, parsed.summaryShort, parsed.hotScore, parsed.tags, article.id]
+      );
+      succeeded++;
     } catch (err: any) {
+      if (err instanceof SummarySkippedError || isAiSafetyRejection(err)) {
+        await query(
+          `UPDATE articles
+           SET summary_status = 'skipped',
+               last_summary_error = $2
+           WHERE id = $1`,
+          [article.id, truncateSummaryError(err)]
+        );
+        succeeded++;
+        continue;
+      }
+
       await query(
         `UPDATE articles
          SET summary_status = 'failed',

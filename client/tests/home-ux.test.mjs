@@ -77,14 +77,15 @@ test('empty feed message distinguishes offline cache and filtered views', () => 
   );
 });
 
-test('feed articles are constrained to the selected date before rendering', () => {
+test('feed articles are constrained to the selected local date before rendering', () => {
   const { filterArticlesBySelectedDate } = loadTsModule('../src/pages/homeUx.ts');
   const articles = [
-    { id: 'new', published_at: '2026-05-06T00:00:00.000Z' },
-    { id: 'old', published_at: '2026-05-05T23:59:00.000Z' },
+    { id: 'new', local_date: '2026-05-06', published_at: '2026-05-05T18:00:00.000Z' },
+    { id: 'old', local_date: '2026-05-05', published_at: '2026-05-05T23:59:00.000Z' },
+    { id: 'fallback', published_at: '2026-05-06T00:00:00.000Z' },
     { id: 'missing' },
   ];
 
-  assert.deepEqual(filterArticlesBySelectedDate(articles, '2026-05-06').map((article) => article.id), ['new']);
-  assert.deepEqual(filterArticlesBySelectedDate(articles, null).map((article) => article.id), ['new', 'old', 'missing']);
+  assert.deepEqual(filterArticlesBySelectedDate(articles, '2026-05-06').map((article) => article.id), ['new', 'fallback']);
+  assert.deepEqual(filterArticlesBySelectedDate(articles, null).map((article) => article.id), ['new', 'old', 'fallback', 'missing']);
 });

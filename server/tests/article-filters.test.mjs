@@ -60,3 +60,11 @@ test('article filters add feed tab predicates before pagination', () => {
   assert.match(buildArticleListFilters({ feedTab: 'voz' }).where, /voz/);
   assert.match(buildArticleListFilters({ feedTab: 'youtube' }).where, /s\.type = 'youtube'/);
 });
+
+test('article local date text SQL serializes as YYYY-MM-DD instead of a UTC Date object', () => {
+  const { LOCAL_DATE_TEXT_SQL } = loadTsModule('../src/lib/articleFilters.ts');
+
+  assert.match(LOCAL_DATE_TEXT_SQL, /^TO_CHAR\(/);
+  assert.match(LOCAL_DATE_TEXT_SQL, /'YYYY-MM-DD'/);
+  assert.match(LOCAL_DATE_TEXT_SQL, /Asia\/Ho_Chi_Minh/);
+});
