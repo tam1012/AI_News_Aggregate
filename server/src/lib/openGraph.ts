@@ -61,7 +61,12 @@ export function buildArticleMeta({
 }): string {
   const title = stripPreviewMarkup(article.title || 'SynthNews');
   const description = pickDescription(article);
-  const imageUrl = normalizeImageUrl(article.image_url, articleUrl);
+  const rawImageUrl = normalizeImageUrl(article.image_url, articleUrl);
+  // Route through image proxy for optimized WebP delivery
+  const siteOrigin = articleUrl.match(/^https?:\/\/[^/]+/i)?.[0] || '';
+  const imageUrl = rawImageUrl
+    ? `${siteOrigin}/api/img?url=${encodeURIComponent(rawImageUrl)}&p=og`
+    : '';
   const cardType = imageUrl ? 'summary_large_image' : 'summary';
 
   return [

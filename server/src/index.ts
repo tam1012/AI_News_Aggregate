@@ -12,6 +12,7 @@ import { sources } from './routes/sources.js';
 import { articles } from './routes/articles.js';
 import { digests } from './routes/digests.js';
 import { health } from './routes/health.js';
+import { imageProxy } from './routes/image-proxy.js';
 import { aiProviders } from './routes/ai-providers.js';
 import { settings } from './routes/settings.js';
 import { assertAdminTokenConfigured, authMiddleware } from './lib/auth.js';
@@ -41,6 +42,9 @@ app.use('/assets/*', async (c, next) => {
   await next();
   c.header('Cache-Control', 'public, max-age=31536000, immutable');
 });
+
+// Image proxy (public, no auth required)
+app.route('/api/img', imageProxy);
 
 // Auth cho write operations
 app.use('/api/*', authMiddleware);

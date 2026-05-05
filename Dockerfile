@@ -19,12 +19,15 @@ RUN cd server && npm run build
 
 # --- Production ---
 FROM node:22-alpine AS production
-RUN apk add --no-cache curl chromium nss freetype harfbuzz ca-certificates ttf-freefont tzdata
+RUN apk add --no-cache curl chromium nss freetype harfbuzz ca-certificates ttf-freefont tzdata vips-dev
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 WORKDIR /app
 
 COPY server/package.json server/package-lock.json* ./server/
 RUN cd server && npm install --omit=dev
+
+# Create image proxy cache directory
+RUN mkdir -p /tmp/img-cache && chmod 777 /tmp/img-cache
 COPY --from=server-build /app/server/dist ./server/dist
 COPY --from=server-build /app/server/src/db/migrations ./server/dist/db/migrations
 COPY --from=client-build /app/client/dist ./server/public
