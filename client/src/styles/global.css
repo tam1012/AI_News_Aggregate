@@ -556,11 +556,13 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 .badge-rss { background: #dbeafe; color: #1d4ed8; }
 .badge-web { background: #f3e8ff; color: #7c3aed; }
+.badge-youtube { background: #fee2e2; color: #b91c1c; }
 .badge-success { background: rgba(22, 163, 74, 0.1); color: var(--color-success); }
 .badge-error { background: rgba(220, 38, 38, 0.1); color: var(--color-error); }
 .badge-pending { background: rgba(217, 119, 6, 0.1); color: var(--color-warning); }
 [data-theme="dark"] .badge-rss { background: #1e3a5f; color: #93c5fd; }
 [data-theme="dark"] .badge-web { background: #3b1f6e; color: #c4b5fd; }
+[data-theme="dark"] .badge-youtube { background: #5f1e1e; color: #fca5a5; }
 
 /* ===== Forms ===== */
 .form-group { margin-bottom: 16px; }

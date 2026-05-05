@@ -140,7 +140,7 @@ export function Sources() {
       <div className="card" style={{ marginBottom: 16 }}>
         <h3 style={{ marginBottom: 8 }}>Thêm nguồn tin</h3>
         <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: 12 }}>
-          Dán link trang web hoặc RSS feed, hệ thống sẽ tự động phân tích. Với Reddit, hệ thống sẽ tự chuyển sang RSS để lấy bài ổn định hơn.
+          Dán link trang web, RSS feed, Reddit, VOZ hoặc kênh YouTube, hệ thống sẽ tự động phân tích.
         </p>
         <div style={{ display: 'flex', gap: 8 }}>
           <input
@@ -236,6 +236,7 @@ export function Sources() {
               <select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })}>
                 <option value="rss">RSS Feed</option>
                 <option value="web">Web Scraping</option>
+                <option value="youtube">YouTube</option>
               </select>
             </div>
             <div className="form-group">

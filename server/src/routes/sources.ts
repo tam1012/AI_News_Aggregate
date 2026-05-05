@@ -24,6 +24,16 @@ function getRedditRssUrl(url: string): string | null {
   }
 }
 
+function isYoutubeUrl(url: string): boolean {
+  try {
+    const normalizedUrl = normalizeUrl(url);
+    const hostname = new URL(normalizedUrl).hostname.toLowerCase();
+    return ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'].includes(hostname);
+  } catch {
+    return false;
+  }
+}
+
 // Lay tat ca sources
 sources.get('/', async (c) => {
   const rows = await getMany(
@@ -58,10 +68,10 @@ sources.post('/', async (c) => {
     }, 400);
   }
 
-  if (!['rss', 'web'].includes(type)) {
+  if (!['rss', 'web', 'youtube'].includes(type)) {
     return c.json({
       success: false,
-      error: { code: 'VALIDATION', message: 'type must be rss or web' },
+      error: { code: 'VALIDATION', message: 'type must be rss, web, or youtube' },
     }, 400);
   }
 
@@ -70,6 +80,9 @@ sources.post('/', async (c) => {
     type = 'rss';
     url = redditRssUrl;
     parser_config = null;
+  }
+  if (isYoutubeUrl(url)) {
+    type = 'youtube';
   }
 
   const id = generateId('src');
@@ -121,10 +134,14 @@ sources.patch('/:id', async (c) => {
     }
   }
 
-  if (body.type !== undefined && !['rss', 'web'].includes(body.type)) {
+  if (body.url !== undefined && isYoutubeUrl(body.url)) {
+    body.type = 'youtube';
+  }
+
+  if (body.type !== undefined && !['rss', 'web', 'youtube'].includes(body.type)) {
     return c.json({
       success: false,
-      error: { code: 'VALIDATION', message: 'type must be rss or web' },
+      error: { code: 'VALIDATION', message: 'type must be rss, web, or youtube' },
     }, 400);
   }
 

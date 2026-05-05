@@ -1,6 +1,6 @@
 # SynthNews
 
-SynthNews là hệ thống đọc tin cá nhân dạng full-stack monorepo. Ứng dụng lấy bài từ RSS, web, Reddit và VOZ, lưu vào PostgreSQL, dùng AI để tóm tắt tiếng Việt, rồi hiển thị trong giao diện đọc nhanh cho desktop và mobile.
+SynthNews là hệ thống đọc tin cá nhân dạng full-stack monorepo. Ứng dụng lấy bài từ RSS, web, Reddit, VOZ và YouTube, lưu vào PostgreSQL, dùng AI để tóm tắt tiếng Việt, rồi hiển thị trong giao diện đọc nhanh cho desktop và mobile.
 
 Project này được thiết kế cho nhu cầu tự host cá nhân: ít thao tác, đọc nhanh, có khu quản trị gọn, có cron nền, có deploy Docker Compose trên VPS.
 
@@ -23,7 +23,7 @@ Project này được thiết kế cho nhu cầu tự host cá nhân: ít thao t
 - [Nginx, HTTPS và cache](#nginx-https-và-cache)
 - [GitHub Actions](#github-actions)
 - [Cron jobs](#cron-jobs)
-- [Scraping Reddit và VOZ](#scraping-reddit-và-voz)
+- [Scraping Reddit, VOZ và YouTube](#scraping-reddit-voz-và-youtube)
 - [Auth và bảo mật](#auth-và-bảo-mật)
 - [Tùy chỉnh domain](#tùy-chỉnh-domain)
 - [Ghi chú vận hành](#ghi-chú-vận-hành)
@@ -33,7 +33,7 @@ Project này được thiết kế cho nhu cầu tự host cá nhân: ít thao t
 - Production chạy bằng `docker compose up -d --build`.
 - Docker expose app nội bộ tại `127.0.0.1:3001`, Nginx reverse proxy ra HTTPS.
 - Backend serve luôn frontend build từ `server/public`, đồng thời expose API dưới `/api/*`.
-- Deep link đang có route thật trong SPA: `/article/:articleId`, `/voz`, `/reddit`, `/digest`.
+- Deep link đang có route thật trong SPA: `/article/:articleId`, `/voz`, `/reddit`, `/youtube`, `/digest`.
 - `/article/:id` có Open Graph meta server-side khi chạy production build, dùng `PUBLIC_SITE_URL` để sinh URL chia sẻ.
 - Static assets trong `/assets/*` có `Cache-Control: public, max-age=31536000, immutable`.
 - API/static text được nén bởi Hono `compress()`, phía Nginx cũng bật gzip.
@@ -43,7 +43,7 @@ Project này được thiết kế cho nhu cầu tự host cá nhân: ít thao t
 
 ### Đọc tin
 
-- Tab `News`, `VOZ`, `Reddit`, `Bản tin`.
+- Tab `News`, `VOZ`, `Reddit`, `YouTube`, `Bản tin`.
 - Split view trên desktop: danh sách bên trái, nội dung bên phải.
 - Detail overlay trên mobile, có gesture kéo xuống để đóng.
 - Deep link bài viết qua `/article/:id`.
@@ -62,6 +62,7 @@ Project này được thiết kế cho nhu cầu tự host cá nhân: ít thao t
 - Web scraper dùng selector cấu hình theo từng source.
 - Reddit scraper theo hướng RSS + enrich comment theo nhiều fallback.
 - VOZ scraper riêng: lấy RSS thread, mở thread thật, đọc nhiều page, chọn comment nổi bật.
+- YouTube scraper riêng: lấy video mới từ channel RSS/API, lấy transcript qua RapidAPI, lưu bài dạng `video`.
 - Forum rescrape cho Reddit/VOZ trong vài giờ đầu để cập nhật comment mới.
 - AI tóm tắt theo prompt riêng cho tin báo và forum.
 - TLDR được trích từ tag `<tldr>` trong output AI.
@@ -245,6 +246,7 @@ Routes chính trong `client/src/router.tsx`:
 | `/` | Tab News |
 | `/voz` | Tab VOZ |
 | `/reddit` | Tab Reddit |
+| `/youtube` | Tab YouTube |
 | `/digest` | Tab Bản tin |
 | `/article/:articleId` | Deep link bài viết |
 | `/sources` | Quản lý nguồn |
@@ -409,6 +411,11 @@ Biến quan trọng:
 | `REDDIT_USERNAME` | Reddit username, optional |
 | `REDDIT_PASSWORD` | Reddit password, optional |
 | `REDDIT_PROXY_URL` | Cloudflare Worker proxy URL, optional |
+| `YOUTUBE_API_KEY` | YouTube Data API v3 key, optional fallback khi channel RSS không dùng được |
+| `RAPIDAPI_KEY` | RapidAPI `yt-api` key để lấy YouTube subtitles/transcripts |
+| `YOUTUBE_TRANSCRIPT_RAPIDAPI_KEY` | Key riêng cho YouTube transcript, ưu tiên hơn `RAPIDAPI_KEY` nếu có |
+| `YOUTUBE_RECENT_DAYS` | Số ngày video YouTube gần nhất được giữ lại, mặc định 7 |
+| `YOUTUBE_TRANSCRIPT_MAX_CHARS` | Trần độ dài transcript đưa vào raw content, mặc định 30000 |
 | `PUPPETEER_EXECUTABLE_PATH` | Chromium path trong container |
 
 Default cần chú ý:
@@ -433,6 +440,11 @@ FORUM_MAX_COMMENTS=70
 FORUM_RAW_CONTENT_MAX_LENGTH=80000
 REDDIT_COMMENT_LIMIT=30
 REDDIT_COMMENT_DEPTH=3
+YOUTUBE_API_KEY=
+RAPIDAPI_KEY=
+YOUTUBE_TRANSCRIPT_RAPIDAPI_KEY=
+YOUTUBE_RECENT_DAYS=7
+YOUTUBE_TRANSCRIPT_MAX_CHARS=30000
 ```
 
 Ví dụ `server/.env` cho local dev:
@@ -569,7 +581,7 @@ Sau khi `docker compose up -d --build` thành công:
 
 1. **Cấu hình AI provider** — Mở `https://your-domain/admin`, nhập `ADMIN_TOKEN` khi được hỏi, rồi vào tab AI Providers. Thêm ít nhất 1 provider (ví dụ Gemini API key miễn phí). Nếu không có AI provider, hệ thống vẫn scrape nhưng mọi bài sẽ stuck ở `pending` — không có summary.
 
-2. **Thêm nguồn tin** — Mở `https://your-domain/sources`, thêm nguồn RSS hoặc web. Backend tự nhận diện URL Reddit/VOZ và chuyển sang scraper riêng.
+2. **Thêm nguồn tin** — Mở `https://your-domain/sources`, thêm nguồn RSS, web hoặc kênh YouTube. Backend tự nhận diện URL Reddit/VOZ/YouTube và chuyển sang scraper riêng.
 
 3. **Chờ cron hoặc trigger thủ công** — Cron scrape sẽ chạy mỗi `SCRAPE_INTERVAL_HOURS` giờ. Để test ngay, vào `/admin` → bấm nút "Cào tin" và "Tóm tắt".
 
@@ -667,7 +679,7 @@ Forum rescrape:
 - Mỗi bài rescrape tối đa 2 lần qua `rescraped_count`.
 - Nếu content đổi, reset `summary_status = 'pending'` để AI tóm tắt lại.
 
-## Scraping Reddit Và VOZ
+## Scraping Reddit, VOZ Và YouTube
 
 ### Reddit
 
@@ -708,6 +720,26 @@ VOZ dùng `scrapeVozSource()`:
 
 Sleep mặc định giữa các page VOZ là 500ms.
 
+### YouTube
+
+Source YouTube được add qua `/sources` bằng URL dạng:
+
+```text
+https://www.youtube.com/@handle
+https://www.youtube.com/channel/UC...
+```
+
+Khi scrape, backend dùng `youtubeFetcher`:
+
+1. Resolve `channel_id` từ `parser_config.youtubeChannelId`, URL `/channel/UC...`, HTML channel page hoặc `YOUTUBE_API_KEY`.
+2. Lấy video mới bằng RSS miễn phí `https://www.youtube.com/feeds/videos.xml?channel_id=...`.
+3. Nếu RSS fail và có `YOUTUBE_API_KEY`, fallback sang YouTube Data API v3 uploads playlist.
+4. Enqueue video vào `article_fetch_jobs`.
+5. Article fetch job lấy transcript qua RapidAPI `yt-api` bằng `YOUTUBE_TRANSCRIPT_RAPIDAPI_KEY` hoặc `RAPIDAPI_KEY`.
+6. Lưu video vào `articles` với `content_type = 'video'`, thumbnail YouTube, mô tả video trong `raw_excerpt`, transcript trong `raw_content`.
+
+Nếu video không có subtitles/transcript hoặc thiếu RapidAPI key, fetch job sẽ fail với lỗi rõ ràng và đi theo retry policy hiện có.
+
 ## Auth Và Bảo Mật
 
 Middleware auth nằm ở `server/src/lib/auth.ts`.
@@ -743,7 +775,7 @@ Nếu dùng domain riêng (không phải domain mẫu trong repo), cập nhật 
 
 ## Ghi Chú Vận Hành
 
-- Nếu sửa frontend layout đọc tin, kiểm tra hard refresh các route `/`, `/voz`, `/reddit`, `/digest`, `/article/:id`.
+- Nếu sửa frontend layout đọc tin, kiểm tra hard refresh các route `/`, `/voz`, `/reddit`, `/youtube`, `/digest`, `/article/:id`.
 - Nếu sửa Open Graph hoặc deep link, kiểm tra production build vì server chỉ inject meta khi có `server/public/index.html`.
 - Nếu dùng cache assets 1 năm, file build phải có hash như Vite mặc định. Không cache immutable cho HTML.
 - Nếu AI provider trả summary không có `<tldr>`, bài vẫn có summary nhưng list preview sẽ fallback sang excerpt/summary.

@@ -182,12 +182,14 @@ function ReadmeWelcome() {
   );
 }
 
-type FeedTab = 'news' | 'voz' | 'reddit';
+type FeedTab = 'news' | 'voz' | 'reddit' | 'youtube';
 
 function classifyArticle(article: any): FeedTab {
   const name = (article.source_name || '').toLowerCase();
   const url = (article.url || '').toLowerCase();
   const title = (article.title || '').toLowerCase();
+  const sourceType = (article.source_type || '').toLowerCase();
+  if (sourceType === 'youtube' || url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube';
   if (name.includes('reddit') || url.includes('reddit.com') || title.startsWith('[r/')) return 'reddit';
   if (name.includes('voz') || url.includes('voz.vn')) return 'voz';
   return 'news';
@@ -203,12 +205,13 @@ export function Home() {
     const path = location.pathname;
     if (path === '/voz') return 'voz' as const;
     if (path === '/reddit') return 'reddit' as const;
+    if (path === '/youtube') return 'youtube' as const;
     if (path === '/digest') return 'digest' as const;
     return 'news' as const;
   }, []); // only on mount
 
   const [selected, setSelected] = useState<any | null>(null);
-  const [tab, setTab] = useState<'news' | 'voz' | 'reddit' | 'digest'>(initialTab);
+  const [tab, setTab] = useState<'news' | 'voz' | 'reddit' | 'youtube' | 'digest'>(initialTab);
   const [filterSource, setFilterSource] = useState<string>('all');
   const [showFilter, setShowFilter] = useState(false);
   const [readArticleIds, setReadArticleIds] = useState<string[]>(() => loadReadArticles());
@@ -318,7 +321,7 @@ export function Home() {
   }, [selected]);
 
   // Navigate helper: sync tab to URL (no React Router re-render)
-  const navigateTab = useCallback((t: 'news' | 'voz' | 'reddit' | 'digest') => {
+  const navigateTab = useCallback((t: 'news' | 'voz' | 'reddit' | 'youtube' | 'digest') => {
     setTab(t);
     const path = t === 'news' ? '/' : `/${t}`;
     window.history.replaceState(null, '', path);
@@ -395,6 +398,7 @@ export function Home() {
           <button className="feed-tab" onClick={() => navigateTab('news')}>News</button>
           <button className="feed-tab" onClick={() => navigateTab('voz')}>VOZ</button>
           <button className="feed-tab" onClick={() => navigateTab('reddit')}>Reddit</button>
+          <button className="feed-tab" onClick={() => navigateTab('youtube')}>YouTube</button>
           <button className={`feed-tab active`} onClick={() => navigateTab('digest')}>Bản tin</button>
         </div>
       )}
@@ -403,7 +407,7 @@ export function Home() {
         <div className={`split-left ${tab === 'digest' ? 'hidden-on-mobile' : ''}`} ref={splitLeftRef}>
           {/* Tab bar inside left pane */}
           <div className="feed-tabs">
-            {(['news', 'voz', 'reddit'] as const).map(t => (
+            {(['news', 'voz', 'reddit', 'youtube'] as const).map(t => (
               <button
                 key={t}
                 className={`feed-tab ${tab === t ? 'active' : ''}`}
@@ -416,7 +420,7 @@ export function Home() {
                   setSelected(null);
                 }}
               >
-                {t === 'news' ? 'News' : t === 'voz' ? 'VOZ' : 'Reddit'}
+                {t === 'news' ? 'News' : t === 'voz' ? 'VOZ' : t === 'reddit' ? 'Reddit' : 'YouTube'}
               </button>
             ))}
             <button
@@ -516,7 +520,7 @@ export function Home() {
             )}
 
             <div className="reader-footer">
-              <p>🤖 Tin tức cập nhật mỗi 3 giờ · Bình luận forum cập nhật mỗi 30 phút · Tóm tắt bằng AI</p>
+              <p>🤖 Tin tức và YouTube cập nhật mỗi 3 giờ · Bình luận forum cập nhật mỗi 30 phút · Tóm tắt bằng AI</p>
             </div>
           </div>
         </div>

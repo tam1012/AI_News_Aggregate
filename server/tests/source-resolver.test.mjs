@@ -37,14 +37,26 @@ test('detect GitHub Trending as supported web source with parser preset', async 
   assert.ok(result.parser_config.articleLinkSelector);
 });
 
-test('detect YouTube as unsupported source without creating a saveable type', async () => {
+test('detect YouTube channel as supported source', async () => {
   const { resolveSourceUrl } = loadTsModule('../src/lib/sourceResolver.ts');
-  const result = await resolveSourceUrl('https://www.youtube.com/channel/abc');
+  const result = await resolveSourceUrl('https://www.youtube.com/@mkbhd');
+
+  assert.equal(result.supported, true);
+  assert.equal(result.detected_kind, 'youtube');
+  assert.equal(result.type, 'youtube');
+  assert.equal(result.name, 'YouTube @mkbhd');
+  assert.equal(result.suggested_url, 'https://www.youtube.com/@mkbhd');
+  assert.equal(result.preview.description, 'YouTube channel source');
+});
+
+test('detect YouTube video URL as unsupported recurring source', async () => {
+  const { resolveSourceUrl } = loadTsModule('../src/lib/sourceResolver.ts');
+  const result = await resolveSourceUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
 
   assert.equal(result.supported, false);
   assert.equal(result.detected_kind, 'youtube');
-  assert.equal(result.type, 'web');
-  assert.match(result.warnings.join(' '), /not supported/i);
+  assert.equal(result.type, 'youtube');
+  assert.match(result.warnings.join(' '), /channel/i);
 });
 
 test('reject private network URLs before probing', async () => {
