@@ -76,7 +76,7 @@ test('digest article limit defaults to 100 and can be overridden safely', () => 
   assert.equal(parseDigestArticleLimit('bad'), 100);
 });
 
-test('digest prompt prioritizes economy society coverage and avoids time-of-day greetings', () => {
+test('digest prompt uses English instructions while prioritizing economy society coverage and avoiding time-of-day greetings', () => {
   const { buildDigestPrompt, buildDigestRunContext } = loadSummarizer();
   const prompt = buildDigestPrompt({
     promptConfig: {
@@ -90,10 +90,11 @@ test('digest prompt prioritizes economy society coverage and avoids time-of-day 
   });
 
   assert.match(prompt, /05\/05\/2026/);
-  assert.match(prompt, /Thời sự kinh tế xã hội/);
-  assert.match(prompt, /kinh tế/i);
-  assert.match(prompt, /xã hội/i);
-  assert.match(prompt, /Không mở đầu bằng lời chào/i);
+  assert.match(prompt, /Socio-economic current affairs/);
+  assert.match(prompt, /economy/i);
+  assert.match(prompt, /society/i);
+  assert.match(prompt, /Do not open with a greeting/i);
+  assert.match(prompt, /Output language: Vietnamese/);
   assert.doesNotMatch(prompt, /Chào buổi sáng/);
 });
 
@@ -190,7 +191,8 @@ test('forum summary prompt requires translating foreign-language comments into V
     custom_context: '',
   });
 
-  assert.match(capturedPrompt, /dịch hoặc diễn giải/i);
-  assert.match(capturedPrompt, /không chép nguyên văn/i);
-  assert.match(capturedPrompt, /thuật ngữ chuyên ngành/i);
+  assert.match(capturedPrompt, /translate or paraphrase/i);
+  assert.match(capturedPrompt, /do not copy/i);
+  assert.match(capturedPrompt, /specialist terms/i);
+  assert.match(capturedPrompt, /Write in natural Vietnamese/i);
 });
