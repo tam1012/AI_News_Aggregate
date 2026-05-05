@@ -795,7 +795,15 @@ function ArticleDetail({
           <div className="detail-body">
             {article.summary_text ? (
               <div className="article-main-content">
-                <ReactMarkdown>{summaryParts.rest}</ReactMarkdown>
+                <ReactMarkdown
+                  components={{
+                    img: ({ node, ...props }) => (
+                      <img {...props} src={proxyImgUrl(props.src, 'detail')} loading="lazy" decoding="async" />
+                    )
+                  }}
+                >
+                  {summaryParts.rest}
+                </ReactMarkdown>
               </div>
             ) : (
               <p>{article.raw_excerpt || 'Chưa có tóm tắt.'}</p>
@@ -836,7 +844,15 @@ function DigestTab() {
     <div className="feed-container" style={{ padding: '0 20px' }}>
       <h2 className="feed-date-heading" style={{ paddingTop: 0 }}>{digest.title || `Bản tin ${digest.digest_date}`}</h2>
       <div className="digest-content">
-        <ReactMarkdown>{digest.body_markdown}</ReactMarkdown>
+        <ReactMarkdown
+          components={{
+            img: ({ node, ...props }) => (
+              <img {...props} src={proxyImgUrl(props.src, 'detail')} loading="lazy" decoding="async" />
+            )
+          }}
+        >
+          {digest.body_markdown}
+        </ReactMarkdown>
       </div>
     </div>
   );
