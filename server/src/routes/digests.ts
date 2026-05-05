@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { getMany, getOne, query } from '../db/index.js';
+import { decodeArticleRows } from '../lib/htmlEntities.js';
 
 const digests = new Hono();
 
@@ -34,7 +35,7 @@ digests.get('/latest', async (c) => {
     [row.id]
   );
 
-  return c.json({ success: true, data: { ...row, articles: items } });
+  return c.json({ success: true, data: { ...row, articles: decodeArticleRows(items) } });
 });
 
 // Danh sach digests (phan trang)
@@ -82,7 +83,7 @@ digests.get('/:id', async (c) => {
     [id]
   );
 
-  return c.json({ success: true, data: { ...row, articles: items } });
+  return c.json({ success: true, data: { ...row, articles: decodeArticleRows(items) } });
 });
 
 // Xoa digest

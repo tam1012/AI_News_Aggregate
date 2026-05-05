@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { getMany, getOne, query } from '../db/index.js';
 import { LOCAL_DATE_SQL, LOCAL_DATE_TEXT_SQL, buildArticleListFilters } from '../lib/articleFilters.js';
+import { decodeArticleRows, decodeArticleTextFields } from '../lib/htmlEntities.js';
 
 const articles = new Hono();
 
@@ -80,7 +81,7 @@ articles.get('/', async (c) => {
 
   return c.json({
     success: true,
-    data: rows,
+    data: decodeArticleRows(rows),
     meta: { page, limit, total, totalPages: Math.ceil(total / limit), date: date || null, tag: tag || null, minScore: minScore || null },
   });
 });
@@ -111,7 +112,7 @@ articles.post('/:id/reset-summary', async (c) => {
     [id]
   );
 
-  return c.json({ success: true, data: row });
+  return c.json({ success: true, data: decodeArticleTextFields(row) });
 });
 
 articles.delete('/:id', async (c) => {
@@ -144,7 +145,7 @@ articles.get('/:id', async (c) => {
   if (!row) {
     return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Article not found' } }, 404);
   }
-  return c.json({ success: true, data: row });
+  return c.json({ success: true, data: decodeArticleTextFields(row) });
 });
 
 // Manual Rescrape (for Admin)

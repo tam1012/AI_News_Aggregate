@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +8,8 @@ import vm from 'node:vm';
 import ts from 'typescript';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const requireFromTest = createRequire(import.meta.url);
+const { decodeHTML } = requireFromTest('entities');
 
 function loadTsModule(relativePath, stubs = {}) {
   const source = readFileSync(resolve(__dirname, relativePath), 'utf8');
@@ -39,6 +42,7 @@ test('build article insert row with pending summary state and retry defaults', (
       generateId: (prefix) => `${prefix}_test`,
       truncate: (value, max) => String(value).slice(0, max),
     },
+    '../../lib/htmlEntities.js': { decodeHtmlEntities: decodeHTML },
   });
 
   const row = buildArticleInsertRow({
@@ -60,6 +64,37 @@ test('build article insert row with pending summary state and retry defaults', (
   assert.equal(row.content_hash, 'hash:Example ');
 });
 
+test('build article insert row decodes HTML entities in article text', () => {
+  const { buildArticleInsertRow } = loadTsModule('../src/services/fetchers/article-writer.ts', {
+    '../../db/index.js': {
+      getOne: async () => null,
+      query: async () => ({ rowCount: 0 }),
+    },
+    '../../lib/utils.js': {
+      createContentHash: (value) => `hash:${value.slice(0, 8)}`,
+      generateId: (prefix) => `${prefix}_test`,
+      truncate: (value, max) => String(value).slice(0, max),
+    },
+    '../../lib/htmlEntities.js': { decodeHtmlEntities: decodeHTML },
+  });
+
+  const row = buildArticleInsertRow({
+    source: { id: 'src_1', language: 'vi' },
+    url: 'https://example.com/post',
+    title:
+      'C&ocirc;ng ty x\u1ed5 s\u1ed1 chi h&agrave;ng ng&agrave;n l\u01b0\u1ee3ng v&agrave;ng mua nh&agrave; \u0111\u1ea5t t\u1ea1i TP.HCM r\u1ed3i b\u1ecf kh&ocirc;ng',
+    rawExcerpt: 'Gi&aacute; v&agrave;ng t\u0103ng',
+    rawContent: 'N\u1ed9i dung c&oacute; entity HTML',
+  });
+
+  assert.equal(
+    row.title,
+    'C\u00f4ng ty x\u1ed5 s\u1ed1 chi h\u00e0ng ng\u00e0n l\u01b0\u1ee3ng v\u00e0ng mua nh\u00e0 \u0111\u1ea5t t\u1ea1i TP.HCM r\u1ed3i b\u1ecf kh\u00f4ng'
+  );
+  assert.equal(row.raw_excerpt, 'Gi\u00e1 v\u00e0ng t\u0103ng');
+  assert.equal(row.raw_content, 'N\u1ed9i dung c\u00f3 entity HTML');
+});
+
 test('insert article skips duplicate URL before hashing', async () => {
   const queries = [];
   const { insertArticleIfNew } = loadTsModule('../src/services/fetchers/article-writer.ts', {
@@ -78,6 +113,7 @@ test('insert article skips duplicate URL before hashing', async () => {
       generateId: () => 'art_test',
       truncate: (value) => value,
     },
+    '../../lib/htmlEntities.js': { decodeHtmlEntities: decodeHTML },
   });
 
   const inserted = await insertArticleIfNew({

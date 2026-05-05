@@ -1,4 +1,5 @@
 import { getOne, query } from '../../db/index.js';
+import { decodeHtmlEntities } from '../../lib/htmlEntities.js';
 import { createContentHash, generateId, truncate } from '../../lib/utils.js';
 
 interface ArticleWriterSource {
@@ -41,16 +42,19 @@ export interface ArticleInsertRow {
 }
 
 export function buildArticleInsertRow(input: ArticleInsertInput): ArticleInsertRow {
-  const rawExcerpt = truncate(input.rawExcerpt || '', input.excerptMaxLength || 500);
-  const rawContent = truncate(input.rawContent || '', input.contentMaxLength || 30000);
-  const seed = input.contentHashSeed || `${input.title}${input.rawExcerpt || input.rawContent || ''}`;
+  const title = decodeHtmlEntities(input.title).trim();
+  const fullRawExcerpt = decodeHtmlEntities(input.rawExcerpt || '');
+  const fullRawContent = decodeHtmlEntities(input.rawContent || '');
+  const rawExcerpt = truncate(fullRawExcerpt, input.excerptMaxLength || 500);
+  const rawContent = truncate(fullRawContent, input.contentMaxLength || 30000);
+  const seed = input.contentHashSeed || `${title}${fullRawExcerpt || fullRawContent || ''}`;
 
   return {
     id: generateId('art'),
     source_id: input.source.id,
     external_id: input.externalId || null,
     url: input.url,
-    title: input.title.trim(),
+    title,
     author: input.author || null,
     published_at: input.publishedAt || null,
     content_type: 'article',
