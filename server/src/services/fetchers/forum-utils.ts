@@ -62,6 +62,11 @@ export function hasMinimumForumDiscussion(commentCount: number, minComments = 10
   return commentCount >= minComments;
 }
 
+export function shouldInsertForumArticle(kind: 'reddit' | 'voz', commentCount: number, minComments = 10): boolean {
+  if (kind === 'reddit') return true;
+  return hasMinimumForumDiscussion(commentCount, minComments);
+}
+
 export function parseVozPosts(html: string, page: number): VozPost[] {
   const $ = cheerio.load(html);
   const posts: VozPost[] = [];

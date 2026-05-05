@@ -6,18 +6,18 @@ import { BROWSER_UA, browserFetch, curlFetch } from './http-utils.js';
 import {
   ForumComment,
   VozPost,
-  hasMinimumForumDiscussion,
   normalizeWhitespace,
   scoreForumComment,
   selectForumComments,
+  shouldInsertForumArticle,
 } from './forum-utils.js';
 
 export { BROWSER_UA, browserFetch, curlFetch } from './http-utils.js';
 export {
-  hasMinimumForumDiscussion,
   normalizeWhitespace,
   scoreForumComment,
   selectForumComments,
+  shouldInsertForumArticle,
 } from './forum-utils.js';
 export type { ForumComment, VozPost } from './forum-utils.js';
 
@@ -309,7 +309,6 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
       let postContent = stripHtmlBasic(rssContent) || item.title;
       let outboundUrl: string | null = null;
       let discussionComments: ForumComment[] = [];
-      let totalDiscussionCommentsSeen = 0;
 
       try {
         await sleep(1200);
@@ -329,7 +328,6 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
             const comments = commentsData[1]?.data?.children || [];
             const flattened: ForumComment[] = [];
             flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
-            totalDiscussionCommentsSeen = flattened.length;
             discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
           }
         } else if (enrichedCount < MAX_ENRICH_PER_RUN) {
@@ -352,7 +350,6 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
                 const comments = commentsData[1]?.data?.children || [];
                 const flattened: ForumComment[] = [];
                 flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
-                totalDiscussionCommentsSeen = flattened.length;
                 discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
                 if (discussionComments.length > 0) {
                   console.log(`[reddit] Puppeteer (old.reddit.com): got ${discussionComments.length} comments for ${postPath}`);
@@ -364,7 +361,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
           }
 
           // Strategy 2: Comment RSS Feed (Native backdoor, bypasses Cloudflare JSON block)
-          if (totalDiscussionCommentsSeen < FORUM_MIN_COMMENTS) {
+          if (discussionComments.length === 0) {
             try {
               const commentRssUrl = `https://www.reddit.com${postPath}.rss`;
               const rssRes = await fetch(commentRssUrl, {
@@ -393,7 +390,6 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
                     });
                   }
                 }
-                totalDiscussionCommentsSeen = comments.length;
                 discussionComments = selectForumComments(comments, REDDIT_COMMENT_LIMIT);
                 if (discussionComments.length > 0) {
                   console.log(`[reddit] RSS Comment Fallback: got ${discussionComments.length} comments for ${postPath}`);
@@ -405,7 +401,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
           }
 
           // Strategy 3: Cloudflare Worker proxy (real-time Reddit API access)
-          if (totalDiscussionCommentsSeen < FORUM_MIN_COMMENTS && REDDIT_PROXY_URL) {
+          if (discussionComments.length === 0 && REDDIT_PROXY_URL) {
             try {
               const proxyUrl = `${REDDIT_PROXY_URL}?path=${encodeURIComponent(postPath + '.json')}&limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
               const proxyRes = await curlFetch(proxyUrl, 'application/json', 15);
@@ -422,7 +418,6 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
                   const comments = commentsData[1]?.data?.children || [];
                   const flattened: ForumComment[] = [];
                   flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
-                  totalDiscussionCommentsSeen = flattened.length;
                   discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
                   if (discussionComments.length > 0) {
                     console.log(`[reddit] Proxy: got ${discussionComments.length} comments for ${postPath}`);
@@ -435,7 +430,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
           }
 
           // Strategy 4: Pullpush archive API (fallback, data may be stale)
-          if (totalDiscussionCommentsSeen < FORUM_MIN_COMMENTS && postId) {
+          if (discussionComments.length === 0 && postId) {
             try {
               const pullpushUrl = `https://api.pullpush.io/reddit/comment/search?link_id=${postId}&size=${REDDIT_COMMENT_LIMIT}&sort=score&sort_type=score`;
               const pullpushRes = await curlFetch(pullpushUrl, 'application/json', 10);
@@ -451,7 +446,6 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
                     order: idx,
                     score: scoreForumComment(c.body, c.score || 0, 1, idx),
                   }));
-                totalDiscussionCommentsSeen = pullpushComments.length;
                 discussionComments = selectForumComments(pullpushComments, REDDIT_COMMENT_LIMIT);
                 if (pullpushComments.length > 0) {
                   console.log(`[reddit] Pullpush: got ${pullpushComments.length} comments for ${postPath}`);
@@ -465,12 +459,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
       } catch {
       }
 
-      if (!hasMinimumForumDiscussion(totalDiscussionCommentsSeen, FORUM_MIN_COMMENTS)) {
-        console.log(`[reddit] Skip ${postPath}: only ${totalDiscussionCommentsSeen} comments/replies (min ${FORUM_MIN_COMMENTS})`);
-        continue;
-      }
-
-      const fullContent = buildRedditRawContent(postContent, outboundUrl, discussionComments, totalDiscussionCommentsSeen);
+      const fullContent = buildRedditRawContent(postContent, outboundUrl, discussionComments, discussionComments.length);
       const contentHash = createContentHash(item.title + fullContent.substring(0, 300));
       const hashExists = await getOne('SELECT id FROM articles WHERE content_hash = $1', [contentHash]);
       if (hashExists) continue;
@@ -598,7 +587,7 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
               score: scoreForumComment(post.body, post.reactions, post.page, post.order),
             }));
 
-          if (!hasMinimumForumDiscussion(comments.length, FORUM_MIN_COMMENTS)) {
+          if (!shouldInsertForumArticle('voz', comments.length, FORUM_MIN_COMMENTS)) {
             console.log(`[voz] Skip ${url}: only ${comments.length} replies (min ${FORUM_MIN_COMMENTS})`);
             continue;
           }
@@ -702,7 +691,7 @@ export async function retryRedditComments(): Promise<{ checked: number; enriched
           score: scoreForumComment(c.body, c.score || 0, 1, idx),
         }));
 
-      if (!hasMinimumForumDiscussion(pullpushComments.length, FORUM_MIN_COMMENTS)) continue;
+      if (pullpushComments.length === 0) continue;
 
       const selectedComments = selectForumComments(pullpushComments, FORUM_MAX_COMMENTS);
 

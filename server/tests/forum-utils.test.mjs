@@ -49,3 +49,15 @@ test('forum discussion threshold can be overridden for tests and config', () => 
   assert.equal(hasMinimumForumDiscussion(4, 5), false);
   assert.equal(hasMinimumForumDiscussion(5, 5), true);
 });
+
+test('forum insert policy applies minimum discussion only to VOZ', () => {
+  const { shouldInsertForumArticle } = loadTsModule('../src/services/fetchers/forum-utils.ts', {
+    cheerio: { load: () => ({}) },
+    '../../lib/utils.js': { normalizePublicHttpUrl: (value) => value },
+  });
+
+  assert.equal(shouldInsertForumArticle('voz', 9), false);
+  assert.equal(shouldInsertForumArticle('voz', 10), true);
+  assert.equal(shouldInsertForumArticle('reddit', 0), true);
+  assert.equal(shouldInsertForumArticle('reddit', 9), true);
+});
