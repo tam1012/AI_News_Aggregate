@@ -40,7 +40,7 @@ test('article open graph meta is escaped and uses article content', () => {
 
   assert.match(meta, /<title>A sharp 1-2 title \| SynthNews<\/title>/);
   assert.match(meta, /property="og:title" content="A sharp 1-2 title"/);
-  assert.match(meta, /property="og:image" content="https:\/\/example.com\/image.jpg"/);
+  assert.match(meta, /property="og:image" content="https:\/\/synthnews\.site\/api\/img\?url=https%3A%2F%2Fexample\.com%2Fimage\.jpg&amp;p=og"/);
   assert.doesNotMatch(meta, /<script>/);
   assert.doesNotMatch(meta, /<b>/);
 });

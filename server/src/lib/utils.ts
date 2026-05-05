@@ -35,7 +35,7 @@ export function normalizeUrl(url: string): string {
   }
 }
 
-function isPrivateHostname(hostname: string): boolean {
+export function isPrivateHostname(hostname: string): boolean {
   const host = hostname.toLowerCase();
   if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
   if (host === '::1' || host === '[::1]') return true;

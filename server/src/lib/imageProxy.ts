@@ -8,6 +8,7 @@ import { createHash } from 'crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, readdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import sharp from 'sharp';
+import { isPrivateHostname, normalizePublicHttpUrl } from './utils.js';
 
 /* ── Presets ── */
 export type ImagePreset = 'thumb' | 'detail' | 'og';
@@ -29,6 +30,21 @@ const CACHE_DIR = process.env.IMAGE_CACHE_DIR || '/tmp/img-cache';
 const MAX_CACHE_SIZE_MB = parseInt(process.env.IMAGE_CACHE_MAX_MB || '200', 10);
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_SOURCE_BYTES = 10 * 1024 * 1024; // 10 MB source limit
+const MAX_SOURCE_PIXELS = 50_000_000;
+
+function toCacheableUrl(sourceUrl: string): string {
+  const normalized = normalizePublicHttpUrl(sourceUrl);
+  if (!normalized) {
+    throw new Error('Invalid source image URL');
+  }
+
+  const parsed = new URL(normalized);
+  if (isPrivateHostname(parsed.hostname)) {
+    throw new Error('Private image hosts are not allowed');
+  }
+
+  return normalized;
+}
 
 /* Ensure cache dir exists */
 function ensureCacheDir(): void {
@@ -72,6 +88,44 @@ function evictIfNeeded(): void {
   } catch { /* ignore errors during eviction */ }
 }
 
+async function readBoundedResponse(response: Response): Promise<Buffer> {
+  const contentLength = Number(response.headers.get('content-length') || '0');
+  if (Number.isFinite(contentLength) && contentLength > MAX_SOURCE_BYTES) {
+    throw new Error(`Source image too large: ${(contentLength / 1024 / 1024).toFixed(1)}MB`);
+  }
+
+  if (!response.body) {
+    const buf = Buffer.from(await response.arrayBuffer());
+    if (buf.length > MAX_SOURCE_BYTES) {
+      throw new Error(`Source image too large: ${(buf.length / 1024 / 1024).toFixed(1)}MB`);
+    }
+    return buf;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      total += value.byteLength;
+      if (total > MAX_SOURCE_BYTES) {
+        await reader.cancel();
+        throw new Error(`Source image too large: ${(total / 1024 / 1024).toFixed(1)}MB`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return Buffer.concat(chunks);
+}
+
 /* ── Main processor ── */
 export async function getOptimizedImage(
   sourceUrl: string,
@@ -79,7 +133,8 @@ export async function getOptimizedImage(
 ): Promise<{ data: Buffer; contentType: string; cacheHit: boolean }> {
   ensureCacheDir();
 
-  const filename = cacheKey(sourceUrl, preset);
+  const normalizedSourceUrl = toCacheableUrl(sourceUrl);
+  const filename = cacheKey(normalizedSourceUrl, preset);
   const cachePath = join(CACHE_DIR, filename);
 
   // Cache hit
@@ -97,7 +152,8 @@ export async function getOptimizedImage(
 
   let response: Response;
   try {
-    response = await fetch(sourceUrl, {
+    response = await fetch(normalizedSourceUrl, {
+      redirect: 'manual',
       signal: controller.signal,
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; SynthNewsBot/1.0)',
@@ -106,6 +162,10 @@ export async function getOptimizedImage(
     });
   } finally {
     clearTimeout(timeout);
+  }
+
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error('Image redirects are not allowed');
   }
 
   if (!response.ok) {
@@ -117,14 +177,11 @@ export async function getOptimizedImage(
     throw new Error(`Not an image: ${contentType}`);
   }
 
-  const buf = Buffer.from(await response.arrayBuffer());
-  if (buf.length > MAX_SOURCE_BYTES) {
-    throw new Error(`Source image too large: ${(buf.length / 1024 / 1024).toFixed(1)}MB`);
-  }
+  const buf = await readBoundedResponse(response);
 
   // Resize + convert
   const config = PRESETS[preset];
-  const webpBuf = await sharp(buf)
+  const webpBuf = await sharp(buf, { limitInputPixels: MAX_SOURCE_PIXELS })
     .resize(config.width, config.height, {
       fit: 'inside',
       withoutEnlargement: true,
