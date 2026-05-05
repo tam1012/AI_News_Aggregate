@@ -96,3 +96,54 @@ test('digest prompt prioritizes economy society coverage and avoids time-of-day 
   assert.match(prompt, /Không mở đầu bằng lời chào/i);
   assert.doesNotMatch(prompt, /Chào buổi sáng/);
 });
+
+test('generate digest does not insert an empty AI response', async () => {
+  const writes = [];
+  const { generateDigest } = loadTsModule('../src/services/summarizer.ts', {
+    '../db/index.js': {
+      getMany: async () => [{
+        id: 'art_1',
+        title: 'Tin kinh te',
+        summary_short: 'Tom tat ngan',
+        summary_text: 'Tom tat dai',
+        hot_score: 8,
+        tags: ['Economy'],
+        source_name: 'VnExpress',
+      }],
+      query: async (sql, params) => {
+        writes.push({ sql, params });
+        return { rowCount: 1 };
+      },
+    },
+    '../lib/utils.js': {
+      generateId: (prefix) => `${prefix}_test`,
+      truncate: (value) => value,
+    },
+    '../lib/tldr.js': {
+      normalizeTldr: (value) => value,
+    },
+    '../lib/summaryRetryPolicy.js': {
+      truncateSummaryError: (err) => String(err?.message || err),
+    },
+    '../lib/summaryOutput.js': {
+      parseAiSummaryOutput: () => ({}),
+    },
+    './ai-client.js': {
+      callAi: async () => '   ',
+    },
+    './prompt-settings.js': {
+      getPromptConfig: async () => ({
+        output_language: 'Vietnamese',
+        topic_priorities: ['AI/LLM'],
+        digest_headings: ['AI & LLM'],
+        custom_context: '',
+      }),
+    },
+    '../lib/promptConfig.js': {},
+  });
+
+  const result = await generateDigest();
+
+  assert.equal(result, null);
+  assert.equal(writes.length, 0);
+});

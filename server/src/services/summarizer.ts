@@ -429,7 +429,12 @@ export async function generateDigest(): Promise<string | null> {
 
   const prompt = buildDigestPrompt({ promptConfig, articleSummaries, runContext });
   try {
-    const digestContent = await callAi(prompt, { max_tokens: 6000 });
+    const digestContent = (await callAi(prompt, { max_tokens: 6000 })).trim();
+    if (!digestContent) {
+      console.error('Failed to generate digest: AI returned empty content');
+      return null;
+    }
+
     const digestId = generateId('dig');
     const digestDate = runContext.digestDate;
 
