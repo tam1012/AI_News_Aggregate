@@ -58,6 +58,10 @@ export function selectForumComments(comments: ForumComment[], maxComments: numbe
     });
 }
 
+export function hasMinimumForumDiscussion(commentCount: number, minComments = 10): boolean {
+  return commentCount >= minComments;
+}
+
 export function parseVozPosts(html: string, page: number): VozPost[] {
   const $ = cheerio.load(html);
   const posts: VozPost[] = [];
