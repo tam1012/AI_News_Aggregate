@@ -3,7 +3,7 @@ import { useLocation, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { api } from '../services/api';
 import { useFetchRaw } from '../hooks/useApi';
-import { getReaderLoadingState, shouldShowDetailPane, shouldShowRightPane } from './homeUx';
+import { getEmptyFeedMessage, getReaderLoadingState, shouldShowDetailPane, shouldShowRightPane, shouldShowScrollTopButton } from './homeUx';
 
 const READ_ARTICLES_STORAGE_KEY = 'read_articles';
 const FEED_PREVIEW_MAX_CHARS = 180;
@@ -235,6 +235,8 @@ export function Home() {
   const [readArticleIds, setReadArticleIds] = useState<string[]>(() => loadReadArticles());
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const [deepLinkLoading, setDeepLinkLoading] = useState(hasArticleDeepLink);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const splitLeftRef = useRef<HTMLDivElement>(null);
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -288,6 +290,27 @@ export function Home() {
     hasSelectedArticle: Boolean(selected),
     hasArticleDeepLink,
   });
+  const emptyFeedMessage = getEmptyFeedMessage({
+    isOfflineCache: isShowingOfflineCache,
+    hasFilter: filterSource !== 'all' || tab !== 'news',
+    tab,
+  });
+
+  const scrollFeedToTop = useCallback(() => {
+    splitLeftRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const handleManualRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    const startedAt = Date.now();
+    try {
+      await reload();
+    } finally {
+      const remainingMs = Math.max(0, 450 - (Date.now() - startedAt));
+      window.setTimeout(() => setIsRefreshing(false), remainingMs);
+    }
+  }, [reload]);
 
   // Date navigation handlers
   const handlePrevDate = () => {
@@ -322,6 +345,22 @@ export function Home() {
     document.body.classList.add('split-view-active');
     return () => { document.body.classList.remove('split-view-active'); };
   }, []);
+
+  useEffect(() => {
+    const updateScrollTopState = () => {
+      const paneScrollY = splitLeftRef.current?.scrollTop || 0;
+      setShowScrollTop(shouldShowScrollTopButton(Math.max(window.scrollY, paneScrollY), detailPaneVisible));
+    };
+
+    updateScrollTopState();
+    window.addEventListener('scroll', updateScrollTopState, { passive: true });
+    const splitLeft = splitLeftRef.current;
+    splitLeft?.addEventListener('scroll', updateScrollTopState, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', updateScrollTopState);
+      splitLeft?.removeEventListener('scroll', updateScrollTopState);
+    };
+  }, [detailPaneVisible]);
 
   useEffect(() => {
     saveReadArticles(readArticleIds);
@@ -433,8 +472,7 @@ export function Home() {
                   className={`feed-tab ${tab === t ? 'active' : ''}`}
                   onClick={() => {
                     if (tab === t) {
-                      splitLeftRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                      scrollFeedToTop();
                     }
                     navigateTab(t);
                     setSelected(null);
@@ -495,6 +533,13 @@ export function Home() {
               </div>
             )}
 
+            <div className="feed-refresh-row">
+              <span>{isRefreshing ? 'Đang cập nhật...' : 'Kéo xuống hoặc bấm để cập nhật tin mới'}</span>
+              <button className="btn btn-sm" onClick={() => void handleManualRefresh()} disabled={isRefreshing || loading}>
+                {isRefreshing ? 'Đang tải' : 'Làm mới'}
+              </button>
+            </div>
+
             {availableDates.length > 0 && selectedDate && (
               <div className="date-navigator">
                 <button 
@@ -529,8 +574,8 @@ export function Home() {
             ) : articles.length === 0 ? (
               <div className="empty-state">
                 <h2>Chưa có tin tức</h2>
-                <p style={{ marginTop: 8 }}>Hệ thống đang cào và tóm tắt tin. Hãy quay lại sau.</p>
-                <button className="btn btn-primary" onClick={reload} style={{ marginTop: 16 }}>Tải lại</button>
+                <p style={{ marginTop: 8 }}>{emptyFeedMessage}</p>
+                <button className="btn btn-primary" onClick={() => void handleManualRefresh()} style={{ marginTop: 16 }}>Tải lại</button>
               </div>
             ) : (
               <div className="feed-day-group">
@@ -573,6 +618,12 @@ export function Home() {
           )}
         </div>
       </div>
+
+      {showScrollTop && (
+        <button className="scroll-top-button" onClick={scrollFeedToTop} aria-label="Lên đầu danh sách">
+          ↑
+        </button>
+      )}
 
       {copyToast && <div className="copy-toast">{copyToast}</div>}
 

@@ -34,3 +34,20 @@ export function shouldShowRightPane({
 }): boolean {
   return tab === 'digest' || shouldShowDetailPane({ tab, hasSelectedArticle, hasArticleDeepLink });
 }
+
+export function shouldShowScrollTopButton(scrollY: number, hasDetailPane: boolean): boolean {
+  return !hasDetailPane && scrollY > 420;
+}
+
+export function getEmptyFeedMessage({
+  isOfflineCache,
+  hasFilter,
+}: {
+  isOfflineCache: boolean;
+  hasFilter: boolean;
+  tab: ReaderTab;
+}): string {
+  if (isOfflineCache) return 'Không có dữ liệu đã lưu cho bộ lọc này.';
+  if (hasFilter) return 'Không có tin trong nguồn/tab này.';
+  return 'Hệ thống đang cào và tóm tắt tin. Hãy quay lại sau.';
+}

@@ -51,3 +51,28 @@ test('youtube tab behaves like an article feed tab', () => {
   assert.equal(shouldShowDetailPane({ tab: 'youtube', hasSelectedArticle: true, hasArticleDeepLink: false }), true);
   assert.equal(shouldShowRightPane({ tab: 'youtube', hasSelectedArticle: false, hasArticleDeepLink: false }), false);
 });
+
+test('scroll-to-top affordance appears only for long feed scroll without detail pane', () => {
+  const { shouldShowScrollTopButton } = loadTsModule('../src/pages/homeUx.ts');
+
+  assert.equal(shouldShowScrollTopButton(421, false), true);
+  assert.equal(shouldShowScrollTopButton(420, false), false);
+  assert.equal(shouldShowScrollTopButton(900, true), false);
+});
+
+test('empty feed message distinguishes offline cache and filtered views', () => {
+  const { getEmptyFeedMessage } = loadTsModule('../src/pages/homeUx.ts');
+
+  assert.equal(
+    getEmptyFeedMessage({ isOfflineCache: true, hasFilter: false, tab: 'news' }),
+    'Không có dữ liệu đã lưu cho bộ lọc này.'
+  );
+  assert.equal(
+    getEmptyFeedMessage({ isOfflineCache: false, hasFilter: true, tab: 'reddit' }),
+    'Không có tin trong nguồn/tab này.'
+  );
+  assert.equal(
+    getEmptyFeedMessage({ isOfflineCache: false, hasFilter: false, tab: 'news' }),
+    'Hệ thống đang cào và tóm tắt tin. Hãy quay lại sau.'
+  );
+});

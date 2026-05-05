@@ -33,3 +33,13 @@ test('split feed toolbar keeps compact tabs separate from the filter button on n
   assert.match(toolbarTabRule, /padding:\s*6px 8px/);
   assert.match(toolbarTabRule, /font-size:\s*0\.82rem/);
 });
+
+test('mobile reader exposes refresh row and floating scroll-to-top affordance styles', () => {
+  const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
+  const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
+
+  assert.match(css, /\.feed-refresh-row\s*\{/);
+  assert.match(css, /\.scroll-top-button\s*\{/);
+  assert.match(homeSource, /className="feed-refresh-row"/);
+  assert.match(homeSource, /className="scroll-top-button"/);
+});
