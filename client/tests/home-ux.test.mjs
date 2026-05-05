@@ -37,3 +37,10 @@ test('non-article loads still use the compact full feed skeleton', () => {
   assert.equal(getReaderLoadingState({ isFeedLoading: true, hasArticleDeepLink: false }), 'feed-only');
   assert.equal(shouldShowDetailPane({ tab: 'news', hasSelectedArticle: false, hasArticleDeepLink: false }), false);
 });
+
+test('digest route keeps the right pane visible without opening article detail state', () => {
+  const { shouldShowDetailPane, shouldShowRightPane } = loadTsModule('../src/pages/homeUx.ts');
+
+  assert.equal(shouldShowDetailPane({ tab: 'digest', hasSelectedArticle: false, hasArticleDeepLink: false }), false);
+  assert.equal(shouldShowRightPane({ tab: 'digest', hasSelectedArticle: false, hasArticleDeepLink: false }), true);
+});

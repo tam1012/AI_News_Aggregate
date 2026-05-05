@@ -22,3 +22,15 @@ export function shouldShowDetailPane({
 }): boolean {
   return tab !== 'digest' && (hasSelectedArticle || hasArticleDeepLink);
 }
+
+export function shouldShowRightPane({
+  tab,
+  hasSelectedArticle,
+  hasArticleDeepLink,
+}: {
+  tab: ReaderTab;
+  hasSelectedArticle: boolean;
+  hasArticleDeepLink: boolean;
+}): boolean {
+  return tab === 'digest' || shouldShowDetailPane({ tab, hasSelectedArticle, hasArticleDeepLink });
+}

@@ -3,7 +3,7 @@ import { useLocation, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { api } from '../services/api';
 import { useFetchRaw } from '../hooks/useApi';
-import { getReaderLoadingState, shouldShowDetailPane } from './homeUx';
+import { getReaderLoadingState, shouldShowDetailPane, shouldShowRightPane } from './homeUx';
 
 const READ_ARTICLES_STORAGE_KEY = 'read_articles';
 const FEED_PREVIEW_MAX_CHARS = 180;
@@ -257,6 +257,11 @@ export function Home() {
   const sources = useMemo(() => (sourcesRaw?.data || []).filter((s: any) => s.is_enabled), [sourcesRaw]);
   const readerLoadingState = getReaderLoadingState({ isFeedLoading: loading, hasArticleDeepLink });
   const detailPaneVisible = shouldShowDetailPane({
+    tab,
+    hasSelectedArticle: Boolean(selected),
+    hasArticleDeepLink,
+  });
+  const rightPaneVisible = shouldShowRightPane({
     tab,
     hasSelectedArticle: Boolean(selected),
     hasArticleDeepLink,
@@ -516,7 +521,7 @@ export function Home() {
           </div>
         </div>
       
-        <div className={`split-right ${!detailPaneVisible ? 'hidden-on-mobile' : ''}`}>
+        <div className={`split-right ${!rightPaneVisible ? 'hidden-on-mobile' : ''}`}>
           {tab === 'digest' ? (
             <DigestTab />
           ) : selected ? (
