@@ -25,7 +25,17 @@ type PromptConfigFormData = {
   custom_context: string;
 };
 
+type AdminTab = 'overview' | 'queue' | 'ai' | 'prompt' | 'articles';
+type SummaryQueueStatus = 'failed' | 'pending' | 'processing' | 'skipped' | 'done';
+
 const AI_PROVIDER_TYPES = ['vertex_ai', 'openai', 'gemini', 'xai', 'mimo', 'anthropic', 'deepseek', 'groq', 'custom'];
+const SUMMARY_QUEUE_STATUSES: { key: SummaryQueueStatus; label: string }[] = [
+  { key: 'failed', label: 'Lỗi' },
+  { key: 'pending', label: 'Chờ' },
+  { key: 'processing', label: 'Đang chạy' },
+  { key: 'skipped', label: 'Bỏ qua' },
+  { key: 'done', label: 'Đã xong' },
+];
 
 function createEmptyAiProviderForm(): AiProviderFormData {
   return {
@@ -60,7 +70,7 @@ function formatExtraConfig(value: unknown): string {
 }
 
 export function Admin() {
-  const [tab, setTab] = useState<'overview' | 'ai' | 'prompt' | 'articles'>('overview');
+  const [tab, setTab] = useState<AdminTab>('overview');
   const { data: health, loading, error, reload } = useFetch<any>(() => api.getHealth());
   const [actionLoading, setActionLoading] = useState('');
 
@@ -85,6 +95,7 @@ export function Admin() {
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
         {[
           { key: 'overview', label: '📊 Tổng quan' },
+          { key: 'queue', label: 'Queue' },
           { key: 'ai', label: '🤖 AI Providers' },
           { key: 'prompt', label: 'Prompt' },
           { key: 'articles', label: '📄 Bài viết' },
@@ -92,7 +103,7 @@ export function Admin() {
           <button
             key={t.key}
             className={`btn btn-sm ${tab === t.key ? 'btn-primary' : ''}`}
-            onClick={() => setTab(t.key as any)}
+            onClick={() => setTab(t.key as AdminTab)}
           >
             {t.label}
           </button>
@@ -204,6 +215,7 @@ export function Admin() {
         </div>
       )}
 
+      {tab === 'queue' && <SummaryQueueTab />}
       {tab === 'ai' && <AiProvidersTab />}
       {tab === 'prompt' && <PromptConfigTab />}
       {tab === 'articles' && <ArticlesTab />}
@@ -737,6 +749,139 @@ function AiProvidersTab() {
 
       {(!providers || providers.length === 0) && (
         <div className="empty-state"><p>Chưa có AI provider nào.</p></div>
+      )}
+    </div>
+  );
+}
+
+function SummaryQueueTab() {
+  const [status, setStatus] = useState<SummaryQueueStatus>('failed');
+  const [page, setPage] = useState(1);
+  const [actionLoading, setActionLoading] = useState('');
+  const { data: raw, loading, error, reload } = useFetchRaw(
+    () => api.getArticles({ page, limit: 50, status }), [page, status]
+  );
+  const articles: any[] = raw?.data || [];
+  const meta = raw?.meta || { page, total: 0, totalPages: 0 };
+
+  const runAction = async (key: string, fn: () => Promise<any>) => {
+    setActionLoading(key);
+    try {
+      await fn();
+      reload();
+    } catch (err: any) {
+      alert('Lỗi: ' + err.message);
+    } finally {
+      setActionLoading('');
+    }
+  };
+
+  const handleStatusChange = (nextStatus: SummaryQueueStatus) => {
+    setStatus(nextStatus);
+    setPage(1);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Xóa bài viết này?')) return;
+    await runAction(`delete-${id}`, () => api.deleteArticle(id));
+  };
+
+  const handleReset = async (id: string) => {
+    await runAction(`reset-${id}`, () => api.resetArticleSummary(id));
+  };
+
+  const handleRescrape = async (article: any) => {
+    await runAction(`rescrape-${article.id}`, () => api.rescrapeArticle(article.id));
+  };
+
+  const handleTriggerSummarize = async () => {
+    await runAction('trigger-summarize', api.triggerSummarize);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+      <div className="card" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontWeight: 700 }}>Summary Queue</div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
+            Theo dõi bài đang chờ, đang xử lý hoặc lỗi tóm tắt.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button className="btn btn-sm" onClick={handleTriggerSummarize} disabled={!!actionLoading}>
+            {actionLoading === 'trigger-summarize' ? 'Đang chạy...' : 'Chạy summarize'}
+          </button>
+          <button className="btn btn-sm" onClick={reload} disabled={loading}>Tải lại</button>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {SUMMARY_QUEUE_STATUSES.map(item => (
+          <button
+            key={item.key}
+            className={`btn btn-sm ${status === item.key ? 'btn-primary' : ''}`}
+            onClick={() => handleStatusChange(item.key)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="loading">Đang tải queue...</div>
+      ) : error ? (
+        <div className="empty-state">
+          <p style={{ color: 'var(--color-error)' }}>{error}</p>
+          <button className="btn btn-primary" onClick={reload} style={{ marginTop: 12 }}>Thử lại</button>
+        </div>
+      ) : (
+        <>
+          <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
+            Hiển thị {articles.length} / {meta.total || 0} bài · Trang {meta.page || page}/{meta.totalPages || 1}
+          </div>
+
+          {articles.map((a: any) => (
+            <div key={a.id} className="card" style={{ padding: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.92rem', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {a.title}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <span>{a.source_name || 'Unknown source'}</span>
+                    {a.published_at && <span>{new Date(a.published_at).toLocaleString('vi-VN')}</span>}
+                    <span className={`badge badge-${a.summary_status === 'done' ? 'success' : a.summary_status === 'failed' ? 'error' : 'pending'}`}>
+                      {a.summary_status}
+                    </span>
+                    <span>retry: {a.retry_count || 0}</span>
+                  </div>
+                  {a.last_summary_error && (
+                    <div style={{ color: 'var(--color-error)', fontSize: '0.75rem', marginTop: 8, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                      {String(a.last_summary_error).substring(0, 500)}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  {/voz|reddit/i.test(a.source_name || '') && (
+                    <button className="btn btn-sm" onClick={() => handleRescrape(a)} disabled={!!actionLoading}>Cào lại</button>
+                  )}
+                  <button className="btn btn-sm" onClick={() => handleReset(a.id)} disabled={!!actionLoading}>Tóm tắt lại</button>
+                  <button className="btn btn-sm btn-danger" onClick={() => handleDelete(a.id)} disabled={!!actionLoading}>Xóa</button>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {articles.length === 0 && (
+            <div className="empty-state"><p>Không có bài nào ở trạng thái này.</p></div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 8, alignItems: 'center' }}>
+            <button className="btn btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1 || loading}>Trang trước</button>
+            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{page}/{meta.totalPages || 1}</span>
+            <button className="btn btn-sm" onClick={() => setPage(p => p + 1)} disabled={page >= (meta.totalPages || 1) || loading}>Trang sau</button>
+          </div>
+        </>
       )}
     </div>
   );
