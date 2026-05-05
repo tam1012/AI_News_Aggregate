@@ -170,7 +170,7 @@ function ReadmeWelcome() {
       </div>
 
       <a
-        href="https://github.com/tam1012/AI_News_Aggregate"
+        href="https://github.com/tam1012/SynthNews"
         target="_blank"
         rel="noopener noreferrer"
         className="btn btn-ghost"
