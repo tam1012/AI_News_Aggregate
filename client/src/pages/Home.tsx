@@ -3,7 +3,7 @@ import { useLocation, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { api } from '../services/api';
 import { useFetchRaw } from '../hooks/useApi';
-import { getEmptyFeedMessage, getReaderLoadingState, shouldShowDetailPane, shouldShowRightPane, shouldShowScrollTopButton } from './homeUx';
+import { filterArticlesBySelectedDate, getEmptyFeedMessage, getReaderLoadingState, shouldShowDetailPane, shouldShowRightPane, shouldShowScrollTopButton } from './homeUx';
 
 const READ_ARTICLES_STORAGE_KEY = 'read_articles';
 const FEED_PREVIEW_MAX_CHARS = 180;
@@ -264,7 +264,7 @@ export function Home() {
     [selectedDate, filterSource, availableDates.length]
   );
 
-  const allArticles: any[] = useMemo(() => raw?.data || [], [raw]);
+  const allArticles: any[] = useMemo(() => filterArticlesBySelectedDate(raw?.data || [], selectedDate), [raw, selectedDate]);
   const isShowingOfflineCache = Boolean(raw?.offline || raw?.stale || datesRaw?.offline || datesRaw?.stale);
 
   // Classify and filter articles by feed tab

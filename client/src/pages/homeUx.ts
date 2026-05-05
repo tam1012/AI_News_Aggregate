@@ -51,3 +51,8 @@ export function getEmptyFeedMessage({
   if (hasFilter) return 'Không có tin trong nguồn/tab này.';
   return 'Hệ thống đang cào và tóm tắt tin. Hãy quay lại sau.';
 }
+
+export function filterArticlesBySelectedDate<T extends { published_at?: string | null }>(articles: T[], selectedDate: string | null): T[] {
+  if (!selectedDate) return articles;
+  return articles.filter((article) => article.published_at?.slice(0, 10) === selectedDate);
+}
