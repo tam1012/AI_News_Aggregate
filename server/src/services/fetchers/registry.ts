@@ -22,10 +22,21 @@ export function isYoutubeSource(source: Pick<SourceRow, 'type' | 'url'>): boolea
   return isHost(source.url, ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be']);
 }
 
+export function isGitHubTrendingSource(source: Pick<SourceRow, 'type' | 'url'>): boolean {
+  if (source.type !== 'web') return false;
+  try {
+    const parsed = new URL(source.url);
+    return parsed.hostname.toLowerCase() === 'github.com' && parsed.pathname.toLowerCase().startsWith('/trending');
+  } catch {
+    return false;
+  }
+}
+
 export function getFetcherKeyForSource(source: Pick<SourceRow, 'type' | 'url'>): string {
   if (isRedditSource(source)) return 'reddit';
   if (isVozSource(source)) return 'voz';
   if (isYoutubeSource(source)) return 'youtube';
+  if (isGitHubTrendingSource(source)) return 'github-trending';
   if (source.type === 'rss') return 'rss';
   if (source.type === 'web') return 'html';
   throw new Error(`No fetcher registered for source type ${source.type}`);

@@ -34,6 +34,7 @@ test('detect GitHub Trending as supported web source with parser preset', async 
   assert.equal(result.detected_kind, 'github-trending');
   assert.equal(result.type, 'web');
   assert.equal(result.canonical_url, 'https://github.com/trending/typescript?since=daily');
+  assert.equal(result.parser_config.kind, 'github-trending');
   assert.ok(result.parser_config.articleLinkSelector);
 });
 

@@ -238,6 +238,7 @@ function githubTrendingPreset(url: string): SourceDetectResult {
   result.detected_kind = 'github-trending';
   result.canonical_url = url;
   result.parser_config = {
+    kind: 'github-trending',
     articleLinkSelector: 'article.Box-row h2 a',
     titleSelector: 'strong[itemprop="name"] a, h1',
     contentSelector: 'article.markdown-body, #readme, main',
