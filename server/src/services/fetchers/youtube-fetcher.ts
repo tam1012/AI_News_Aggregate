@@ -318,7 +318,16 @@ export const youtubeFetcher: SourceFetcher = {
     const videoId = payload.videoId || job.external_id || extractYouTubeVideoId(job.url);
     if (!videoId) throw new Error(`Cannot extract YouTube video id from ${job.url}`);
 
-    const transcript = await fetchYouTubeTranscript(videoId);
+    let transcript = '';
+    try {
+      transcript = await fetchYouTubeTranscript(videoId);
+    } catch (err: any) {
+      console.log(`[YouTube Fetcher] Failed to fetch transcript for ${videoId}: ${err.message}. Using description fallback.`);
+    }
+
+    // Delay 3s to avoid rate limiting from YouTube
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
     return {
       source,
       externalId: videoId,
@@ -327,7 +336,7 @@ export const youtubeFetcher: SourceFetcher = {
       author: source.name,
       publishedAt: job.published_at,
       rawExcerpt: payload.description || '',
-      rawContent: transcript,
+      rawContent: transcript || payload.description || job.title || '',
       contentHashSeed: payload.contentHashSeed || `${videoId}:${job.title}`,
       imageUrl: payload.imageUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
       contentType: 'video',
