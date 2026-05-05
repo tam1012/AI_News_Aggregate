@@ -2,6 +2,7 @@ export const LOCAL_DATE_SQL = `DATE(COALESCE(a.published_at, a.created_at) AT TI
 export const LOCAL_DATE_TEXT_SQL = `TO_CHAR(${LOCAL_DATE_SQL}, 'YYYY-MM-DD')`;
 
 const VALID_SUMMARY_STATUSES = ['pending', 'processing', 'done', 'failed', 'skipped'];
+const VALID_FEED_TABS = ['news', 'voz', 'reddit', 'youtube'];
 
 export interface ArticleListFilterInput {
   sourceId?: string;
@@ -9,6 +10,7 @@ export interface ArticleListFilterInput {
   date?: string;
   tag?: string;
   minScore?: string;
+  feedTab?: string;
 }
 
 export interface ArticleListFilters {
@@ -35,6 +37,10 @@ export function buildArticleListFilters(input: ArticleListFilterInput): ArticleL
     throw new Error('date must be YYYY-MM-DD');
   }
 
+  if (input.feedTab && !VALID_FEED_TABS.includes(input.feedTab)) {
+    throw new Error('Invalid feedTab');
+  }
+
   const minScore = parseMinScore(input.minScore);
   const params: any[] = [];
   const clauses = ['1=1'];
@@ -59,6 +65,15 @@ export function buildArticleListFilters(input: ArticleListFilterInput): ArticleL
   if (minScore !== null) {
     clauses.push(`a.hot_score >= $${paramIndex++}`);
     params.push(minScore);
+  }
+  if (input.feedTab === 'youtube') {
+    clauses.push(`(s.type = 'youtube' OR a.url ILIKE '%youtube.com%' OR a.url ILIKE '%youtu.be%')`);
+  } else if (input.feedTab === 'reddit') {
+    clauses.push(`(s.name ILIKE '%reddit%' OR a.url ILIKE '%reddit.com%' OR a.title ILIKE '[r/%')`);
+  } else if (input.feedTab === 'voz') {
+    clauses.push(`(s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`);
+  } else if (input.feedTab === 'news') {
+    clauses.push(`NOT (s.type = 'youtube' OR a.url ILIKE '%youtube.com%' OR a.url ILIKE '%youtu.be%' OR s.name ILIKE '%reddit%' OR a.url ILIKE '%reddit.com%' OR a.title ILIKE '[r/%' OR s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`);
   }
 
   return {

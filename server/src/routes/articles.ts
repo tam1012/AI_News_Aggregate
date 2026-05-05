@@ -46,17 +46,18 @@ articles.get('/', async (c) => {
   const date = c.req.query('date'); // YYYY-MM-DD local VN date
   const tag = c.req.query('tag');
   const minScore = c.req.query('minScore');
+  const feedTab = c.req.query('feedTab');
   const offset = (page - 1) * limit;
 
   let filters;
   try {
-    filters = buildArticleListFilters({ sourceId, status, date, tag, minScore });
+    filters = buildArticleListFilters({ sourceId, status, date, tag, minScore, feedTab });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'VALIDATION', message: err.message } }, 400);
   }
 
   const countResult = await getOne<{ count: string }>(
-    `SELECT COUNT(*) as count FROM articles a ${filters.where}`,
+    `SELECT COUNT(*) as count FROM articles a LEFT JOIN sources s ON s.id = a.source_id ${filters.where}`,
     filters.params
   );
   const total = parseInt(countResult?.count || '0');
@@ -82,7 +83,7 @@ articles.get('/', async (c) => {
   return c.json({
     success: true,
     data: decodeArticleRows(rows),
-    meta: { page, limit, total, totalPages: Math.ceil(total / limit), date: date || null, tag: tag || null, minScore: minScore || null },
+    meta: { page, limit, total, totalPages: Math.ceil(total / limit), date: date || null, tag: tag || null, minScore: minScore || null, feedTab: feedTab || null },
   });
 });
 

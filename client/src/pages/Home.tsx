@@ -7,6 +7,7 @@ import { filterArticlesBySelectedDate, getEmptyFeedMessage, getReaderLoadingStat
 
 const READ_ARTICLES_STORAGE_KEY = 'read_articles';
 const FEED_PREVIEW_MAX_CHARS = 180;
+const FEED_PAGE_SIZE = 100;
 
 /* ── helpers ── */
 function formatTime(dateStr: string): string {
@@ -237,6 +238,10 @@ export function Home() {
   const [deepLinkLoading, setDeepLinkLoading] = useState(hasArticleDeepLink);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [articlePages, setArticlePages] = useState<any[]>([]);
+  const [articlePage, setArticlePage] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const splitLeftRef = useRef<HTMLDivElement>(null);
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -258,21 +263,25 @@ export function Home() {
   const { data: raw, loading, error, reload } = useFetchRaw(
     () => {
       // Don't fetch until we have a date, unless there are no dates at all
-      if (availableDates.length > 0 && !selectedDate) return Promise.resolve({ data: [] });
-      return api.getArticles({ page: 1, limit: 100, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource });
+      if (availableDates.length > 0 && !selectedDate) return Promise.resolve({ data: [], meta: { total: 0, page: 1, totalPages: 0 } });
+      return api.getArticles({ page: 1, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab });
     },
-    [selectedDate, filterSource, availableDates.length]
+    [selectedDate, filterSource, availableDates.length, tab]
   );
 
-  const allArticles: any[] = useMemo(() => filterArticlesBySelectedDate(raw?.data || [], selectedDate), [raw, selectedDate]);
+  useEffect(() => {
+    setArticlePages(raw?.data || []);
+    setArticlePage(1);
+    setLoadMoreError(null);
+  }, [raw]);
+
+  const allArticles: any[] = useMemo(() => filterArticlesBySelectedDate(articlePages, selectedDate), [articlePages, selectedDate]);
   const isShowingOfflineCache = Boolean(raw?.offline || raw?.stale || datesRaw?.offline || datesRaw?.stale);
 
-  // Classify and filter articles by feed tab
-  const feedTab: FeedTab = (tab === 'digest') ? 'news' : tab;
-  const articles: any[] = useMemo(() => {
-    if (filterSource !== 'all') return allArticles; // source filter overrides tab filter
-    return allArticles.filter(a => classifyArticle(a) === feedTab);
-  }, [allArticles, feedTab, filterSource]);
+  const articles: any[] = allArticles;
+  const hasMoreArticles = Boolean(raw?.meta && articlePages.length < raw.meta.total);
+  const loadedArticleCount = articlePages.length;
+  const totalArticleCount = raw?.meta?.total || loadedArticleCount;
 
   // Unique sources for filter (fetch all sources to be safe, but since we are filtering by date, we might miss sources. Ideally we fetch from a sources list)
   // We'll use api.getSources() for a full list, but for now we keep using the current articles if we don't have a separate fetch.
@@ -311,6 +320,22 @@ export function Home() {
       window.setTimeout(() => setIsRefreshing(false), remainingMs);
     }
   }, [reload]);
+
+  const handleLoadMoreArticles = useCallback(async () => {
+    if (isLoadingMore || !hasMoreArticles) return;
+    const nextPage = articlePage + 1;
+    setIsLoadingMore(true);
+    setLoadMoreError(null);
+    try {
+      const response = await api.getArticles({ page: nextPage, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab });
+      setArticlePages(prev => [...prev, ...(response?.data || [])]);
+      setArticlePage(nextPage);
+    } catch (err: any) {
+      setLoadMoreError(err.message || 'Không thể tải thêm bài cũ.');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [articlePage, filterSource, hasMoreArticles, isLoadingMore, selectedDate, tab]);
 
   // Date navigation handlers
   const handlePrevDate = () => {
@@ -578,17 +603,29 @@ export function Home() {
                 <button className="btn btn-primary" onClick={() => void handleManualRefresh()} style={{ marginTop: 16 }}>Tải lại</button>
               </div>
             ) : (
-              <div className="feed-day-group">
-                {articles.map(article => (
-                  <FeedItem
-                    key={article.id}
-                    article={article}
-                    isActive={selected?.id === article.id}
-                    isRead={readArticleIds.includes(article.id)}
-                    onClick={() => handleSelectArticle(article)}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="feed-day-group">
+                  {articles.map(article => (
+                    <FeedItem
+                      key={article.id}
+                      article={article}
+                      isActive={selected?.id === article.id}
+                      isRead={readArticleIds.includes(article.id)}
+                      onClick={() => handleSelectArticle(article)}
+                    />
+                  ))}
+                </div>
+                <div className="feed-load-more">
+                  {loadMoreError && <p className="feed-load-more-error">{loadMoreError}</p>}
+                  {hasMoreArticles ? (
+                    <button className="btn btn-ghost" onClick={() => void handleLoadMoreArticles()} disabled={isLoadingMore}>
+                      {isLoadingMore ? 'Đang tải thêm...' : `Tải thêm bài cũ (${loadedArticleCount}/${totalArticleCount})`}
+                    </button>
+                  ) : (
+                    <p>Đã hiển thị hết bài trong ngày này.</p>
+                  )}
+                </div>
+              </>
             )}
 
             <div className="reader-footer">

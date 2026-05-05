@@ -281,6 +281,20 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   cursor: pointer;
 }
 
+.feed-load-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 0 8px;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+
+.feed-load-more-error {
+  color: var(--color-error);
+}
+
 /* ===== Date Heading ===== */
 .feed-date-heading {
   font-family: var(--font-heading);

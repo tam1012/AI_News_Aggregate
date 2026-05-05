@@ -43,3 +43,13 @@ test('mobile reader exposes refresh row and floating scroll-to-top affordance st
   assert.match(homeSource, /className="feed-refresh-row"/);
   assert.match(homeSource, /className="scroll-top-button"/);
 });
+
+test('feed uses server-side tab pagination and exposes load-more control', () => {
+  const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
+  const apiSource = readFileSync(resolve(__dirname, '../src/services/api.ts'), 'utf8');
+
+  assert.match(apiSource, /feedTab\?: 'news' \| 'voz' \| 'reddit' \| 'youtube'/);
+  assert.match(homeSource, /feedTab: tab === 'digest' \? 'news' : tab/);
+  assert.match(homeSource, /handleLoadMoreArticles/);
+  assert.match(homeSource, /Tải thêm bài cũ/);
+});

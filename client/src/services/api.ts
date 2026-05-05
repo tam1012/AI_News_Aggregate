@@ -87,7 +87,7 @@ export const api = {
   detectSource: (url: string) => request<any>('/sources/detect', { method: 'POST', body: JSON.stringify({ url }) }),
 
   // Articles
-  getArticles: (params?: { page?: number; limit?: number; sourceId?: string; status?: string; date?: string; tag?: string; minScore?: number }) => {
+  getArticles: (params?: { page?: number; limit?: number; sourceId?: string; status?: string; date?: string; tag?: string; minScore?: number; feedTab?: 'news' | 'voz' | 'reddit' | 'youtube' }) => {
     const qs = new URLSearchParams();
     if (params?.page) qs.set('page', String(params.page));
     if (params?.limit) qs.set('limit', String(params.limit));
@@ -96,6 +96,7 @@ export const api = {
     if (params?.date) qs.set('date', params.date);
     if (params?.tag) qs.set('tag', params.tag);
     if (params?.minScore) qs.set('minScore', String(params.minScore));
+    if (params?.feedTab) qs.set('feedTab', params.feedTab);
     return request<any>(`/articles?${qs}`);
   },
   getArticleDates: (sourceId?: string) => {

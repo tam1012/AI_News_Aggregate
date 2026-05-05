@@ -49,4 +49,14 @@ test('article filters validate score, status, and date', () => {
   assert.throws(() => buildArticleListFilters({ status: 'bad' }), /Invalid status/);
   assert.throws(() => buildArticleListFilters({ date: '04-05-2026' }), /date must be YYYY-MM-DD/);
   assert.throws(() => buildArticleListFilters({ minScore: '11' }), /minScore must be between 1 and 10/);
+  assert.throws(() => buildArticleListFilters({ feedTab: 'bad' }), /Invalid feedTab/);
+});
+
+test('article filters add feed tab predicates before pagination', () => {
+  const { buildArticleListFilters } = loadTsModule('../src/lib/articleFilters.ts');
+
+  assert.match(buildArticleListFilters({ feedTab: 'news' }).where, /NOT \(s\.type = 'youtube'/);
+  assert.match(buildArticleListFilters({ feedTab: 'reddit' }).where, /reddit/);
+  assert.match(buildArticleListFilters({ feedTab: 'voz' }).where, /voz/);
+  assert.match(buildArticleListFilters({ feedTab: 'youtube' }).where, /s\.type = 'youtube'/);
 });
