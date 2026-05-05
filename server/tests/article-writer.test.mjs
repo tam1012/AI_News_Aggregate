@@ -61,7 +61,36 @@ test('build article insert row with pending summary state and retry defaults', (
   assert.equal(row.summary_status, 'pending');
   assert.equal(row.retry_count, 0);
   assert.equal(row.last_summary_error, null);
+  assert.equal(row.content_type, 'article');
   assert.equal(row.content_hash, 'hash:Example ');
+});
+
+test('build article insert row supports video content metadata', () => {
+  const { buildArticleInsertRow } = loadTsModule('../src/services/fetchers/article-writer.ts', {
+    '../../db/index.js': {
+      getOne: async () => null,
+      query: async () => ({ rowCount: 0 }),
+    },
+    '../../lib/utils.js': {
+      createContentHash: (value) => `hash:${value.slice(0, 8)}`,
+      generateId: (prefix) => `${prefix}_test`,
+      truncate: (value, max) => String(value).slice(0, max),
+    },
+    '../../lib/htmlEntities.js': { decodeHtmlEntities: decodeHTML },
+  });
+
+  const row = buildArticleInsertRow({
+    source: { id: 'src_youtube', language: 'vi' },
+    url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    title: 'Video title',
+    rawExcerpt: 'Video description',
+    rawContent: 'Transcript text',
+    contentType: 'video',
+    metadata: { videoId: 'dQw4w9WgXcQ', channelId: 'UC123' },
+  });
+
+  assert.equal(row.content_type, 'video');
+  assert.deepEqual(row.metadata, { videoId: 'dQw4w9WgXcQ', channelId: 'UC123' });
 });
 
 test('build article insert row decodes HTML entities in article text', () => {

@@ -3,6 +3,7 @@ export function usesFluidShell(pathname: string) {
     pathname === '/' ||
     pathname === '/voz' ||
     pathname === '/reddit' ||
+    pathname === '/youtube' ||
     pathname === '/digest' ||
     pathname.startsWith('/article') ||
     pathname.startsWith('/admin') ||

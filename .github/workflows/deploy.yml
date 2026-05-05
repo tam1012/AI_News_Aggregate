@@ -20,6 +20,15 @@ jobs:
           git pull origin main
           export NVM_DIR="$HOME/.nvm"
           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          if [ -n "${{ secrets.RAPIDAPI_KEY }}" ]; then
+            export RAPIDAPI_KEY="${{ secrets.RAPIDAPI_KEY }}"
+          fi
+          if [ -n "${{ secrets.YOUTUBE_TRANSCRIPT_RAPIDAPI_KEY }}" ]; then
+            export YOUTUBE_TRANSCRIPT_RAPIDAPI_KEY="${{ secrets.YOUTUBE_TRANSCRIPT_RAPIDAPI_KEY }}"
+          fi
+          if [ -n "${{ secrets.YOUTUBE_API_KEY }}" ]; then
+            export YOUTUBE_API_KEY="${{ secrets.YOUTUBE_API_KEY }}"
+          fi
           docker compose up -d --build
           for i in {1..20}; do
             if curl -fsS http://127.0.0.1:3001/api/health/live >/dev/null; then

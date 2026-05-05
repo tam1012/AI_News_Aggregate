@@ -12,6 +12,7 @@ export function Router() {
           <Route path="/" element={<Home />} />
           <Route path="/voz" element={<Home />} />
           <Route path="/reddit" element={<Home />} />
+          <Route path="/youtube" element={<Home />} />
           <Route path="/digest" element={<Home />} />
           <Route path="/article/:articleId" element={<Home />} />
           <Route path="/sources" element={<Sources />} />

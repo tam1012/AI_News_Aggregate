@@ -20,6 +20,8 @@ export interface ArticleInsertInput {
   contentHashSeed?: string;
   excerptMaxLength?: number;
   contentMaxLength?: number;
+  contentType?: 'article' | 'video';
+  metadata?: any;
 }
 
 export interface ArticleInsertRow {
@@ -30,12 +32,13 @@ export interface ArticleInsertRow {
   title: string;
   author: string | null;
   published_at: string | null;
-  content_type: 'article';
+  content_type: 'article' | 'video';
   language: string;
   raw_excerpt: string;
   raw_content: string;
   content_hash: string;
   image_url: string | null;
+  metadata: any;
   summary_status: 'pending';
   retry_count: 0;
   last_summary_error: null;
@@ -57,12 +60,13 @@ export function buildArticleInsertRow(input: ArticleInsertInput): ArticleInsertR
     title,
     author: input.author || null,
     published_at: input.publishedAt || null,
-    content_type: 'article',
+    content_type: input.contentType || 'article',
     language: input.source.language,
     raw_excerpt: rawExcerpt,
     raw_content: rawContent,
     content_hash: createContentHash(seed),
     image_url: input.imageUrl || null,
+    metadata: input.metadata || null,
     summary_status: 'pending',
     retry_count: 0,
     last_summary_error: null,
@@ -80,8 +84,8 @@ export async function insertArticleIfNew(input: ArticleInsertInput): Promise<boo
   const insertResult = await query(
     `INSERT INTO articles (id, source_id, external_id, url, title, author, published_at,
                            content_type, language, raw_excerpt, raw_content, content_hash,
-                           image_url, summary_status, retry_count, last_summary_error)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'article', $8, $9, $10, $11, $12, 'pending', 0, NULL)
+                           image_url, metadata, summary_status, retry_count, last_summary_error)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending', 0, NULL)
      ON CONFLICT (url) DO NOTHING
      RETURNING id`,
     [
@@ -92,11 +96,13 @@ export async function insertArticleIfNew(input: ArticleInsertInput): Promise<boo
       row.title,
       row.author,
       row.published_at,
+      row.content_type,
       row.language,
       row.raw_excerpt,
       row.raw_content,
       row.content_hash,
       row.image_url,
+      row.metadata ? JSON.stringify(row.metadata) : null,
     ]
   );
 
