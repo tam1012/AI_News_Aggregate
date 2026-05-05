@@ -16,6 +16,67 @@ interface ArticleForSummary {
   source_name: string;
 }
 
+interface DigestRunContext {
+  now: Date;
+  periodStart: string;
+  periodEnd: string;
+  digestDate: string;
+  displayDate: string;
+  displayDateTime: string;
+}
+
+interface DigestPromptInput {
+  promptConfig: PromptConfig;
+  articleSummaries: string;
+  runContext: DigestRunContext;
+}
+
+const DIGEST_TIME_ZONE = 'Asia/Ho_Chi_Minh';
+const DEFAULT_DIGEST_ARTICLE_LIMIT = 100;
+const MAX_DIGEST_ARTICLE_LIMIT = 200;
+
+function getVietnamDateParts(date: Date): { year: string; month: string; day: string; hour: string; minute: string } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: DIGEST_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const value = (type: string) => parts.find((part) => part.type === type)?.value || '';
+
+  return {
+    year: value('year'),
+    month: value('month'),
+    day: value('day'),
+    hour: value('hour'),
+    minute: value('minute'),
+  };
+}
+
+export function buildDigestRunContext(now = new Date()): DigestRunContext {
+  const parts = getVietnamDateParts(now);
+  const periodEnd = now.toISOString();
+  const periodStart = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+  return {
+    now,
+    periodStart,
+    periodEnd,
+    digestDate: `${parts.year}-${parts.month}-${parts.day}`,
+    displayDate: `${parts.day}/${parts.month}/${parts.year}`,
+    displayDateTime: `${parts.hour}:${parts.minute} ${parts.day}/${parts.month}/${parts.year}`,
+  };
+}
+
+export function parseDigestArticleLimit(value = process.env.DIGEST_ARTICLE_LIMIT): number {
+  const parsed = parseInt(value || '', 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_DIGEST_ARTICLE_LIMIT;
+  return Math.min(Math.max(parsed, 1), MAX_DIGEST_ARTICLE_LIMIT);
+}
+
 async function claimPendingArticles(limit: number): Promise<ArticleForSummary[]> {
   const result = await query<ArticleForSummary>(
     `WITH picked AS (
@@ -283,11 +344,62 @@ export async function summarizePendingArticles(): Promise<{ processed: number; s
 }
 
 // Tạo digest từ các articles đã có summary
+export function buildDigestPrompt({ promptConfig, articleSummaries, runContext }: DigestPromptInput): string {
+  const customContext = promptConfig.custom_context ? `\nNgữ cảnh tùy chỉnh: ${promptConfig.custom_context}` : '';
+  const topicPriorities = [
+    ...promptConfig.topic_priorities,
+    'Thời sự kinh tế xã hội',
+    'Kinh tế vĩ mô',
+    'Chính sách công',
+    'Đời sống xã hội',
+  ];
+  const digestHeadings = [
+    ...promptConfig.digest_headings,
+    'Thời sự kinh tế xã hội',
+    'Kinh tế, chính sách và đời sống',
+  ];
+
+  return `Bạn là tổng biên tập bản tin hằng ngày cho một chuyên gia công nghệ/kinh doanh Việt Nam bận rộn. Nhiệm vụ: tổng hợp các bài viết dưới đây thành một bản tin CẬP NHẬT, có chiều sâu phân tích, kết nối bối cảnh công nghệ với thời sự kinh tế xã hội.
+
+Ngôn ngữ output: ${promptConfig.output_language}
+Thời điểm cập nhật: ${runContext.displayDateTime} (giờ Việt Nam)
+Ngày bản tin: ${runContext.displayDate}
+Chủ đề ưu tiên: ${topicPriorities.join(', ')}
+Gợi ý nhóm heading: ${digestHeadings.join(', ')}${customContext}
+
+QUY TẮC:
+1. Nhóm tin theo chủ đề lớn nhưng HEADING phải mô tả cụ thể nội dung:
+   ✗ "## Công nghệ"  ✗ "## Thế giới"
+   ✓ "## AI Race: Google tung Gemini 3, OpenAI phản công bằng GPT-5"
+   ✓ "## Chính sách kinh tế Đông Nam Á đổi hướng trước áp lực chi phí"
+2. Bắt buộc có góc nhìn thời sự kinh tế xã hội nếu dữ liệu đầu vào có bài phù hợp: kinh tế vĩ mô, doanh nghiệp, việc làm, chính sách, giao thông, giáo dục, y tế, pháp luật, xã hội Việt Nam hoặc quốc tế.
+3. Mỗi mục chủ đề:
+   - Mở đầu bằng 2-3 câu tổng quan viết tự nhiên như biên tập viên, nêu bối cảnh và xu hướng chung.
+   - Sau đó đi vào từng tin: viết 3-5 câu cho mỗi tin quan trọng, không chỉ 1 bullet nêu tiêu đề.
+   - Trích dẫn cụ thể: con số, tên người, tổ chức, địa điểm, chính sách hoặc mốc thời gian đáng chú ý.
+   - Nếu nhiều tin liên quan -> viết thành đoạn văn liền mạch thay vì bullet rời rạc.
+4. Với tin từ forum (Reddit, VOZ): tóm tắt ý kiến cộng đồng, nêu 1-2 comment hay nhất.
+5. Tránh lặp thông tin giữa các mục.
+6. Viết bằng tiếng Việt tự nhiên, lưu loát, dễ đọc, tone chuyên nghiệp nhưng gần gũi.
+7. Không mở đầu bằng lời chào, xưng hô, hoặc câu phụ thuộc thời điểm trong ngày. Mở thẳng vào bản tin và ghi đúng ngày ${runContext.displayDate}.
+8. Cuối bản tin: viết 1 section "## Điểm nhấn trong ngày" — chọn 1-2 sự kiện đáng chú ý nhất, viết nhận xét ngắn gọn mang tính editorial.
+
+ĐỊNH DẠNG (Markdown, KHÔNG emoji):
+- KHÔNG dùng H1 (#).
+- Mục chủ đề dùng ##.
+- Mix đoạn văn + bullet — ưu tiên đoạn văn liền mạch hơn bullet liệt kê.
+- In đậm (**bold**) cho tên riêng, con số quan trọng, từ khóa.
+- Tổng dài khoảng 1000-1800 từ.
+
+Các bài viết cập nhật đến ${runContext.displayDateTime}:
+${articleSummaries}`;
+}
+
+// Generate digest from summarized articles in the latest rolling 24-hour window.
 export async function generateDigest(): Promise<string | null> {
   const promptConfig = await getPromptConfig();
-  const now = new Date();
-  const periodEnd = now.toISOString();
-  const periodStart = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const runContext = buildDigestRunContext();
+  const articleLimit = parseDigestArticleLimit();
 
   const articlesForDigest = await getMany(
     `SELECT a.id, a.title, a.summary_text, a.summary_short, a.hot_score, a.tags, a.url, a.published_at,
@@ -298,8 +410,8 @@ export async function generateDigest(): Promise<string | null> {
        AND a.created_at >= $1
        AND a.created_at <= $2
      ORDER BY a.hot_score DESC NULLS LAST, a.published_at DESC NULLS LAST
-     LIMIT 50`,
-    [periodStart, periodEnd]
+     LIMIT $3`,
+    [runContext.periodStart, runContext.periodEnd, articleLimit]
   );
 
   if (articlesForDigest.length === 0) {
@@ -315,48 +427,16 @@ export async function generateDigest(): Promise<string | null> {
     })
     .join('\n\n');
 
-  const digestDateStr = now.toISOString().split('T')[0];
-  const customContext = promptConfig.custom_context ? `\nNgữ cảnh tùy chỉnh: ${promptConfig.custom_context}` : '';
-  const prompt = `Bạn là tổng biên tập bản tin hằng ngày cho một chuyên gia công nghệ/kinh doanh Việt Nam bận rộn. Nhiệm vụ: tổng hợp các bài viết dưới đây thành một bản tin CHUYÊN SÂU, viết hay, có chiều sâu phân tích — không chỉ liệt kê mà phải KỂ CHUYỆN.
-
-Ngôn ngữ output: ${promptConfig.output_language}
-Chủ đề ưu tiên: ${promptConfig.topic_priorities.join(', ')}
-Gợi ý nhóm heading: ${promptConfig.digest_headings.join(', ')}${customContext}
-
-QUY TẮC:
-1. Nhóm tin theo chủ đề lớn nhưng HEADING phải mô tả cụ thể nội dung:
-   ✗ "## Công nghệ"  ✗ "## Thế giới"
-   ✓ "## AI Race: Google tung Gemini 3, OpenAI phản công bằng GPT-5"
-   ✓ "## Startup Việt huy động 15 triệu USD giữa mùa đông gọi vốn"
-2. Mỗi mục chủ đề:
-   - Mở đầu bằng 2-3 câu TỔNG QUAN viết tự nhiên như biên tập viên, nêu bối cảnh và xu hướng chung.
-   - Sau đó đi vào từng tin: viết 3-5 câu CHO MỖI TIN, không chỉ 1 bullet nêu tiêu đề.
-   - Trích dẫn cụ thể: con số, tên người, quotes đáng chú ý.
-   - Nếu nhiều tin liên quan → viết thành đoạn văn liền mạch thay vì bullet rời rạc.
-3. Với tin từ forum (Reddit, VOZ): tóm tắt ý kiến cộng đồng, nêu 1-2 comment hay nhất.
-4. Tránh lặp thông tin giữa các mục.
-5. Viết bằng tiếng Việt tự nhiên, lưu loát, dễ đọc — tone chuyên nghiệp nhưng gần gũi.
-6. Cuối bản tin: viết 1 section "## Điểm nhấn trong ngày" — chọn 1-2 sự kiện đáng chú ý nhất, viết nhận xét ngắn gọn mang tính editorial.
-
-ĐỊNH DẠNG (Markdown, KHÔNG emoji):
-- KHÔNG dùng H1 (#).
-- Mục chủ đề dùng ##.
-- Mix đoạn văn + bullet — ưu tiên đoạn văn liền mạch hơn bullet liệt kê.
-- In đậm (**bold**) cho tên riêng, con số quan trọng, từ khóa.
-- Tổng dài khoảng 800-1500 từ.
-
-Các bài viết hôm nay (${digestDateStr}):
-${articleSummaries}`;
-
+  const prompt = buildDigestPrompt({ promptConfig, articleSummaries, runContext });
   try {
-    const digestContent = await callAi(prompt, { max_tokens: 4000 });
+    const digestContent = await callAi(prompt, { max_tokens: 6000 });
     const digestId = generateId('dig');
-    const digestDate = now.toISOString().split('T')[0];
+    const digestDate = runContext.digestDate;
 
     await query(
       `INSERT INTO digests (id, digest_date, period_start, period_end, language, title, body_markdown, article_count, status)
        VALUES ($1, $2, $3, $4, 'vi', $5, $6, $7, 'done')`,
-      [digestId, digestDate, periodStart, periodEnd, `Bản tin ${digestDate}`, digestContent, articlesForDigest.length]
+      [digestId, digestDate, runContext.periodStart, runContext.periodEnd, `Bản tin ${digestDate}`, digestContent, articlesForDigest.length]
     );
 
     for (const article of articlesForDigest) {

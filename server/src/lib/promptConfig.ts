@@ -10,9 +10,9 @@ export const PROMPT_CONFIG_KEY = 'prompt_config';
 
 export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
   output_language: 'Vietnamese',
-  topic_priorities: ['AI/LLM', 'Security', 'Dev Tools', 'Startup/Business'],
-  allowed_tags: ['AI', 'Tech', 'Security', 'Business', 'Vietnam', 'World', 'Dev', 'Science', 'Crypto', 'Policy', 'Entertainment'],
-  digest_headings: ['AI & LLM', 'Security', 'Tools & Infrastructure', 'Startup & Business', 'Policy & Society'],
+  topic_priorities: ['AI/LLM', 'Security', 'Dev Tools', 'Startup/Business', 'Economy', 'Society', 'Policy'],
+  allowed_tags: ['AI', 'Tech', 'Security', 'Business', 'Economy', 'Society', 'Vietnam', 'World', 'Dev', 'Science', 'Crypto', 'Policy', 'Entertainment'],
+  digest_headings: ['AI & LLM', 'Security', 'Tools & Infrastructure', 'Startup & Business', 'Economy & Society', 'Policy & Society'],
   custom_context: '',
 };
 
