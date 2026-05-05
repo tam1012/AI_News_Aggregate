@@ -103,10 +103,20 @@ function shouldTryFeedThumbnail(article: any): boolean {
 
 /* ── image proxy helper ── */
 type ImgPreset = 'thumb' | 'detail' | 'og';
-function proxyImgUrl(rawUrl: string | null | undefined, preset: ImgPreset = 'detail'): string {
+function proxyImgUrl(rawUrl: string | null | undefined, preset: ImgPreset = 'detail', baseUrl?: string | null): string {
   const url = String(rawUrl || '').trim();
   if (!url) return '';
-  return `/api/img?url=${encodeURIComponent(url)}&p=${preset}`;
+
+  let sourceUrl = url;
+  if (url.startsWith('/')) {
+    try {
+      sourceUrl = new URL(url, baseUrl || window.location.origin).toString();
+    } catch {
+      return '';
+    }
+  }
+
+  return `/api/img?url=${encodeURIComponent(sourceUrl)}&p=${preset}`;
 }
 
 function isUsefulFeedThumbnail(img: HTMLImageElement): boolean {
@@ -646,7 +656,7 @@ function FeedItem({
         </div>
         {showThumbnail && article.image_url && (
           <img
-            src={proxyImgUrl(article.image_url, 'thumb')}
+            src={proxyImgUrl(article.image_url, 'thumb', article.url)}
             alt=""
             className="feed-item-thumb"
             loading="lazy"
@@ -783,7 +793,7 @@ function ArticleDetail({
 
           {article.image_url && (
             <img
-              src={proxyImgUrl(article.image_url, 'detail')}
+              src={proxyImgUrl(article.image_url, 'detail', article.url)}
               alt=""
               className="detail-image"
               loading="lazy"
