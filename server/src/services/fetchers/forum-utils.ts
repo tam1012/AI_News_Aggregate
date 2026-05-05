@@ -63,7 +63,6 @@ export function hasMinimumForumDiscussion(commentCount: number, minComments = 10
 }
 
 export function shouldInsertForumArticle(kind: 'reddit' | 'voz', commentCount: number, minComments = 10): boolean {
-  if (kind === 'reddit') return true;
   return hasMinimumForumDiscussion(commentCount, minComments);
 }
 

@@ -32,6 +32,7 @@ const rssParser = new RssParser({
 const FORUM_RAW_CONTENT_MAX_LENGTH = parseInt(process.env.FORUM_RAW_CONTENT_MAX_LENGTH || '80000');
 const FORUM_MAX_COMMENTS = parseInt(process.env.FORUM_MAX_COMMENTS || '70');
 const FORUM_MIN_COMMENTS = Math.max(1, parseInt(process.env.FORUM_MIN_COMMENTS || '10', 10) || 10);
+const REDDIT_MIN_COMMENTS = Math.max(1, parseInt(process.env.REDDIT_MIN_COMMENTS || '5', 10) || 5);
 const VOZ_MAX_THREAD_PAGES = parseInt(process.env.VOZ_MAX_THREAD_PAGES || '15');
 const REDDIT_COMMENT_LIMIT = parseInt(process.env.REDDIT_COMMENT_LIMIT || '30');
 const REDDIT_COMMENT_DEPTH = parseInt(process.env.REDDIT_COMMENT_DEPTH || '3');
@@ -457,6 +458,11 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
           }
         }
       } catch {
+      }
+
+      if (!shouldInsertForumArticle('reddit', discussionComments.length, REDDIT_MIN_COMMENTS)) {
+        console.log(`[reddit] Skip ${postPath}: only ${discussionComments.length} comments/replies`);
+        continue;
       }
 
       const fullContent = buildRedditRawContent(postContent, outboundUrl, discussionComments, discussionComments.length);
