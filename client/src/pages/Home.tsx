@@ -101,6 +101,14 @@ function shouldTryFeedThumbnail(article: any): boolean {
   return true;
 }
 
+/* ── image proxy helper ── */
+type ImgPreset = 'thumb' | 'detail' | 'og';
+function proxyImgUrl(rawUrl: string | null | undefined, preset: ImgPreset = 'detail'): string {
+  const url = String(rawUrl || '').trim();
+  if (!url) return '';
+  return `/api/img?url=${encodeURIComponent(url)}&p=${preset}`;
+}
+
 function isUsefulFeedThumbnail(img: HTMLImageElement): boolean {
   const width = img.naturalWidth;
   const height = img.naturalHeight;
@@ -638,7 +646,7 @@ function FeedItem({
         </div>
         {showThumbnail && article.image_url && (
           <img
-            src={article.image_url}
+            src={proxyImgUrl(article.image_url, 'thumb')}
             alt=""
             className="feed-item-thumb"
             loading="lazy"
@@ -775,7 +783,7 @@ function ArticleDetail({
 
           {article.image_url && (
             <img
-              src={article.image_url}
+              src={proxyImgUrl(article.image_url, 'detail')}
               alt=""
               className="detail-image"
               loading="lazy"
