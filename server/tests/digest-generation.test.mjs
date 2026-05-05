@@ -147,3 +147,50 @@ test('generate digest does not insert an empty AI response', async () => {
   assert.equal(result, null);
   assert.equal(writes.length, 0);
 });
+
+test('forum summary prompt requires translating foreign-language comments into Vietnamese', async () => {
+  let capturedPrompt = '';
+  const { summarizeArticle } = loadTsModule('../src/services/summarizer.ts', {
+    '../db/index.js': {},
+    '../lib/utils.js': {
+      generateId: (prefix) => `${prefix}_test`,
+      truncate: (value) => value,
+    },
+    '../lib/tldr.js': {
+      normalizeTldr: (value) => value,
+    },
+    '../lib/summaryRetryPolicy.js': {
+      truncateSummaryError: (err) => String(err?.message || err),
+    },
+    '../lib/summaryOutput.js': {
+      parseAiSummaryOutput: () => ({ editorialMarkdown: 'ok', tags: [] }),
+    },
+    './ai-client.js': {
+      callAi: async (prompt) => {
+        capturedPrompt = prompt;
+        return '{}';
+      },
+    },
+    './prompt-settings.js': {},
+    '../lib/promptConfig.js': {},
+  });
+
+  await summarizeArticle({
+    id: 'art_reddit',
+    title: '[r/test] Launch feedback',
+    raw_excerpt: '',
+    raw_content: 'User abc: "Your site says #1 couples app, but the store says 1k downloads."',
+    language: 'en',
+    source_name: 'Reddit',
+  }, {
+    output_language: 'Vietnamese',
+    topic_priorities: ['AI/LLM'],
+    allowed_tags: ['AI'],
+    digest_headings: ['AI'],
+    custom_context: '',
+  });
+
+  assert.match(capturedPrompt, /dịch hoặc diễn giải/i);
+  assert.match(capturedPrompt, /không chép nguyên văn/i);
+  assert.match(capturedPrompt, /thuật ngữ chuyên ngành/i);
+});
