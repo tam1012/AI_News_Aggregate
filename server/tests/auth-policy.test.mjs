@@ -21,6 +21,7 @@ function loadTsModule(relativePath) {
     process: { env: {} },
     exports: moduleContext.exports,
     module: moduleContext,
+    require: () => ({ recordAuthFailure: () => ({ allowed: true, retryAfterSeconds: 0 }) }),
   });
   return moduleContext.exports;
 }

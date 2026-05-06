@@ -1,4 +1,6 @@
 import { Context, Next } from 'hono';
+import crypto from 'crypto';
+import { recordAuthFailure } from './rateLimit.js';
 
 const WEAK_ADMIN_TOKENS = new Set(['', 'change-me', 'change-me-to-a-random-string']);
 
@@ -23,8 +25,12 @@ export function assertAdminTokenConfigured() {
 
 export function hasValidAdminToken(authHeader?: string): boolean {
   const adminToken = process.env.ADMIN_TOKEN || '';
-  if (isWeakAdminToken(adminToken)) return false;
-  return extractBearerToken(authHeader) === adminToken;
+  const candidate = extractBearerToken(authHeader);
+  if (isWeakAdminToken(adminToken) || !candidate) return false;
+
+  const expected = Buffer.from(adminToken);
+  const actual = Buffer.from(candidate);
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 
 export function requiresAdminTokenForRequest(method: string, path: string): boolean {
@@ -50,6 +56,11 @@ export async function authMiddleware(c: Context, next: Next) {
 
   // Everything else needs token
   if (!hasValidAdminToken(c.req.header('Authorization'))) {
+    const rateLimit = recordAuthFailure(c);
+    if (!rateLimit.allowed) {
+      c.header('Retry-After', String(rateLimit.retryAfterSeconds));
+      return c.json({ success: false, error: { code: 'RATE_LIMITED', message: 'Too many invalid token attempts' } }, 429);
+    }
     return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid or missing token' } }, 401);
   }
 

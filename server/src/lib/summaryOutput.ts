@@ -5,6 +5,7 @@ export interface ParsedSummaryOutput {
   tags: string[];
   editorialMarkdown: string;
   usedStructuredOutput: boolean;
+  isUsable: boolean;
 }
 
 interface StructuredSummaryOutput {
@@ -76,27 +77,36 @@ function normalizeTags(value: unknown, allowedTags: string[]): string[] {
   return out;
 }
 
+function hasEnoughSummaryText(text: string): boolean {
+  return text.replace(/[#*_`\s-]/g, '').length >= 120;
+}
+
 export function parseAiSummaryOutput(raw: string, allowedTags: string[]): ParsedSummaryOutput {
   const parsed = parseJsonCandidate(raw);
   const editorialMarkdown = cleanText(parsed?.editorial_markdown);
 
   if (parsed && editorialMarkdown) {
+    const tldr = cleanText(parsed.tldr);
     return {
-      tldr: cleanText(parsed.tldr),
+      tldr,
       summaryShort: cleanText(parsed.summary_short) || null,
       hotScore: normalizeScore(parsed.hot_score),
       tags: normalizeTags(parsed.tags, allowedTags),
       editorialMarkdown,
       usedStructuredOutput: true,
+      isUsable: Boolean(tldr) && hasEnoughSummaryText(editorialMarkdown),
     };
   }
 
+  const legacyMarkdown = removeLegacyTldr(raw);
+  const legacyTldr = extractLegacyTldr(raw);
   return {
-    tldr: extractLegacyTldr(raw),
+    tldr: legacyTldr,
     summaryShort: null,
     hotScore: null,
     tags: [],
-    editorialMarkdown: removeLegacyTldr(raw),
+    editorialMarkdown: legacyMarkdown,
     usedStructuredOutput: false,
+    isUsable: Boolean(legacyTldr) && hasEnoughSummaryText(legacyMarkdown),
   };
 }

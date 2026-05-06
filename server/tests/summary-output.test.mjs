@@ -41,6 +41,7 @@ test('parse structured JSON summary output into article metadata and markdown', 
   assert.deepEqual(Array.from(parsed.tags), ['AI', 'Tech']);
   assert.equal(parsed.editorialMarkdown, '## Heading\n\nNội dung sâu.');
   assert.equal(parsed.usedStructuredOutput, true);
+  assert.equal(parsed.isUsable, false);
 });
 
 test('parse legacy markdown summary output and keep existing TLDR behavior', () => {
@@ -54,6 +55,7 @@ test('parse legacy markdown summary output and keep existing TLDR behavior', () 
   assert.deepEqual(Array.from(parsed.tags), []);
   assert.equal(parsed.editorialMarkdown, '## Legacy\n\nBody');
   assert.equal(parsed.usedStructuredOutput, false);
+  assert.equal(parsed.isUsable, false);
 });
 
 test('clamp score and normalize allowed tags from structured output', () => {
@@ -69,4 +71,18 @@ test('clamp score and normalize allowed tags from structured output', () => {
   assert.equal(parsed.hotScore, 10);
   assert.deepEqual(Array.from(parsed.tags), ['AI', 'Security', 'Crypto']);
   assert.equal(parsed.summaryShort, null);
+  assert.equal(parsed.isUsable, false);
+});
+
+test('mark long structured output with TLDR as usable', () => {
+  const { parseAiSummaryOutput } = loadTsModule('../src/lib/summaryOutput.ts');
+  const parsed = parseAiSummaryOutput(JSON.stringify({
+    tldr: 'Đây là tóm tắt chính.',
+    summary_short: 'Bản tóm tắt ngắn.',
+    hot_score: 7,
+    tags: ['AI'],
+    editorial_markdown: '## Bối cảnh chính\n\nNội dung phân tích đủ dài để người đọc hiểu bối cảnh, các bên liên quan, hệ quả và lý do sự kiện này đáng chú ý trong thực tế vận hành sản phẩm công nghệ.',
+  }), ['AI']);
+
+  assert.equal(parsed.isUsable, true);
 });

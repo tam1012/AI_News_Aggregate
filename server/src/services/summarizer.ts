@@ -160,7 +160,12 @@ export async function summarizeArticle(article: ArticleForSummary, promptConfig?
 
   try {
     const result = await callAi(prompt);
-    return parseAiSummaryOutput(result.trim(), config.allowed_tags);
+    const parsed = parseAiSummaryOutput(result.trim(), config.allowed_tags);
+    if (!parsed.isUsable) {
+      const repaired = await callAi(buildSummaryRepairPrompt(result, config));
+      return parseAiSummaryOutput(repaired.trim(), config.allowed_tags);
+    }
+    return parsed;
   } catch (err: any) {
     if (isAiSafetyRejection(err)) {
       try {
@@ -175,6 +180,26 @@ export async function summarizeArticle(article: ArticleForSummary, promptConfig?
     console.error(`Failed to summarize article ${article.id}:`, err.message);
     throw err;
   }
+}
+
+function buildSummaryRepairPrompt(rawOutput: string, config: PromptConfig): string {
+  return `Convert the following AI summary into exactly one valid JSON object. Do not add facts, do not wrap the JSON in markdown fences, and preserve the original meaning. Write in natural Vietnamese when the output language is Vietnamese. Translate or paraphrase foreign-language sentences into ${config.output_language}; do not copy full foreign-language sentences verbatim. Preserve proper nouns, product names, code, metrics, and specialist terms.
+
+Required JSON shape:
+{
+  "tldr": "1-2 natural sentences, max 200 characters",
+  "summary_short": "1 short paragraph, max 300 characters",
+  "hot_score": 1,
+  "tags": ["one to three allowed tags"],
+  "editorial_markdown": "full Markdown article"
+}
+
+Allowed tags: ${config.allowed_tags.join(', ')}
+Output language: ${config.output_language}
+
+<raw_output>
+${truncate(rawOutput, 8000)}
+</raw_output>`;
 }
 
 function buildSafeFallbackPrompt(article: ArticleForSummary, content: string, config: PromptConfig): string {

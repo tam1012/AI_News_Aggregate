@@ -16,6 +16,7 @@ import { imageProxy } from './routes/image-proxy.js';
 import { aiProviders } from './routes/ai-providers.js';
 import { settings } from './routes/settings.js';
 import { assertAdminTokenConfigured, authMiddleware } from './lib/auth.js';
+import { writeRateLimitMiddleware } from './lib/rateLimit.js';
 import { getOne } from './db/index.js';
 import { startCronJobs } from './jobs/scheduler.js';
 import { buildArticleMeta, injectArticleMeta } from './lib/openGraph.js';
@@ -46,7 +47,8 @@ app.use('/assets/*', async (c, next) => {
 // Image proxy (public, no auth required)
 app.route('/api/img', imageProxy);
 
-// Auth cho write operations
+// Auth and write protection
+app.use('/api/*', writeRateLimitMiddleware);
 app.use('/api/*', authMiddleware);
 
 // API Routes

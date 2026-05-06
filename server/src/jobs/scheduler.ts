@@ -19,6 +19,7 @@ import {
   buildResetRetryableFailedSummariesSql,
   buildResetStuckProcessingSummariesSql,
 } from '../lib/summaryRetryPolicy.js';
+import { runWithJobLock } from '../lib/jobLock.js';
 
 // Scrape ALL enabled sources (chay moi gio tai :00)
 async function runScrapeJob() {
@@ -205,11 +206,8 @@ async function runCleanupJob() {
 async function runRetryJob() {
   console.log(`[${new Date().toISOString()}] Running retry check...`);
   try {
-    // Reset stuck 'processing' > 5 phút (API timeout hoặc crash)
-    const stuckResult = await query(
-      `UPDATE articles SET summary_status = 'pending'
-       WHERE summary_status = 'processing' AND updated_at < NOW() - INTERVAL '5 minutes'`
-    );
+    const stuckStatement = buildResetStuckProcessingSummariesSql();
+    const stuckResult = await query(stuckStatement.sql, stuckStatement.params);
     if (stuckResult.rowCount && stuckResult.rowCount > 0) {
       console.log(`  Reset ${stuckResult.rowCount} stuck processing articles`);
     }
@@ -248,21 +246,17 @@ export function startCronJobs() {
   const intervalHours = parseInt(process.env.SCRAPE_INTERVAL_HOURS || '1');
 
   cron.schedule('0 * * * *', async () => {
-    try {
-      await runScrapeJob();
-    } catch (err) {
-      console.error(err);
-    }
+    runWithJobLock('scrape', runScrapeJob).catch(console.error);
   });
 
   // Summarize independently so slow AI never blocks source scraping.
   cron.schedule('*/10 * * * *', () => {
-    runSummarizeJob().catch(console.error);
+    runWithJobLock('summarize', runSummarizeJob).catch(console.error);
   });
 
   // Fetch discovered article URLs independently from source discovery.
   cron.schedule('*/5 * * * *', () => {
-    runArticleFetchJob().catch(console.error);
+    runWithJobLock('article-fetch', runArticleFetchJob).catch(console.error);
   });
 
   // Re-scrape active forum threads every 30 minutes (at :30 and :00 of non-scrape hours)
@@ -275,29 +269,27 @@ export function startCronJobs() {
       return;
     }
 
-    try {
+    runWithJobLock('forum-rescrape', async () => {
       const result = await runForumRescrapeJob();
       if (result.updated > 0) {
-        await runSummarizeJob();
+        await runWithJobLock('summarize', runSummarizeJob);
       }
-    } catch (err) {
-      console.error(err);
-    }
+    }).catch(console.error);
   });
 
   // Generate digest ở phút 30 (sau khi đã tóm tắt xong)
   cron.schedule(`30 */${intervalHours} * * *`, () => {
-    runDigestJob().catch(console.error);
+    runWithJobLock('digest', runDigestJob).catch(console.error);
   });
 
   // Retry & fix mỗi 10 phút
   cron.schedule('*/10 * * * *', () => {
-    runRetryJob().catch(console.error);
+    runWithJobLock('retry', runRetryJob).catch(console.error);
   });
 
   // Cleanup mỗi ngày lúc 2:43 AM
   cron.schedule('43 2 * * *', () => {
-    runCleanupJob().catch(console.error);
+    runWithJobLock('cleanup', runCleanupJob).catch(console.error);
   });
 
   console.log(`Cron jobs scheduled:`);
