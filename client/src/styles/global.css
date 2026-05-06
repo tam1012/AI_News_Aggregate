@@ -1107,3 +1107,12 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
     display: none !important;
   }
 }
+
+/* ===== Admin Clickable Cards ===== */
+.admin-clickable-card:hover {
+  background: var(--color-bg-hover) !important;
+  border-color: var(--color-accent) !important;
+}
+.admin-clickable-row:hover {
+  background: var(--color-bg-hover);
+}

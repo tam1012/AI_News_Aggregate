@@ -142,6 +142,17 @@ export function Admin() {
   const [tab, setTab] = useState<AdminTab>('overview');
   const { data: health, loading, error, reload } = useFetch<any>(() => api.getHealth());
   const [actionLoading, setActionLoading] = useState('');
+  const [queueFilter, setQueueFilter] = useState<SummaryQueueStatus>('failed');
+  const [fetchFilter, setFetchFilter] = useState<FetchJobStatus>('failed');
+
+  const goToQueue = (status: SummaryQueueStatus) => {
+    setQueueFilter(status);
+    setTab('queue');
+  };
+  const goToFetch = (status: FetchJobStatus) => {
+    setFetchFilter(status);
+    setTab('fetchJobs');
+  };
 
   const trigger = async (action: string, fn: () => Promise<any>) => {
     setActionLoading(action);
@@ -202,23 +213,23 @@ export function Admin() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
                   {[
-                    ['Nguồn đang lỗi', health.sources?.failing, health.sources?.failing > 0 ? 'var(--color-error)' : 'var(--color-success)', `${numberText(health.sources?.backed_off)} nguồn đang chờ thử lại`],
-                    ['URL chưa lấy bài', health.articleFetchJobs?.discovered, health.articleFetchJobs?.failed > 0 ? 'var(--color-error)' : 'var(--color-warning)', `${numberText(health.articleFetchJobs?.failed)} lỗi · ${numberText(health.articleFetchJobs?.retryable_failed)} có thể thử lại`],
-                    ['Bài chờ tóm tắt', health.articles?.pending, health.articles?.failed > 0 ? 'var(--color-error)' : 'var(--color-warning)', `${numberText(health.articles?.failed)} lỗi · ${numberText(health.articles?.retryable_failed)} sẽ thử lại`],
-                    ['Bài bị bỏ qua', health.articles?.skipped, 'var(--color-text-muted)', 'Thường do nội dung quá ngắn hoặc AI từ chối'],
-                  ].map(([label, value, color, note]) => (
-                    <div key={String(label)} style={{ padding: '10px 12px', border: '1px solid var(--color-border-light)', borderRadius: 8 }}>
-                      <div style={{ fontSize: '1.55rem', lineHeight: 1, fontWeight: 800, color: String(color) }}>{value || 0}</div>
-                      <div style={{ fontSize: '0.82rem', fontWeight: 600, marginTop: 6 }}>{label}</div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: 3 }}>{note}</div>
+                    { label: 'Nguồn đang lỗi', value: health.sources?.failing, color: health.sources?.failing > 0 ? 'var(--color-error)' : 'var(--color-success)', note: `${numberText(health.sources?.backed_off)} nguồn đang chờ thử lại`, onClick: () => window.location.href = '/sources', tip: 'Mở trang Nguồn tin để xem chi tiết' },
+                    { label: 'URL chưa lấy bài', value: health.articleFetchJobs?.discovered, color: health.articleFetchJobs?.failed > 0 ? 'var(--color-error)' : 'var(--color-warning)', note: `${numberText(health.articleFetchJobs?.failed)} lỗi · ${numberText(health.articleFetchJobs?.retryable_failed)} có thể thử lại`, onClick: () => goToFetch('discovered'), tip: 'Xem danh sách URL đang chờ lấy nội dung' },
+                    { label: 'Bài chờ tóm tắt', value: health.articles?.pending, color: health.articles?.failed > 0 ? 'var(--color-error)' : 'var(--color-warning)', note: `${numberText(health.articles?.failed)} lỗi · ${numberText(health.articles?.retryable_failed)} sẽ thử lại`, onClick: () => goToQueue('pending'), tip: 'Xem danh sách bài đang chờ AI tóm tắt' },
+                    { label: 'Bài bị bỏ qua', value: health.articles?.skipped, color: 'var(--color-text-muted)', note: 'Thường do nội dung quá ngắn hoặc AI từ chối', onClick: () => goToQueue('skipped'), tip: 'Xem bài bị bỏ qua — có thể xóa hoặc tóm tắt lại' },
+                  ].map((item) => (
+                    <div key={item.label} onClick={item.onClick} title={item.tip} style={{ padding: '10px 12px', border: '1px solid var(--color-border-light)', borderRadius: 8, cursor: 'pointer', transition: 'background 0.15s' }} className="admin-clickable-card">
+                      <div style={{ fontSize: '1.55rem', lineHeight: 1, fontWeight: 800, color: item.color }}>{item.value || 0}</div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 600, marginTop: 6 }}>{item.label} ›</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: 3 }}>{item.note}</div>
                     </div>
                   ))}
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
-                <div className="card">
-                  <div style={{ fontWeight: 700, marginBottom: 10 }}>Tình trạng nguồn tin</div>
+                <div className="card admin-clickable-card" onClick={() => window.location.href = '/sources'} title="Mở trang Nguồn tin" style={{ cursor: 'pointer' }}>
+                  <div style={{ fontWeight: 700, marginBottom: 10 }}>Tình trạng nguồn tin ›</div>
                   <div style={{ display: 'grid', gap: 8 }}>
                     {[
                       ['Tổng nguồn', health.sources?.total],
@@ -240,14 +251,14 @@ export function Admin() {
                   <div style={{ fontWeight: 700, marginBottom: 10 }}>Tình trạng bài viết</div>
                   <div style={{ display: 'grid', gap: 8 }}>
                     {[
-                      ['Tổng bài', health.articles?.total],
-                      ['Đã tóm tắt', health.articles?.done],
-                      ['Đang tóm tắt', health.articles?.processing],
-                      ['Tóm tắt lỗi', health.articles?.failed],
-                    ].map(([label, value]) => (
-                      <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.86rem' }}>
-                        <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
-                        <strong>{value || 0}</strong>
+                      { label: 'Tổng bài', value: health.articles?.total, tip: 'Tổng số bài viết trong hệ thống' },
+                      { label: 'Đã tóm tắt', value: health.articles?.done, onClick: () => goToQueue('done'), tip: 'Bài đã được AI tóm tắt thành công' },
+                      { label: 'Đang tóm tắt', value: health.articles?.processing, onClick: () => goToQueue('processing'), tip: 'Bài đang được AI xử lý' },
+                      { label: 'Tóm tắt lỗi', value: health.articles?.failed, onClick: () => goToQueue('failed'), tip: 'Bài tóm tắt bị lỗi — bấm để xem và xử lý' },
+                    ].map((item) => (
+                      <div key={item.label} onClick={item.onClick} title={item.tip} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.86rem', cursor: item.onClick ? 'pointer' : 'default', padding: '2px 4px', borderRadius: 4, transition: 'background 0.15s' }} className={item.onClick ? 'admin-clickable-row' : undefined}>
+                        <span style={{ color: 'var(--color-text-muted)' }}>{item.label}{item.onClick ? ' ›' : ''}</span>
+                        <strong>{item.value || 0}</strong>
                       </div>
                     ))}
                   </div>
@@ -257,14 +268,14 @@ export function Admin() {
                   <div style={{ fontWeight: 700, marginBottom: 10 }}>Hàng đợi lấy bài</div>
                   <div style={{ display: 'grid', gap: 8 }}>
                     {[
-                      ['Tổng URL', health.articleFetchJobs?.total],
-                      ['Chờ lấy bài', health.articleFetchJobs?.discovered],
-                      ['Đang lấy bài', health.articleFetchJobs?.fetching],
-                      ['Lấy bài lỗi', health.articleFetchJobs?.failed],
-                    ].map(([label, value]) => (
-                      <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.86rem' }}>
-                        <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
-                        <strong>{value || 0}</strong>
+                      { label: 'Tổng URL', value: health.articleFetchJobs?.total, tip: 'Tổng URL đã phát hiện từ các nguồn' },
+                      { label: 'Chờ lấy bài', value: health.articleFetchJobs?.discovered, onClick: () => goToFetch('discovered'), tip: 'URL đã phát hiện nhưng chưa lấy nội dung' },
+                      { label: 'Đang lấy bài', value: health.articleFetchJobs?.fetching, onClick: () => goToFetch('fetching'), tip: 'URL đang được hệ thống lấy nội dung' },
+                      { label: 'Lấy bài lỗi', value: health.articleFetchJobs?.failed, onClick: () => goToFetch('failed'), tip: 'URL lấy nội dung bị lỗi — bấm để xem và thử lại' },
+                    ].map((item) => (
+                      <div key={item.label} onClick={item.onClick} title={item.tip} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.86rem', cursor: item.onClick ? 'pointer' : 'default', padding: '2px 4px', borderRadius: 4, transition: 'background 0.15s' }} className={item.onClick ? 'admin-clickable-row' : undefined}>
+                        <span style={{ color: 'var(--color-text-muted)' }}>{item.label}{item.onClick ? ' ›' : ''}</span>
+                        <strong>{item.value || 0}</strong>
                       </div>
                     ))}
                   </div>
@@ -433,8 +444,8 @@ export function Admin() {
         </div>
       )}
 
-      {tab === 'queue' && <SummaryQueueTab />}
-      {tab === 'fetchJobs' && <FetchJobsTab />}
+      {tab === 'queue' && <SummaryQueueTab initialStatus={queueFilter} />}
+      {tab === 'fetchJobs' && <FetchJobsTab initialStatus={fetchFilter} />}
       {tab === 'ai' && <AiProvidersTab />}
       {tab === 'prompt' && <PromptConfigTab />}
 
@@ -1060,8 +1071,8 @@ function AiProvidersTab() {
   );
 }
 
-function SummaryQueueTab() {
-  const [status, setStatus] = useState<SummaryQueueStatus>('failed');
+function SummaryQueueTab({ initialStatus }: { initialStatus?: SummaryQueueStatus }) {
+  const [status, setStatus] = useState<SummaryQueueStatus>(initialStatus || 'failed');
   const [page, setPage] = useState(1);
   const [actionLoading, setActionLoading] = useState('');
   const { data: raw, loading, error, reload } = useFetchRaw(
@@ -1193,8 +1204,8 @@ function SummaryQueueTab() {
   );
 }
 
-function FetchJobsTab() {
-  const [status, setStatus] = useState<FetchJobStatus>('failed');
+function FetchJobsTab({ initialStatus }: { initialStatus?: FetchJobStatus }) {
+  const [status, setStatus] = useState<FetchJobStatus>(initialStatus || 'failed');
   const [page, setPage] = useState(1);
   const [actionLoading, setActionLoading] = useState('');
   const { data: raw, loading, error, reload } = useFetchRaw(
