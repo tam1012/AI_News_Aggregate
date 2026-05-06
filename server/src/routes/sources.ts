@@ -206,6 +206,7 @@ sources.post('/:id/scrape', async (c) => {
 
   try {
     const fetcher = getFetcherForSource(source, sourceFetchers);
+    const scrapeIntervalHours = Math.max(1, Math.ceil(source.fetch_interval_minutes / 60));
     let result;
     if (fetcher.discover) {
       const discovered = await fetcher.discover(source);
@@ -216,8 +217,8 @@ sources.post('/:id/scrape', async (c) => {
     }
 
     const nextRunDelayMinutes = result.errors.length > 0
-      ? Math.min(source.fetch_interval_minutes * 2, 24 * 60)
-      : source.fetch_interval_minutes;
+      ? Math.min(scrapeIntervalHours * 60 * 2, 24 * 60)
+      : scrapeIntervalHours * 60;
     const status = result.errors.length > 0 ? (result.itemsInserted > 0 ? 'partial' : 'failed') : 'success';
     const errorMessage = result.errors.length > 0 ? result.errors.join('; ').substring(0, 500) : null;
 
@@ -233,9 +234,9 @@ sources.post('/:id/scrape', async (c) => {
     );
 
     await query(
-      `INSERT INTO scrape_logs (id, source_id, job_type, status, started_at, finished_at, items_found, items_inserted, error_message)
-       VALUES ($1, $2, 'manual_source_scrape', $3, $4, NOW(), $5, $6, $7)`,
-      [logId, source.id, status, startedAt, result.itemsFound, result.itemsInserted, errorMessage]
+      `INSERT INTO scrape_logs (id, source_id, job_type, status, started_at, finished_at, items_found, items_inserted, error_message, metadata)
+       VALUES ($1, $2, 'manual_source_scrape', $3, $4, NOW(), $5, $6, $7, $8)`,
+      [logId, source.id, status, startedAt, result.itemsFound, result.itemsInserted, errorMessage, result.metadata ? JSON.stringify(result.metadata) : null]
     );
 
     return c.json({
@@ -250,7 +251,7 @@ sources.post('/:id/scrape', async (c) => {
   } catch (err: any) {
     const message = err.message.substring(0, 500);
     const failureCount = source.consecutive_failures + 1;
-    const backoffMinutes = Math.min(source.fetch_interval_minutes * Math.pow(2, Math.max(failureCount - 1, 0)), 24 * 60);
+    const backoffMinutes = Math.min(Math.max(1, Math.ceil(source.fetch_interval_minutes / 60)) * 60 * Math.pow(2, Math.max(failureCount - 1, 0)), 24 * 60);
 
     await query(
       `UPDATE sources SET

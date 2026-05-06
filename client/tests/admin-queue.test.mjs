@@ -24,3 +24,13 @@ test('summary queue filters articles by summary status and shows operational fie
   assert.match(source, /Tóm tắt lại/);
   assert.match(source, /Chạy tóm tắt/);
 });
+
+test('admin overview exposes forum observability labels', () => {
+  const source = readFileSync(resolve(__dirname, '../src/pages/Admin.tsx'), 'utf8');
+
+  assert.match(source, /Theo dõi forum Reddit\/VOZ/);
+  assert.match(source, /Bỏ qua: ít comment/);
+  assert.match(source, /Bỏ qua: ít comment hữu ích/);
+  assert.match(source, /Lỗi fetch comment/);
+  assert.match(source, /health\.forum\.totals24h/);
+});

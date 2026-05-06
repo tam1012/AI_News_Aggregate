@@ -38,6 +38,8 @@ async function runScrapeJob() {
     const logId = generateId('log');
     const startedAt = new Date().toISOString();
 
+    const scrapeIntervalHours = Math.max(1, Math.ceil(source.fetch_interval_minutes / 60));
+
     try {
       console.log(`  Scraping [${source.type}] ${source.name}...`);
       const fetcher = getFetcherForSource(source, sourceFetchers);
@@ -51,8 +53,8 @@ async function runScrapeJob() {
       }
 
       const nextRunDelayMinutes = result.errors.length > 0
-        ? Math.min(source.fetch_interval_minutes * 2, 24 * 60)
-        : source.fetch_interval_minutes;
+        ? Math.min(scrapeIntervalHours * 60 * 2, 24 * 60)
+        : scrapeIntervalHours * 60;
 
       await query(
         `UPDATE sources SET
@@ -66,10 +68,11 @@ async function runScrapeJob() {
       // Log
       const status = result.errors.length > 0 ? (result.itemsInserted > 0 ? 'partial' : 'failed') : 'success';
       await query(
-        `INSERT INTO scrape_logs (id, source_id, job_type, status, started_at, finished_at, items_found, items_inserted, error_message)
-         VALUES ($1, $2, 'scrape', $3, $4, NOW(), $5, $6, $7)`,
+        `INSERT INTO scrape_logs (id, source_id, job_type, status, started_at, finished_at, items_found, items_inserted, error_message, metadata)
+         VALUES ($1, $2, 'scrape', $3, $4, NOW(), $5, $6, $7, $8)`,
         [logId, source.id, status, startedAt, result.itemsFound, result.itemsInserted,
-         result.errors.length > 0 ? result.errors.join('; ') : null]
+         result.errors.length > 0 ? result.errors.join('; ') : null,
+         result.metadata ? JSON.stringify(result.metadata) : null]
       );
 
       console.log(`    -> ${result.itemsInserted}/${result.itemsFound} items inserted ${result.errors.length > 0 ? `(${result.errors.length} errors)` : ''}`);
@@ -80,7 +83,7 @@ async function runScrapeJob() {
         'SELECT consecutive_failures + 1 as consecutive_failures FROM sources WHERE id = $1',
         [source.id]
       );
-      const backoffMinutes = Math.min(source.fetch_interval_minutes * Math.pow(2, Math.max((failureCount?.consecutive_failures || 1) - 1, 0)), 24 * 60);
+      const backoffMinutes = Math.min(scrapeIntervalHours * 60 * Math.pow(2, Math.max((failureCount?.consecutive_failures || 1) - 1, 0)), 24 * 60);
 
       await query(
         `UPDATE sources SET
@@ -225,7 +228,7 @@ async function runRetryJob() {
     try {
       const redditRetry = await retryRedditComments();
       redditEnriched = redditRetry.enriched;
-      console.log(`  Reddit comments retry: checked=${redditRetry.checked}, enriched=${redditRetry.enriched}`);
+      console.log(`  Reddit comments retry: checked=${redditRetry.checked}, enriched=${redditRetry.enriched}, empty=${redditRetry.pullpushEmpty}, failed=${redditRetry.pullpushFailed}, noUseful=${redditRetry.noUsefulComments}, invalidUrl=${redditRetry.invalidUrl}`);
     } catch (err: any) {
       console.log(`  Reddit retry error: ${err.message}`);
     }
@@ -242,10 +245,9 @@ async function runRetryJob() {
 }
 
 export function startCronJobs() {
-  const intervalHours = parseInt(process.env.SCRAPE_INTERVAL_HOURS || '3');
+  const intervalHours = parseInt(process.env.SCRAPE_INTERVAL_HOURS || '1');
 
-  // Scrape at minute 0 past every X hours (e.g. 0, 3, 6, 9...)
-  cron.schedule(`0 */${intervalHours} * * *`, async () => {
+  cron.schedule('0 * * * *', async () => {
     try {
       await runScrapeJob();
     } catch (err) {
@@ -299,7 +301,7 @@ export function startCronJobs() {
   });
 
   console.log(`Cron jobs scheduled:`);
-  console.log(`  - Scrape: every ${intervalHours}h at :00`);
+  console.log(`  - Scrape due sources: hourly at :00`);
   console.log(`  - Article Fetch: every 5 minutes`);
   console.log(`  - Summarize: every 10 minutes`);
   console.log(`  - Forum Rescrape: every 30 mins (max 2 times per article)`);

@@ -26,6 +26,7 @@ export interface ScrapeResult {
   itemsFound: number;
   itemsInserted: number;
   errors: string[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface SourceFetcher {

@@ -95,6 +95,18 @@ function statusLabel(value: string): string {
   return labels[value] || value;
 }
 
+function forumKindLabel(kind: string): string {
+  const labels: Record<string, string> = {
+    reddit: 'Reddit',
+    voz: 'VOZ',
+  };
+  return labels[kind] || kind;
+}
+
+function forumStatsValue(row: any, key: string): number {
+  return Number(row?.[key] || row?.forum?.[key] || 0);
+}
+
 export function Admin() {
   const [tab, setTab] = useState<AdminTab>('overview');
   const { data: health, loading, error, reload } = useFetch<any>(() => api.getHealth());
@@ -226,6 +238,58 @@ export function Admin() {
                   </div>
                 </div>
               </div>
+
+              {health.forum && ((health.forum.totals24h?.length || 0) > 0 || (health.forum.recent?.length || 0) > 0) && (
+                <div className="card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontWeight: 700 }}>Theo dõi forum Reddit/VOZ</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
+                        Số liệu 24h gần nhất để biết thread bị bỏ qua vì ít comment, ít comment hữu ích hay lỗi fetch.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8, marginBottom: 12 }}>
+                    {health.forum.totals24h?.map((row: any) => (
+                      <div key={row.kind} style={{ padding: '10px 12px', border: '1px solid var(--color-border-light)', borderRadius: 8 }}>
+                        <div style={{ fontSize: '0.86rem', fontWeight: 700, marginBottom: 8 }}>{forumKindLabel(row.kind)}</div>
+                        <div style={{ display: 'grid', gap: 5, fontSize: '0.78rem' }}>
+                          {[
+                            ['Thread đã xem', row.threadsSeen],
+                            ['Đã thêm', row.inserted],
+                            ['Bỏ qua: ít comment', row.skippedFewComments],
+                            ['Bỏ qua: ít comment hữu ích', row.skippedFewUsefulComments],
+                            ['Trùng bài', row.skippedDuplicate],
+                            ['Lỗi fetch comment', row.fetchErrors],
+                          ].map(([label, value]) => (
+                            <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                              <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
+                              <strong>{value || 0}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {health.forum.recent?.length > 0 && (
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {health.forum.recent.slice(0, 4).map((log: any, i: number) => (
+                        <div key={`${log.source_id || 'forum'}-${log.started_at}-${i}`} style={{ fontSize: '0.78rem', paddingTop: i === 0 ? 0 : 8, borderTop: i === 0 ? 'none' : '1px solid var(--color-border-light)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                            <strong>{log.source_name || log.source_id || forumKindLabel(log.forum?.kind)}</strong>
+                            <span style={{ color: 'var(--color-text-muted)' }}>{new Date(log.started_at).toLocaleString('vi-VN')}</span>
+                          </div>
+                          <div style={{ color: 'var(--color-text-muted)', marginTop: 3 }}>
+                            {forumKindLabel(log.forum?.kind)} · xem {forumStatsValue(log, 'threadsSeen')} · thêm {forumStatsValue(log, 'inserted')} · ít comment {forumStatsValue(log, 'skippedFewComments')} · ít hữu ích {forumStatsValue(log, 'skippedFewUsefulComments')} · lỗi fetch {forumStatsValue(log, 'fetchErrors')}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {health.lastDigest && (
                 <div className="card">

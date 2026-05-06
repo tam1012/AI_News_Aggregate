@@ -1,0 +1,2 @@
+ALTER TABLE scrape_logs
+  ADD COLUMN IF NOT EXISTS metadata JSONB;

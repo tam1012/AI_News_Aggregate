@@ -147,6 +147,67 @@ interface ScrapeResult {
   itemsFound: number;
   itemsInserted: number;
   errors: string[];
+  metadata?: Record<string, unknown>;
+}
+
+type ForumSkipReason = 'few_comments' | 'few_useful_comments' | 'duplicate' | 'comment_fetch_failed';
+
+type ForumStrategyName = 'oauth' | 'puppeteer' | 'rss' | 'proxy' | 'pullpush';
+
+interface ForumScrapeStats {
+  kind: 'reddit' | 'voz';
+  threadsSeen: number;
+  inserted: number;
+  skippedFewComments: number;
+  skippedFewUsefulComments: number;
+  skippedDuplicate: number;
+  fetchErrors: number;
+  strategies?: Record<ForumStrategyName, { attempts: number; successes: number }>;
+}
+
+function createForumScrapeStats(kind: 'reddit' | 'voz'): ForumScrapeStats {
+  const stats: ForumScrapeStats = {
+    kind,
+    threadsSeen: 0,
+    inserted: 0,
+    skippedFewComments: 0,
+    skippedFewUsefulComments: 0,
+    skippedDuplicate: 0,
+    fetchErrors: 0,
+  };
+
+  if (kind === 'reddit') {
+    stats.strategies = {
+      oauth: { attempts: 0, successes: 0 },
+      puppeteer: { attempts: 0, successes: 0 },
+      rss: { attempts: 0, successes: 0 },
+      proxy: { attempts: 0, successes: 0 },
+      pullpush: { attempts: 0, successes: 0 },
+    };
+  }
+
+  return stats;
+}
+
+function markForumSkip(stats: ForumScrapeStats, reason: ForumSkipReason) {
+  if (reason === 'few_comments') stats.skippedFewComments++;
+  if (reason === 'few_useful_comments') stats.skippedFewUsefulComments++;
+  if (reason === 'duplicate') stats.skippedDuplicate++;
+  if (reason === 'comment_fetch_failed') stats.fetchErrors++;
+}
+
+function getForumSkipReason(commentCount: number, minComments: number, usefulCount: number, minUsefulComments = 3): ForumSkipReason | null {
+  if (commentCount === 0) return 'comment_fetch_failed';
+  if (commentCount < minComments) return 'few_comments';
+  if (usefulCount < minUsefulComments) return 'few_useful_comments';
+  return null;
+}
+
+function markRedditStrategy(stats: ForumScrapeStats, strategy: ForumStrategyName, success: boolean) {
+  const entry = stats.strategies?.[strategy];
+  if (!entry) return;
+  entry.attempts++;
+  if (success) entry.successes++;
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
@@ -268,7 +329,8 @@ export function buildRedditRawContent(postContent: string, linkUrl: string | nul
 }
 
 export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResult> {
-  const result: ScrapeResult = { itemsFound: 0, itemsInserted: 0, errors: [] };
+  const forumStats = createForumScrapeStats('reddit');
+  const result: ScrapeResult = { itemsFound: 0, itemsInserted: 0, errors: [], metadata: { forum: forumStats } };
   const subreddit = extractSubreddit(source.url);
   if (!subreddit) {
     result.errors.push('Could not extract subreddit name');
@@ -302,8 +364,12 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
 
       const url = normalizePublicHttpUrl(item.link);
       if (!url) continue;
+      forumStats.threadsSeen++;
       const existing = await getOne('SELECT id FROM articles WHERE url = $1', [url]);
-      if (existing) continue;
+      if (existing) {
+        markForumSkip(forumStats, 'duplicate');
+        continue;
+      }
 
       const postPath = new URL(url).pathname;
       const rssContent = item.contentSnippet || item.content || '';
@@ -316,6 +382,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
         const postId = postPath.match(/\/comments\/([a-z0-9]+)/)?.[1];
 
         if (hasRedditOAuth()) {
+          markRedditStrategy(forumStats, 'oauth', false);
           // Use OAuth API for full comment access
           const commentsData = await redditApiFetch(`${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`);
           if (commentsData) {
@@ -330,12 +397,14 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
             const flattened: ForumComment[] = [];
             flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
             discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
+            markRedditStrategy(forumStats, 'oauth', discussionComments.length > 0);
           }
         } else if (enrichedCount < MAX_ENRICH_PER_RUN) {
           enrichedCount++;
 
           // Strategy 1: Puppeteer Headless Browser (Mimics real user to bypass blocks)
           try {
+            markRedditStrategy(forumStats, 'puppeteer', false);
             const oldUrl = `https://old.reddit.com${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
             const rawJsonText = await browserFetch(oldUrl, 25000, true);
             if (rawJsonText && (rawJsonText.trim().startsWith('[') || rawJsonText.trim().startsWith('{'))) {
@@ -353,6 +422,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
                 flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
                 discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
                 if (discussionComments.length > 0) {
+                  markRedditStrategy(forumStats, 'puppeteer', true);
                   console.log(`[reddit] Puppeteer (old.reddit.com): got ${discussionComments.length} comments for ${postPath}`);
                 }
               }
@@ -364,6 +434,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
           // Strategy 2: Comment RSS Feed (Native backdoor, bypasses Cloudflare JSON block)
           if (discussionComments.length === 0) {
             try {
+              markRedditStrategy(forumStats, 'rss', false);
               const commentRssUrl = `https://www.reddit.com${postPath}.rss`;
               const rssRes = await fetch(commentRssUrl, {
                 headers: {
@@ -393,6 +464,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
                 }
                 discussionComments = selectForumComments(comments, REDDIT_COMMENT_LIMIT);
                 if (discussionComments.length > 0) {
+                  markRedditStrategy(forumStats, 'rss', true);
                   console.log(`[reddit] RSS Comment Fallback: got ${discussionComments.length} comments for ${postPath}`);
                 }
               }
@@ -404,6 +476,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
           // Strategy 3: Cloudflare Worker proxy (real-time Reddit API access)
           if (discussionComments.length === 0 && REDDIT_PROXY_URL) {
             try {
+              markRedditStrategy(forumStats, 'proxy', false);
               const proxyUrl = `${REDDIT_PROXY_URL}?path=${encodeURIComponent(postPath + '.json')}&limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
               const proxyRes = await curlFetch(proxyUrl, 'application/json', 15);
               if (proxyRes.ok) {
@@ -421,6 +494,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
                   flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
                   discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
                   if (discussionComments.length > 0) {
+                    markRedditStrategy(forumStats, 'proxy', true);
                     console.log(`[reddit] Proxy: got ${discussionComments.length} comments for ${postPath}`);
                   }
                 }
@@ -433,6 +507,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
           // Strategy 4: Pullpush archive API (fallback, data may be stale)
           if (discussionComments.length === 0 && postId) {
             try {
+              markRedditStrategy(forumStats, 'pullpush', false);
               const pullpushUrl = `https://api.pullpush.io/reddit/comment/search?link_id=${postId}&size=${REDDIT_COMMENT_LIMIT}&sort=score&sort_type=score`;
               const pullpushRes = await curlFetch(pullpushUrl, 'application/json', 10);
               if (pullpushRes.ok) {
@@ -449,6 +524,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
                   }));
                 discussionComments = selectForumComments(pullpushComments, REDDIT_COMMENT_LIMIT);
                 if (pullpushComments.length > 0) {
+                  markRedditStrategy(forumStats, 'pullpush', discussionComments.length > 0);
                   console.log(`[reddit] Pullpush: got ${pullpushComments.length} comments for ${postPath}`);
                 }
               }
@@ -461,15 +537,20 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
       }
 
       const selectedRedditComments = selectForumComments(discussionComments, REDDIT_COMMENT_LIMIT);
-      if (!shouldInsertForumArticle('reddit', discussionComments.length, REDDIT_MIN_COMMENTS, selectedRedditComments)) {
-        console.log(`[reddit] Skip ${postPath}: ${discussionComments.length} comments/replies, ${selectedRedditComments.length} useful`);
+      const skipReason = getForumSkipReason(discussionComments.length, REDDIT_MIN_COMMENTS, selectedRedditComments.length);
+      if (skipReason) {
+        markForumSkip(forumStats, skipReason);
+        console.log(`[reddit] Skip ${postPath}: reason=${skipReason}, ${discussionComments.length} comments/replies, ${selectedRedditComments.length} useful`);
         continue;
       }
 
       const fullContent = buildRedditRawContent(postContent, outboundUrl, selectedRedditComments, discussionComments.length);
       const contentHash = createContentHash(item.title + fullContent.substring(0, 300));
       const hashExists = await getOne('SELECT id FROM articles WHERE content_hash = $1', [contentHash]);
-      if (hashExists) continue;
+      if (hashExists) {
+        markForumSkip(forumStats, 'duplicate');
+        continue;
+      }
 
       const excerpt = truncate(stripHtmlBasic(rssContent) || item.title, 500);
       let imageUrl: string | null = null;
@@ -498,7 +579,10 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
           truncate(fullContent || item.title, FORUM_RAW_CONTENT_MAX_LENGTH), contentHash, imageUrl,
         ]
       );
-      if (insertResult.rowCount && insertResult.rowCount > 0) result.itemsInserted++;
+      if (insertResult.rowCount && insertResult.rowCount > 0) {
+        result.itemsInserted++;
+        forumStats.inserted++;
+      }
     }
   } catch (err: any) {
     result.errors.push(err.message);
@@ -508,7 +592,8 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
 }
 
 export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> {
-  const result: ScrapeResult = { itemsFound: 0, itemsInserted: 0, errors: [] };
+  const forumStats = createForumScrapeStats('voz');
+  const result: ScrapeResult = { itemsFound: 0, itemsInserted: 0, errors: [], metadata: { forum: forumStats } };
 
   try {
     const sourceUrl = normalizePublicHttpUrl(source.url);
@@ -534,13 +619,20 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
 
       const url = normalizePublicHttpUrl(item.link);
       if (!url) continue;
+      forumStats.threadsSeen++;
       const existing = await getOne('SELECT id FROM articles WHERE url = $1', [url]);
-      if (existing) continue;
+      if (existing) {
+        markForumSkip(forumStats, 'duplicate');
+        continue;
+      }
 
       const rawExcerpt = item.contentSnippet || item.content || '';
       const contentHash = createContentHash(item.title + rawExcerpt.substring(0, 200));
       const hashExists = await getOne('SELECT id FROM articles WHERE content_hash = $1', [contentHash]);
-      if (hashExists) continue;
+      if (hashExists) {
+        markForumSkip(forumStats, 'duplicate');
+        continue;
+      }
 
       let fullContent = '';
       let imageUrl: string | null = null;
@@ -595,8 +687,10 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
             }));
 
           const selectedComments = selectForumComments(comments, FORUM_MAX_COMMENTS);
-          if (!shouldInsertForumArticle('voz', comments.length, FORUM_MIN_COMMENTS, selectedComments)) {
-            console.log(`[voz] Skip ${url}: ${comments.length} replies, ${selectedComments.length} useful`);
+          const skipReason = getForumSkipReason(comments.length, FORUM_MIN_COMMENTS, selectedComments.length);
+          if (skipReason) {
+            markForumSkip(forumStats, skipReason);
+            console.log(`[voz] Skip ${url}: reason=${skipReason}, ${comments.length} replies, ${selectedComments.length} useful`);
             continue;
           }
 
@@ -607,7 +701,8 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
       }
 
       if (!fullContent) {
-        console.log(`[voz] Skip ${url}: could not verify at least ${FORUM_MIN_COMMENTS} replies`);
+        markForumSkip(forumStats, 'comment_fetch_failed');
+        console.log(`[voz] Skip ${url}: reason=comment_fetch_failed, could not verify at least ${FORUM_MIN_COMMENTS} replies`);
         continue;
       }
 
@@ -636,7 +731,11 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
           truncate(fullContent, FORUM_RAW_CONTENT_MAX_LENGTH), contentHash, imageUrl,
         ]
       );
-      if (insertResult.rowCount && insertResult.rowCount > 0) result.itemsInserted++;
+      if (insertResult.rowCount && insertResult.rowCount > 0) {
+        result.itemsInserted++;
+        forumStats.inserted++;
+      }
+
     }
   } catch (err: any) {
     result.errors.push(err.message);
@@ -653,8 +752,17 @@ export function stripHtmlBasic(html: string): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+interface RedditRetryResult {
+  checked: number;
+  enriched: number;
+  invalidUrl: number;
+  pullpushFailed: number;
+  pullpushEmpty: number;
+  noUsefulComments: number;
+}
+
 // Retry lấy comment Reddit cho các bài chưa có comment (Pullpush index chậm)
-export async function retryRedditComments(): Promise<{ checked: number; enriched: number }> {
+export async function retryRedditComments(): Promise<RedditRetryResult> {
   const MAX_RETRY = 10;
 
   // Tìm bài Reddit tạo trong 48h qua, có raw_content chứa "Đã trích 0 comment"
@@ -670,21 +778,36 @@ export async function retryRedditComments(): Promise<{ checked: number; enriched
     [MAX_RETRY]
   );
 
-  if (articles.length === 0) return { checked: 0, enriched: 0 };
+  if (articles.length === 0) {
+    return { checked: 0, enriched: 0, invalidUrl: 0, pullpushFailed: 0, pullpushEmpty: 0, noUsefulComments: 0 };
+  }
 
-  let enriched = 0;
+  const retryResult: RedditRetryResult = {
+    checked: articles.length,
+    enriched: 0,
+    invalidUrl: 0,
+    pullpushFailed: 0,
+    pullpushEmpty: 0,
+    noUsefulComments: 0,
+  };
 
   for (const article of articles) {
     try {
       // Extract post ID from URL: /r/sub/comments/POST_ID/...
       const postIdMatch = article.url?.match(/\/comments\/([a-z0-9]+)/);
-      if (!postIdMatch) continue;
+      if (!postIdMatch) {
+        retryResult.invalidUrl++;
+        continue;
+      }
       const postId = postIdMatch[1];
 
       await sleep(1000);
       const pullpushUrl = `https://api.pullpush.io/reddit/comment/search?link_id=${postId}&size=${REDDIT_COMMENT_LIMIT}&sort=score&sort_type=score`;
       const pullpushRes = await curlFetch(pullpushUrl, 'application/json', 10);
-      if (!pullpushRes.ok) continue;
+      if (!pullpushRes.ok) {
+        retryResult.pullpushFailed++;
+        continue;
+      }
 
       const pullpushData = await pullpushRes.json();
       const pullpushComments: ForumComment[] = (pullpushData.data || [])
@@ -698,9 +821,16 @@ export async function retryRedditComments(): Promise<{ checked: number; enriched
           score: scoreForumComment(c.body, c.score || 0, 1, idx),
         }));
 
-      if (pullpushComments.length === 0) continue;
+      if (pullpushComments.length === 0) {
+        retryResult.pullpushEmpty++;
+        continue;
+      }
 
       const selectedComments = selectForumComments(pullpushComments, FORUM_MAX_COMMENTS);
+      if (selectedComments.length === 0) {
+        retryResult.noUsefulComments++;
+        continue;
+      }
 
       // Reconstruct raw_content: keep original post content, replace comment section
       const existingContent = article.raw_content || '';
@@ -725,11 +855,12 @@ export async function retryRedditComments(): Promise<{ checked: number; enriched
       );
 
       console.log(`[reddit-retry] Enriched ${article.id} with ${selectedComments.length} comments (from ${pullpushComments.length} total)`);
-      enriched++;
+      retryResult.enriched++;
     } catch (err: any) {
       console.log(`[reddit-retry] Failed for ${article.id}: ${err.message}`);
+      retryResult.pullpushFailed++;
     }
   }
 
-  return { checked: articles.length, enriched };
+  return retryResult;
 }
