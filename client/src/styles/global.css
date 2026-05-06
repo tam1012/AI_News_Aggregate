@@ -75,6 +75,7 @@ body {
   line-height: 1.6;
   min-height: 100vh;
   min-height: 100dvh;
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   transition: background 0.3s, color 0.3s;
@@ -1008,8 +1009,18 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 
 @media (max-width: 899px) {
+  html,
+  body,
+  #root {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
   .container-fluid {
+    width: 100%;
+    max-width: 100%;
     padding: 0 16px;
+    overflow-x: clip;
   }
 
   body.detail-open {
@@ -1030,12 +1041,13 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   .visible-on-mobile-only.feed-tabs {
     justify-content: flex-start;
     gap: 6px;
-    width: 100vw;
-    max-width: 100vw;
-    margin-left: calc(50% - 50vw);
+    width: auto;
+    max-width: 100%;
+    margin: 0 -16px;
     padding: 10px 16px 8px;
     overflow-x: auto;
     overflow-y: hidden;
+    overscroll-behavior-x: contain;
     scrollbar-width: none;
   }
 
@@ -1045,7 +1057,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 
   .visible-on-mobile-only.feed-tabs .feed-tab {
     flex: 0 0 auto;
-    padding: 7px 16px;
+    padding: 7px 14px;
   }
 
   .feed-refresh-row {

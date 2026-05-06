@@ -51,8 +51,10 @@ test('mobile digest tab bar scrolls horizontally without page overflow', () => {
   const mobileTabRule = css.match(/\.visible-on-mobile-only\.feed-tabs \.feed-tab\s*\{([^}]+)\}/)?.[1] || '';
 
   assert.match(homeSource, /className="feed-tabs visible-on-mobile-only"/);
-  assert.match(mobileTabsRule, /max-width:\s*100vw/);
+  assert.match(css, /overflow-x:\s*clip/);
+  assert.match(mobileTabsRule, /max-width:\s*100%/);
   assert.match(mobileTabsRule, /overflow-x:\s*auto/);
+  assert.match(mobileTabsRule, /overscroll-behavior-x:\s*contain/);
   assert.match(mobileTabsRule, /justify-content:\s*flex-start/);
   assert.match(mobileTabRule, /flex:\s*0 0 auto/);
 });
