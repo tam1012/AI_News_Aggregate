@@ -495,7 +495,7 @@ export function Home() {
       {/* Mobile-only tab bar — visible when digest tab is active (split-left is hidden) */}
       {tab === 'digest' && (
         <div className="feed-tabs visible-on-mobile-only">
-          <button className="feed-tab" onClick={() => navigateTab('news')}>News</button>
+          <button className="feed-tab" onClick={() => navigateTab('news')}>Tin mới</button>
           <button className="feed-tab" onClick={() => navigateTab('voz')}>VOZ</button>
           <button className="feed-tab" onClick={() => navigateTab('reddit')}>Reddit</button>
           <button className="feed-tab" onClick={() => navigateTab('youtube')}>YT</button>
@@ -520,7 +520,7 @@ export function Home() {
                     setSelected(null);
                   }}
                 >
-                  {t === 'news' ? 'News' : t === 'voz' ? 'VOZ' : t === 'reddit' ? 'Reddit' : 'YT'}
+                  {t === 'news' ? 'Tin mới' : t === 'voz' ? 'VOZ' : t === 'reddit' ? 'Reddit' : 'YT'}
                 </button>
               ))}
               <button
@@ -646,7 +646,7 @@ export function Home() {
             )}
 
             <div className="reader-footer">
-              <p>🤖 Nguồn mặc định cào mỗi 60 phút và tự backoff khi lỗi · Fetch bài mỗi 5 phút · Tóm tắt AI mỗi 10 phút</p>
+              <p>Nguồn mặc định cào mỗi 60 phút và tự backoff khi lỗi · Fetch bài mỗi 5 phút · Tóm tắt AI mỗi 10 phút</p>
             </div>
           </div>
         </div>

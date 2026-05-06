@@ -44,6 +44,22 @@ test('mobile reader exposes refresh row and floating scroll-to-top affordance st
   assert.match(homeSource, /className="scroll-top-button"/);
 });
 
+test('mobile feed and detail styles prioritize compact reading', () => {
+  const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
+  const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
+
+  assert.match(css, /-webkit-line-clamp:\s*3/);
+  assert.match(css, /\.detail-actions\s*\{[\s\S]*position:\s*sticky/);
+  assert.match(css, /--safe-bottom:\s*env\(safe-area-inset-bottom/);
+  assert.match(homeSource, />Tin mới<\/button>/);
+});
+
+test('service worker cache version is bumped for updated app shell', () => {
+  const serviceWorker = readFileSync(resolve(__dirname, '../public/sw.js'), 'utf8');
+
+  assert.match(serviceWorker, /CACHE_VERSION = 'synthnews-v2'/);
+});
+
 test('feed uses server-side tab pagination and exposes load-more control', () => {
   const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
   const apiSource = readFileSync(resolve(__dirname, '../src/services/api.ts'), 'utf8');

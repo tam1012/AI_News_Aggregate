@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'synthnews-v1';
+const CACHE_VERSION = 'synthnews-v2';
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
