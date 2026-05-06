@@ -207,9 +207,17 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 .split-feed-toolbar {
   position: sticky; top: 57px; z-index: 50;
-  display: flex; align-items: center; gap: 4px;
+  display: flex; flex-direction: column;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg);
+  padding-bottom: 6px;
+}
+.toolbar-tabs-row {
+  display: flex; align-items: center; gap: 4px;
+}
+.toolbar-filters-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 2px 0 0;
 }
 .split-feed-toolbar .feed-tabs {
   position: static; top: auto; z-index: auto;
@@ -950,9 +958,6 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
     padding: 10px 20px 6px;
     background: var(--color-bg);
     border-bottom: 1px solid var(--color-border);
-    display: flex;
-    align-items: center;
-    gap: 4px;
   }
 
   .split-left .feed-tabs {

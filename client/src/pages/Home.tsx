@@ -517,100 +517,102 @@ export function Home() {
         <div className={`split-left ${tab === 'digest' ? 'hidden-on-mobile' : ''}`} ref={splitLeftRef}>
           {/* Tab bar inside left pane */}
           <div className="split-feed-toolbar">
-            <div className="feed-tabs">
-              {(['news', 'voz', 'reddit', 'youtube'] as const).map(t => (
-                <button
-                  key={t}
-                  className={`feed-tab ${tab === t ? 'active' : ''}`}
-                  onClick={() => {
-                    if (tab === t) {
-                      scrollFeedToTop();
-                    }
-                    navigateTab(t);
-                    setSelected(null);
-                    setFilterTag('');
-                  }}
-                >
-                  {t === 'news' ? 'Tin mới' : t === 'voz' ? 'VOZ' : t === 'reddit' ? 'Reddit' : 'YT'}
-                </button>
-              ))}
-              <button
-                className={`feed-tab ${tab === 'digest' ? 'active' : ''}`}
-                onClick={() => navigateTab('digest')}
-              >
-                Bản tin
-              </button>
-            </div>
-            <div className="feed-filter-control">
-              <button
-                className={`icon-btn ${filterSource !== 'all' ? 'active' : ''}`}
-                onClick={() => setShowFilter(!showFilter)}
-                title="Lọc theo nguồn"
-                style={{ width: 32, height: 32, fontSize: '0.85rem' }}
-              >
-                ▽
-              </button>
-              {showFilter && (
-                <div className="filter-dropdown">
+            <div className="toolbar-tabs-row">
+              <div className="feed-tabs">
+                {(['news', 'voz', 'reddit', 'youtube'] as const).map(t => (
                   <button
-                    className={`filter-option ${filterSource === 'all' ? 'active' : ''}`}
-                    onClick={() => { setFilterSource('all'); setShowFilter(false); }}
+                    key={t}
+                    className={`feed-tab ${tab === t ? 'active' : ''}`}
+                    onClick={() => {
+                      if (tab === t) {
+                        scrollFeedToTop();
+                      }
+                      navigateTab(t);
+                      setSelected(null);
+                      setFilterTag('');
+                    }}
                   >
-                    Tất cả nguồn
+                    {t === 'news' ? 'Tin mới' : t === 'voz' ? 'VOZ' : t === 'reddit' ? 'Reddit' : 'YT'}
                   </button>
-                  {sources.map((s: any) => (
+                ))}
+                <button
+                  className={`feed-tab ${tab === 'digest' ? 'active' : ''}`}
+                  onClick={() => navigateTab('digest')}
+                >
+                  Bản tin
+                </button>
+              </div>
+              <div className="feed-filter-control">
+                <button
+                  className={`icon-btn ${filterSource !== 'all' ? 'active' : ''}`}
+                  onClick={() => setShowFilter(!showFilter)}
+                  title="Lọc theo nguồn"
+                  style={{ width: 32, height: 32, fontSize: '0.85rem' }}
+                >
+                  ▽
+                </button>
+                {showFilter && (
+                  <div className="filter-dropdown">
                     <button
-                      key={s.id}
-                      className={`filter-option ${filterSource === s.id ? 'active' : ''}`}
-                      onClick={() => { setFilterSource(s.id); setShowFilter(false); }}
+                      className={`filter-option ${filterSource === 'all' ? 'active' : ''}`}
+                      onClick={() => { setFilterSource('all'); setShowFilter(false); }}
                     >
-                      {s.name.replace(/ - .*$/, '').replace(/ RSS.*$/, '')}
+                      Tất cả nguồn
+                    </button>
+                    {sources.map((s: any) => (
+                      <button
+                        key={s.id}
+                        className={`filter-option ${filterSource === s.id ? 'active' : ''}`}
+                        onClick={() => { setFilterSource(s.id); setShowFilter(false); }}
+                      >
+                        {s.name.replace(/ - .*$/, '').replace(/ RSS.*$/, '')}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="toolbar-filters-row">
+              <div className="feed-sort-toggle" aria-label="Sắp xếp tin">
+                <button
+                  className={`feed-sort-option ${feedSort === 'latest' ? 'active' : ''}`}
+                  onClick={() => setFeedSort('latest')}
+                  type="button"
+                >
+                  Mới nhất
+                </button>
+                <button
+                  className={`feed-sort-option ${feedSort === 'hot' ? 'active' : ''}`}
+                  onClick={() => setFeedSort('hot')}
+                  type="button"
+                >
+                  Tin nóng
+                </button>
+              </div>
+              {popularTags.length > 0 && (
+                <div className="topic-chips" aria-label="Lọc theo chủ đề">
+                  <button
+                    className={`topic-chip ${!filterTag ? 'active' : ''}`}
+                    onClick={() => setFilterTag('')}
+                    type="button"
+                  >
+                    Tất cả
+                  </button>
+                  {popularTags.slice(0, 10).map(t => (
+                    <button
+                      key={t.tag}
+                      className={`topic-chip ${filterTag === t.tag ? 'active' : ''}`}
+                      onClick={() => setFilterTag(filterTag === t.tag ? '' : t.tag)}
+                      type="button"
+                      title={`${t.count} bài`}
+                    >
+                      {t.tag}
                     </button>
                   ))}
                 </div>
               )}
             </div>
           </div>
-          <div className="feed-sort-toggle" aria-label="Sắp xếp tin">
-            <button
-              className={`feed-sort-option ${feedSort === 'latest' ? 'active' : ''}`}
-              onClick={() => setFeedSort('latest')}
-              type="button"
-            >
-              Mới nhất
-            </button>
-            <button
-              className={`feed-sort-option ${feedSort === 'hot' ? 'active' : ''}`}
-              onClick={() => setFeedSort('hot')}
-              type="button"
-            >
-              Tin nóng
-            </button>
-          </div>
-
-          {/* Topic filter chips */}
-          {popularTags.length > 0 && (
-            <div className="topic-chips" aria-label="Lọc theo chủ đề">
-              <button
-                className={`topic-chip ${!filterTag ? 'active' : ''}`}
-                onClick={() => setFilterTag('')}
-                type="button"
-              >
-                Tất cả
-              </button>
-              {popularTags.slice(0, 10).map(t => (
-                <button
-                  key={t.tag}
-                  className={`topic-chip ${filterTag === t.tag ? 'active' : ''}`}
-                  onClick={() => setFilterTag(filterTag === t.tag ? '' : t.tag)}
-                  type="button"
-                  title={`${t.count} bài`}
-                >
-                  {t.tag}
-                </button>
-              ))}
-            </div>
-          )}
 
           {/* Active filter indicator */}
           {filterSource !== 'all' && (
