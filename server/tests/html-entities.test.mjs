@@ -21,6 +21,7 @@ function loadTsModule(relativePath, stubs = {}) {
   });
   const moduleContext = { exports: {} };
   vm.runInNewContext(outputText, {
+    Buffer,
     exports: moduleContext.exports,
     module: moduleContext,
     require: (name) => {
@@ -46,4 +47,21 @@ test('decode article text fields for legacy API rows with HTML entities', () => 
   assert.equal(row.title, 'C\u00f4ng ty x\u1ed5 s\u1ed1 chi h\u00e0ng ng\u00e0n l\u01b0\u1ee3ng v\u00e0ng');
   assert.equal(row.raw_excerpt, 'Gi\u00e1 v\u00e0ng t\u0103ng');
   assert.equal(row.url, 'https://example.com?a=1&amp;b=2');
+});
+
+test('decode article text fields repairs mojibake and strips unsafe controls', () => {
+  const { decodeArticleTextFields } = loadTsModule('../src/lib/htmlEntities.ts', {
+    entities: { decodeHTML },
+  });
+
+  const title = 'New York real estate titan likens ‘tax the rich’ to racial slurs';
+  const summary = '## Phát ngôn gây tranh cãi\n\nDễ bị đánh giá.';
+  const row = decodeArticleTextFields({
+    id: 'art_guardian',
+    title: Buffer.from(title, 'utf8').toString('latin1'),
+    summary_text: Buffer.from(summary, 'utf8').toString('latin1'),
+  });
+
+  assert.equal(row.title, title);
+  assert.equal(row.summary_text, summary);
 });
