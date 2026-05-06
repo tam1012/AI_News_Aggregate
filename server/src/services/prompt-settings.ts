@@ -26,3 +26,8 @@ export async function savePromptConfig(payload: unknown): Promise<PromptConfig> 
   );
   return config;
 }
+
+export async function resetPromptConfig(): Promise<PromptConfig> {
+  await query('DELETE FROM app_settings WHERE key = $1', [PROMPT_CONFIG_KEY]);
+  return DEFAULT_PROMPT_CONFIG;
+}

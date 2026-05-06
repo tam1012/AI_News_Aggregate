@@ -136,7 +136,9 @@ export const api = {
 
   // Settings
   getPromptConfig: () => request<any>('/settings/prompt'),
+  getDefaultPromptConfig: () => request<any>('/settings/prompt/default'),
   updatePromptConfig: (data: any) => request<any>('/settings/prompt', { method: 'PATCH', body: JSON.stringify(data) }),
+  resetPromptConfig: () => request<any>('/settings/prompt/reset', { method: 'POST' }),
 
   // Admin triggers
   triggerScrape: () => request<any>('/health/trigger/scrape', { method: 'POST' }),

@@ -162,9 +162,35 @@ export async function summarizeArticle(article: ArticleForSummary, promptConfig?
     const result = await callAi(prompt);
     return parseAiSummaryOutput(result.trim(), config.allowed_tags);
   } catch (err: any) {
+    if (isAiSafetyRejection(err)) {
+      try {
+        const fallbackResult = await callAi(buildSafeFallbackPrompt(article, content, config));
+        return parseAiSummaryOutput(fallbackResult.trim(), config.allowed_tags);
+      } catch (fallbackErr: any) {
+        console.error(`Safe fallback failed for article ${article.id}:`, fallbackErr.message);
+        throw new SummarySkippedError(`Skipped after safe fallback: ${fallbackErr.message || err.message}`);
+      }
+    }
+
     console.error(`Failed to summarize article ${article.id}:`, err.message);
     throw err;
   }
+}
+
+function buildSafeFallbackPrompt(article: ArticleForSummary, content: string, config: PromptConfig): string {
+  return `You are a cautious news editor. The normal summary attempt was rejected by safety filters. Produce a safe, high-level editorial summary without quoting sensitive passages, repeating dangerous instructions, or adding operational details.
+
+Title: ${article.title}
+Source: ${article.source_name}
+Original language: ${article.language || 'unknown'}
+
+Use only benign context from this source text. If the source contains violence, self-harm, malware, exploitation, weapons, illegal activity, or other sensitive material, describe the topic abstractly and focus on public-interest context, stakeholders, and implications.
+
+<raw_data>
+${truncate(content, 8000)}
+</raw_data>
+
+${buildStructuredOutputContract(config)}`;
 }
 
 function buildStructuredOutputContract(config: PromptConfig): string {

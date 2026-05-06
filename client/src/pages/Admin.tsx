@@ -246,6 +246,29 @@ function joinLines(value: unknown): string {
   return Array.isArray(value) ? value.join('\n') : '';
 }
 
+function buildPromptConfigPayload(formData: PromptConfigFormData) {
+  return {
+    output_language: formData.output_language.trim(),
+    topic_priorities: splitLines(formData.topic_priorities),
+    allowed_tags: splitLines(formData.allowed_tags),
+    digest_headings: splitLines(formData.digest_headings),
+    custom_context: formData.custom_context.trim(),
+  };
+}
+
+function getPromptConfigWarnings(formData: PromptConfigFormData): string[] {
+  const payload = buildPromptConfigPayload(formData);
+  const warnings: string[] = [];
+  if (!payload.output_language) warnings.push('Ngôn ngữ output đang trống.');
+  if (payload.allowed_tags.length === 0) warnings.push('Allowed tags cần ít nhất 1 tag để AI trả JSON hợp lệ.');
+  if (payload.allowed_tags.length > 24) warnings.push('Allowed tags quá nhiều có thể làm AI chọn tag thiếu nhất quán.');
+  if (payload.topic_priorities.length === 0) warnings.push('Topic priorities đang trống, hot_score sẽ ít định hướng hơn.');
+  if (payload.digest_headings.length === 0) warnings.push('Digest headings đang trống, digest sẽ khó gom nhóm ổn định.');
+  if (payload.custom_context.length > 1500) warnings.push('Custom context dài hơn 1500 ký tự có thể làm prompt tốn token và kém ổn định.');
+  if (/[<>]/.test(payload.custom_context)) warnings.push('Custom context không được chứa dấu < hoặc >.');
+  return warnings;
+}
+
 function PromptConfigTab() {
   const { data: config, loading, error, reload } = useFetch<any>(() => api.getPromptConfig());
   const [formData, setFormData] = useState<PromptConfigFormData>({
@@ -257,6 +280,9 @@ function PromptConfigTab() {
   });
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [showPreview, setShowPreview] = useState(false);
+  const warnings = getPromptConfigWarnings(formData);
+  const previewPayload = buildPromptConfigPayload(formData);
 
   useEffect(() => {
     if (!config) return;
@@ -274,14 +300,52 @@ function PromptConfigTab() {
     setSaving(true);
     setSaveMessage('');
     try {
-      await api.updatePromptConfig({
-        output_language: formData.output_language.trim(),
-        topic_priorities: splitLines(formData.topic_priorities),
-        allowed_tags: splitLines(formData.allowed_tags),
-        digest_headings: splitLines(formData.digest_headings),
-        custom_context: formData.custom_context.trim(),
-      });
+      await api.updatePromptConfig(previewPayload);
       setSaveMessage('Đã lưu cấu hình prompt.');
+      reload();
+    } catch (err: any) {
+      setSaveMessage(`Lỗi: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const applyDefaultConfig = async () => {
+    setSaving(true);
+    setSaveMessage('');
+    try {
+      const result = await api.getDefaultPromptConfig();
+      const defaultConfig = result.data;
+      setFormData({
+        output_language: defaultConfig.output_language || '',
+        topic_priorities: joinLines(defaultConfig.topic_priorities),
+        allowed_tags: joinLines(defaultConfig.allowed_tags),
+        digest_headings: joinLines(defaultConfig.digest_headings),
+        custom_context: defaultConfig.custom_context || '',
+      });
+      setSaveMessage('Đã nạp cấu hình mặc định, bấm Lưu nếu muốn áp dụng.');
+    } catch (err: any) {
+      setSaveMessage(`Lỗi: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const resetDefaultConfig = async () => {
+    if (!confirm('Reset prompt config về mặc định?')) return;
+    setSaving(true);
+    setSaveMessage('');
+    try {
+      const result = await api.resetPromptConfig();
+      const resetConfig = result.data;
+      setFormData({
+        output_language: resetConfig.output_language || '',
+        topic_priorities: joinLines(resetConfig.topic_priorities),
+        allowed_tags: joinLines(resetConfig.allowed_tags),
+        digest_headings: joinLines(resetConfig.digest_headings),
+        custom_context: resetConfig.custom_context || '',
+      });
+      setSaveMessage('Đã reset prompt config về mặc định.');
       reload();
     } catch (err: any) {
       setSaveMessage(`Lỗi: ${err.message}`);
@@ -295,10 +359,33 @@ function PromptConfigTab() {
 
   return (
     <form className="card" onSubmit={handleSubmit}>
-      <div style={{ fontWeight: 600, marginBottom: 6 }}>Prompt config</div>
-      <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', marginBottom: 12 }}>
-        Cấu hình này áp dụng cho bài tóm tắt mới và digest mới. Mỗi dòng là một giá trị.
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 12 }}>
+        <div>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>Prompt config</div>
+          <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
+            Cấu hình này áp dụng cho bài tóm tắt mới và digest mới. Mỗi dòng là một giá trị.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button type="button" className="btn btn-sm" onClick={() => setShowPreview(value => !value)}>
+            {showPreview ? 'Ẩn preview' : 'Preview JSON'}
+          </button>
+          <button type="button" className="btn btn-sm" onClick={applyDefaultConfig} disabled={saving}>Nạp mặc định</button>
+          <button type="button" className="btn btn-sm btn-danger" onClick={resetDefaultConfig} disabled={saving}>Reset mặc định</button>
+        </div>
       </div>
+
+      {warnings.length > 0 && (
+        <div style={{ marginBottom: 12, padding: 10, border: '1px solid var(--color-warning)', borderRadius: 6, color: 'var(--color-warning)', fontSize: '0.82rem' }}>
+          {warnings.map((warning) => <div key={warning}>{warning}</div>)}
+        </div>
+      )}
+
+      {showPreview && (
+        <pre style={{ marginBottom: 12, padding: 12, border: '1px solid var(--color-border)', borderRadius: 6, background: 'var(--color-bg)', color: 'var(--color-text)', overflowX: 'auto', fontSize: '0.78rem' }}>
+          {JSON.stringify(previewPayload, null, 2)}
+        </pre>
+      )}
 
       <div className="form-group">
         <label>Ngôn ngữ output</label>
