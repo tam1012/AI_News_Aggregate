@@ -72,7 +72,8 @@ test('mobile feed and detail styles prioritize compact reading', () => {
 test('service worker cache version is bumped for updated app shell', () => {
   const serviceWorker = readFileSync(resolve(__dirname, '../public/sw.js'), 'utf8');
 
-  assert.match(serviceWorker, /CACHE_VERSION = 'synthnews-v2'/);
+  assert.match(serviceWorker, /CACHE_VERSION = 'synthnews-v3'/);
+  assert.match(serviceWorker, /fetch\(request, \{ cache: 'no-store' \}\)/);
 });
 
 test('feed uses server-side tab pagination and exposes load-more control', () => {

@@ -4,7 +4,9 @@ export function registerServiceWorker(): void {
   if (!import.meta.env.PROD) return;
 
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then((registration) => {
+      registration.update().catch(() => {});
+    }).catch((err) => {
       console.warn('[sw] registration failed', err);
     });
   });

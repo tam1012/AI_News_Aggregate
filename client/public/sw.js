@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'synthnews-v2';
+const CACHE_VERSION = 'synthnews-v3';
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -66,16 +66,19 @@ async function networkFirst(request, fallbackResponse) {
   }
 }
 
-async function cacheFirst(request) {
+async function appShellNetworkFirst(request) {
   const shell = await caches.open(APP_SHELL_CACHE);
-  const cached = await shell.match(request);
-  if (cached) return cached;
-
-  const response = await fetch(request);
-  if (response && response.ok) {
-    shell.put(request, response.clone());
+  try {
+    const response = await fetch(request, { cache: 'no-store' });
+    if (response && response.ok) {
+      shell.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    const cached = await shell.match(request);
+    if (cached) return cached;
+    throw new Error('App shell unavailable');
   }
-  return response;
 }
 
 self.addEventListener('fetch', (event) => {
@@ -94,11 +97,11 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (request.mode === 'navigate') {
-    event.respondWith(networkFirst(request, caches.match('/')));
+    event.respondWith(appShellNetworkFirst(request));
     return;
   }
 
   if (APP_SHELL.includes(url.pathname) || url.pathname.startsWith('/assets/')) {
-    event.respondWith(cacheFirst(request));
+    event.respondWith(appShellNetworkFirst(request));
   }
 });
