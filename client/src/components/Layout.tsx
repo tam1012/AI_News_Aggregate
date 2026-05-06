@@ -6,7 +6,7 @@ import { usesFluidShell } from './layoutShell';
 const ADMIN_TOKEN_STORAGE_KEY = 'admin_token';
 
 export function Layout() {
-  const { fontSize, cycleFontSize, theme, toggleTheme } = useSettings();
+  const { fontSize, cycleFontSize, theme, toggleTheme, fontFamily, fontOptions, setFontFamily } = useSettings();
   const location = useLocation();
   const isAdmin = location.pathname.startsWith('/admin');
   const isSources = location.pathname.startsWith('/sources');
@@ -55,6 +55,17 @@ export function Layout() {
                 ⚙️
               </NavLink>
             ))}
+            <select
+              className="font-family-select"
+              value={fontFamily}
+              onChange={(e) => setFontFamily(e.target.value as typeof fontFamily)}
+              title="Font chữ"
+              aria-label="Font chữ"
+            >
+              {fontOptions.map((option) => (
+                <option key={option.key} value={option.key}>{option.label}</option>
+              ))}
+            </select>
             <button
               className="font-size-btn"
               onClick={cycleFontSize}
