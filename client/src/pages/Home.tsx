@@ -327,6 +327,18 @@ export function Home() {
     [tab, selectedDate]
   );
   const popularTags: { tag: string; count: number }[] = useMemo(() => tagsRaw?.data || [], [tagsRaw]);
+
+  // After tags reload, scroll the active chip back into view
+  useEffect(() => {
+    if (!filterTag || !filtersRowRef.current) return;
+    const activeChip = filtersRowRef.current.querySelector('.topic-chip.active') as HTMLElement;
+    if (activeChip) {
+      requestAnimationFrame(() => {
+        activeChip.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      });
+    }
+  }, [popularTags, filterTag]);
+
   const readerLoadingState = getReaderLoadingState({ isFeedLoading: loading, hasArticleDeepLink });
   const detailPaneVisible = shouldShowDetailPane({
     tab,
@@ -623,7 +635,10 @@ export function Home() {
                     <button
                       key={t.tag}
                       className={`topic-chip ${filterTag === t.tag ? 'active' : ''} ${!filterTag && !t.tag ? 'active' : ''}`}
-                      onClick={() => setFilterTag(filterTag === t.tag ? '' : t.tag)}
+                      onClick={(e) => {
+                        setFilterTag(filterTag === t.tag ? '' : t.tag);
+                        (e.currentTarget as HTMLElement).scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                      }}
                       type="button"
                       title={`${t.count} bài`}
                     >
