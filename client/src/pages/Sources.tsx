@@ -29,6 +29,7 @@ export function Sources() {
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [scrapingId, setScrapingId] = useState<string | null>(null);
   const [formError, setFormError] = useState('');
 
   const handleDetect = async () => {
@@ -134,6 +135,21 @@ export function Sources() {
       reload();
     } catch (err: any) {
       alert('Lỗi: ' + err.message);
+    }
+  };
+
+  const handleScrape = async (id: string) => {
+    setScrapingId(id);
+    try {
+      const res = await api.scrapeSource(id);
+      const data = res.data;
+      alert(`Cào xong: ${data.itemsInserted}/${data.itemsFound} mục mới${data.status === 'partial' ? ' (có lỗi một phần)' : ''}`);
+      reload();
+    } catch (err: any) {
+      alert('Lỗi cào nguồn: ' + err.message);
+      reload();
+    } finally {
+      setScrapingId(null);
     }
   };
 
@@ -328,6 +344,9 @@ export function Sources() {
                   <input type="checkbox" checked={source.is_enabled} onChange={() => handleToggle(source.id)} />
                   <span className="slider"></span>
                 </label>
+                <button className="btn btn-sm" onClick={() => handleScrape(source.id)} disabled={!source.is_enabled || scrapingId === source.id}>
+                  {scrapingId === source.id ? 'Đang cào...' : 'Cào ngay'}
+                </button>
                 <button className="btn btn-sm" onClick={() => handleEdit(source)}>
                   Sửa
                 </button>

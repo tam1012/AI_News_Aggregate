@@ -2,6 +2,10 @@ import { Hono } from 'hono';
 import { getMany, getOne, query } from '../db/index.js';
 import { generateId, normalizePublicHttpUrl, normalizeUrl } from '../lib/utils.js';
 import { resolveSourceUrl } from '../lib/sourceResolver.js';
+import { getFetcherForSource } from '../services/fetchers/registry.js';
+import { SourceRow, sourceFetchers } from '../services/fetchers/index.js';
+import { scrapeSource } from '../services/scraper.js';
+import { enqueueDiscoveredArticles } from '../services/article-fetch-queue.js';
 
 const sources = new Hono();
 
@@ -179,6 +183,92 @@ sources.patch('/:id', async (c) => {
 
   const row = await getOne('SELECT * FROM sources WHERE id = $1', [id]);
   return c.json({ success: true, data: row });
+});
+
+sources.post('/:id/scrape', async (c) => {
+  const { id } = c.req.param();
+  const source = await getOne<SourceRow & { is_enabled: boolean; consecutive_failures: number }>(
+    `SELECT id, type, name, url, language, category, fetch_interval_minutes, parser_config,
+            is_enabled, consecutive_failures
+     FROM sources
+     WHERE id = $1`,
+    [id]
+  );
+  if (!source) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Source not found' } }, 404);
+  }
+  if (!source.is_enabled) {
+    return c.json({ success: false, error: { code: 'VALIDATION', message: 'Source is disabled' } }, 400);
+  }
+
+  const logId = generateId('log');
+  const startedAt = new Date().toISOString();
+
+  try {
+    const fetcher = getFetcherForSource(source, sourceFetchers);
+    let result;
+    if (fetcher.discover) {
+      const discovered = await fetcher.discover(source);
+      const enqueued = await enqueueDiscoveredArticles(discovered);
+      result = { itemsFound: discovered.length, itemsInserted: enqueued, errors: [] as string[] };
+    } else {
+      result = await scrapeSource(source);
+    }
+
+    const nextRunDelayMinutes = result.errors.length > 0
+      ? Math.min(source.fetch_interval_minutes * 2, 24 * 60)
+      : source.fetch_interval_minutes;
+    const status = result.errors.length > 0 ? (result.itemsInserted > 0 ? 'partial' : 'failed') : 'success';
+    const errorMessage = result.errors.length > 0 ? result.errors.join('; ').substring(0, 500) : null;
+
+    await query(
+      `UPDATE sources SET
+         last_checked_at = NOW(),
+         last_success_at = CASE WHEN $2 != 'failed' THEN NOW() ELSE last_success_at END,
+         consecutive_failures = CASE WHEN $2 = 'failed' THEN consecutive_failures + 1 ELSE 0 END,
+         last_error_message = $3,
+         next_run_at = NOW() + ($4 * INTERVAL '1 minute')
+       WHERE id = $1`,
+      [source.id, status, errorMessage, nextRunDelayMinutes]
+    );
+
+    await query(
+      `INSERT INTO scrape_logs (id, source_id, job_type, status, started_at, finished_at, items_found, items_inserted, error_message)
+       VALUES ($1, $2, 'manual_source_scrape', $3, $4, NOW(), $5, $6, $7)`,
+      [logId, source.id, status, startedAt, result.itemsFound, result.itemsInserted, errorMessage]
+    );
+
+    return c.json({
+      success: true,
+      data: {
+        status,
+        itemsFound: result.itemsFound,
+        itemsInserted: result.itemsInserted,
+        errors: result.errors,
+      },
+    });
+  } catch (err: any) {
+    const message = err.message.substring(0, 500);
+    const failureCount = source.consecutive_failures + 1;
+    const backoffMinutes = Math.min(source.fetch_interval_minutes * Math.pow(2, Math.max(failureCount - 1, 0)), 24 * 60);
+
+    await query(
+      `UPDATE sources SET
+         last_checked_at = NOW(), consecutive_failures = consecutive_failures + 1,
+         last_error_message = $1,
+         next_run_at = NOW() + ($3 * INTERVAL '1 minute')
+       WHERE id = $2`,
+      [message, source.id, backoffMinutes]
+    );
+
+    await query(
+      `INSERT INTO scrape_logs (id, source_id, job_type, status, started_at, finished_at, error_message)
+       VALUES ($1, $2, 'manual_source_scrape', 'failed', $3, NOW(), $4)`,
+      [logId, source.id, startedAt, message]
+    );
+
+    return c.json({ success: false, error: { code: 'SCRAPE_FAILED', message } }, 500);
+  }
 });
 
 // Xoa source

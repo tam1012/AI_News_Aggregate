@@ -84,6 +84,7 @@ export const api = {
   updateSource: (id: string, data: any) => request<any>(`/sources/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteSource: (id: string) => request<any>(`/sources/${id}`, { method: 'DELETE' }),
   toggleSource: (id: string) => request<any>(`/sources/${id}/toggle`, { method: 'POST' }),
+  scrapeSource: (id: string) => request<any>(`/sources/${id}/scrape`, { method: 'POST' }),
   detectSource: (url: string) => request<any>('/sources/detect', { method: 'POST', body: JSON.stringify({ url }) }),
 
   // Articles
