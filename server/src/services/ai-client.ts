@@ -16,6 +16,12 @@ interface AiProvider {
   extra_config: any;
 }
 
+interface AiCallOptions {
+  max_tokens?: number;
+  temperature?: number;
+  timeoutMs?: number;
+}
+
 function resolveOpenAiCompatibleEndpoint(rawEndpoint: string | null | undefined, fallback = ''): string {
   const endpoint = (rawEndpoint || fallback || '').trim();
   if (!endpoint) return '';
@@ -84,7 +90,7 @@ export async function getActiveProvider(): Promise<AiProvider | null> {
 // ==========================================
 // Goi AI - tu dong chon provider dang active
 // ==========================================
-export async function callAi(prompt: string, overrides?: { max_tokens?: number, temperature?: number }): Promise<string> {
+export async function callAi(prompt: string, overrides?: AiCallOptions): Promise<string> {
   const provider = await getActiveProvider();
   if (!provider) {
     throw new Error('No active AI provider configured. Go to Settings > AI Providers to set one up.');
@@ -95,10 +101,11 @@ export async function callAi(prompt: string, overrides?: { max_tokens?: number, 
 // ==========================================
 // Goi AI voi 1 provider cu the
 // ==========================================
-export async function callAiProvider(provider: AiProvider, prompt: string, overrides?: { max_tokens?: number, temperature?: number }): Promise<string> {
+export async function callAiProvider(provider: AiProvider, prompt: string, overrides?: AiCallOptions): Promise<string> {
   try {
     let result: string;
 
+    const timeoutMs = overrides?.timeoutMs ?? parseInt(process.env.AI_REQUEST_TIMEOUT_MS || '60000', 10);
     const finalProvider = {
       ...provider,
       max_tokens: overrides?.max_tokens ?? provider.max_tokens,
@@ -107,23 +114,23 @@ export async function callAiProvider(provider: AiProvider, prompt: string, overr
 
     switch (finalProvider.provider_type) {
       case 'vertex_ai':
-        result = await callVertexAi(finalProvider, prompt);
+        result = await callVertexAi(finalProvider, prompt, timeoutMs);
         break;
       case 'gemini':
-        result = await callGeminiStudio(finalProvider, prompt);
+        result = await callGeminiStudio(finalProvider, prompt, timeoutMs);
         break;
       case 'openai':
       case 'xai':
       case 'deepseek':
       case 'groq':
       case 'mimo':
-        result = await callOpenAiCompatible(finalProvider, prompt);
+        result = await callOpenAiCompatible(finalProvider, prompt, timeoutMs);
         break;
       case 'anthropic':
-        result = await callAnthropic(finalProvider, prompt);
+        result = await callAnthropic(finalProvider, prompt, timeoutMs);
         break;
       case 'custom':
-        result = await callCustom(finalProvider, prompt);
+        result = await callCustom(finalProvider, prompt, timeoutMs);
         break;
       default:
         throw new Error(`Unsupported provider type: ${finalProvider.provider_type}`);
@@ -154,7 +161,7 @@ export async function callAiProvider(provider: AiProvider, prompt: string, overr
 // ==========================================
 // VERTEX AI (Google Cloud)
 // ==========================================
-async function callVertexAi(provider: AiProvider, prompt: string): Promise<string> {
+async function callVertexAi(provider: AiProvider, prompt: string, timeoutMs: number): Promise<string> {
   if (!provider.project_id) throw new Error('Vertex AI requires project_id');
   if (!provider.service_account_json) throw new Error('Vertex AI requires service_account_json');
 
@@ -183,7 +190,7 @@ async function callVertexAi(provider: AiProvider, prompt: string): Promise<strin
         { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
       ]
     }),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   if (!response.ok) {
@@ -198,7 +205,7 @@ async function callVertexAi(provider: AiProvider, prompt: string): Promise<strin
 // ==========================================
 // GEMINI AI STUDIO (Google)
 // ==========================================
-async function callGeminiStudio(provider: AiProvider, prompt: string): Promise<string> {
+async function callGeminiStudio(provider: AiProvider, prompt: string, timeoutMs: number): Promise<string> {
   if (!provider.api_key) throw new Error('Gemini AI Studio requires api_key');
 
   const url = provider.api_endpoint ||
@@ -220,7 +227,7 @@ async function callGeminiStudio(provider: AiProvider, prompt: string): Promise<s
         { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
       ]
     }),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   if (!response.ok) {
@@ -235,7 +242,7 @@ async function callGeminiStudio(provider: AiProvider, prompt: string): Promise<s
 // ==========================================
 // OPENAI-COMPATIBLE (OpenAI, xAI/Grok, DeepSeek, Groq, Mimo, ...)
 // ==========================================
-async function callOpenAiCompatible(provider: AiProvider, prompt: string): Promise<string> {
+async function callOpenAiCompatible(provider: AiProvider, prompt: string, timeoutMs: number): Promise<string> {
   if (!provider.api_key) throw new Error(`${provider.name} requires api_key`);
 
   // Default endpoints theo provider_type
@@ -263,7 +270,7 @@ async function callOpenAiCompatible(provider: AiProvider, prompt: string): Promi
       temperature: provider.temperature,
       stream: false,
     }),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   if (!response.ok) {
@@ -277,7 +284,7 @@ async function callOpenAiCompatible(provider: AiProvider, prompt: string): Promi
 // ==========================================
 // ANTHROPIC (Claude)
 // ==========================================
-async function callAnthropic(provider: AiProvider, prompt: string): Promise<string> {
+async function callAnthropic(provider: AiProvider, prompt: string, timeoutMs: number): Promise<string> {
   if (!provider.api_key) throw new Error('Anthropic requires api_key');
 
   const url = provider.api_endpoint || 'https://api.anthropic.com/v1/messages';
@@ -294,7 +301,7 @@ async function callAnthropic(provider: AiProvider, prompt: string): Promise<stri
       max_tokens: provider.max_tokens,
       messages: [{ role: 'user', content: prompt }],
     }),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   if (!response.ok) {
@@ -309,7 +316,7 @@ async function callAnthropic(provider: AiProvider, prompt: string): Promise<stri
 // ==========================================
 // CUSTOM - OpenAI-compatible format
 // ==========================================
-async function callCustom(provider: AiProvider, prompt: string): Promise<string> {
+async function callCustom(provider: AiProvider, prompt: string, timeoutMs: number): Promise<string> {
   const format = provider.extra_config?.format || 'openai'; // 'openai' | 'gemini'
   const url = format === 'openai'
     ? resolveOpenAiCompatibleEndpoint(provider.api_endpoint)
@@ -351,7 +358,7 @@ async function callCustom(provider: AiProvider, prompt: string): Promise<string>
     method: 'POST',
     headers,
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   if (!response.ok) {

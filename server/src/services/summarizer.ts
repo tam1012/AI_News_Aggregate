@@ -34,6 +34,7 @@ interface DigestPromptInput {
 const DIGEST_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 const DEFAULT_DIGEST_ARTICLE_LIMIT = 100;
 const MAX_DIGEST_ARTICLE_LIMIT = 200;
+const DEFAULT_DIGEST_AI_TIMEOUT_MS = 180000;
 
 function getVietnamDateParts(date: Date): { year: string; month: string; day: string; hour: string; minute: string } {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -127,6 +128,18 @@ export class SummarySkippedError extends Error {
 function isAiSafetyRejection(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err || '');
   return /safety|high-risk|rejected/i.test(message);
+}
+
+function isAiTimeout(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err || '');
+  const name = err instanceof Error ? err.name : '';
+  return /timeout|timed out|aborted/i.test(`${name} ${message}`);
+}
+
+function getDigestAiTimeoutMs(): number {
+  const parsed = parseInt(process.env.DIGEST_AI_TIMEOUT_MS || '', 10);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  return DEFAULT_DIGEST_AI_TIMEOUT_MS;
 }
 
 export async function summarizeArticle(article: ArticleForSummary, promptConfig?: PromptConfig): Promise<ParsedSummaryOutput> {
@@ -348,10 +361,10 @@ export async function summarizePendingArticles(): Promise<{ processed: number; s
       await query(
         `UPDATE articles
          SET summary_status = 'failed',
-             retry_count = retry_count + 1,
+             retry_count = CASE WHEN $3 THEN retry_count ELSE retry_count + 1 END,
              last_summary_error = $2
          WHERE id = $1`,
-        [article.id, truncateSummaryError(err)]
+        [article.id, truncateSummaryError(err), isAiTimeout(err)]
       );
       failed++;
     }
@@ -446,7 +459,7 @@ export async function generateDigest(): Promise<string | null> {
 
   const prompt = buildDigestPrompt({ promptConfig, articleSummaries, runContext });
   try {
-    const digestContent = (await callAi(prompt, { max_tokens: 6000 })).trim();
+    const digestContent = (await callAi(prompt, { max_tokens: 6000, timeoutMs: getDigestAiTimeoutMs() })).trim();
     if (!digestContent) {
       console.error('Failed to generate digest: AI returned empty content');
       return null;

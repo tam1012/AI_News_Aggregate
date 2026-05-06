@@ -24,15 +24,16 @@ function loadTsModule(relativePath) {
   return moduleContext.exports;
 }
 
-test('retry policy resets only failed summaries below retry limit', () => {
+test('retry policy resets failed summaries below retry limit and timeout failures', () => {
   const { buildResetRetryableFailedSummariesSql, MAX_SUMMARY_RETRIES } = loadTsModule('../src/lib/summaryRetryPolicy.ts');
   const statement = buildResetRetryableFailedSummariesSql(15);
 
   assert.equal(MAX_SUMMARY_RETRIES, 3);
   assert.match(statement.sql, /summary_status = 'failed'/);
   assert.match(statement.sql, /retry_count < \$1/);
+  assert.match(statement.sql, /last_summary_error/);
   assert.match(statement.sql, /summary_status = 'pending'/);
-  assert.deepEqual(Array.from(statement.params), [3, 15]);
+  assert.deepEqual(Array.from(statement.params), [3, 15, '%timeout%', '%aborted%']);
 });
 
 test('retry policy resets stale processing summaries back to pending', () => {
