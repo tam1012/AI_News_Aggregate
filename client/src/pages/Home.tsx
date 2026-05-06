@@ -573,24 +573,23 @@ export function Home() {
               </div>
             </div>
             <div className="toolbar-filters-row">
-              <div className="feed-sort-toggle" aria-label="Sắp xếp tin">
-                <button
-                  className={`feed-sort-option ${feedSort === 'latest' ? 'active' : ''}`}
-                  onClick={() => setFeedSort('latest')}
-                  type="button"
-                >
-                  Mới nhất
-                </button>
-                <button
-                  className={`feed-sort-option ${feedSort === 'hot' ? 'active' : ''}`}
-                  onClick={() => setFeedSort('hot')}
-                  type="button"
-                >
-                  Tin nóng
-                </button>
-              </div>
+              <button
+                className={`topic-chip ${feedSort === 'latest' ? 'active' : ''}`}
+                onClick={() => setFeedSort('latest')}
+                type="button"
+              >
+                Mới nhất
+              </button>
+              <button
+                className={`topic-chip ${feedSort === 'hot' ? 'active' : ''}`}
+                onClick={() => setFeedSort('hot')}
+                type="button"
+              >
+                🔥 Nóng
+              </button>
               {popularTags.length > 0 && (
-                <div className="topic-chips" aria-label="Lọc theo chủ đề">
+                <>
+                  <span className="toolbar-divider" />
                   <button
                     className={`topic-chip ${!filterTag ? 'active' : ''}`}
                     onClick={() => setFilterTag('')}
@@ -609,7 +608,7 @@ export function Home() {
                       {t.tag}
                     </button>
                   ))}
-                </div>
+                </>
               )}
             </div>
           </div>

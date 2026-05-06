@@ -216,8 +216,18 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   display: flex; align-items: center; gap: 4px;
 }
 .toolbar-filters-row {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
-  padding: 2px 0 0;
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 0 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.toolbar-filters-row::-webkit-scrollbar {
+  display: none;
+}
+.toolbar-divider {
+  width: 1px; height: 16px; flex-shrink: 0;
+  background: var(--color-border);
 }
 .split-feed-toolbar .feed-tabs {
   position: static; top: auto; z-index: auto;
@@ -1123,23 +1133,6 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 
 /* ===== Topic Filter Chips ===== */
-.topic-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 6px 0 2px;
-}
-@media (max-width: 899px) {
-  .topic-chips {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-  }
-  .topic-chips::-webkit-scrollbar {
-    display: none;
-  }
-}
 .topic-chip {
   flex-shrink: 0;
   border: 1px solid var(--color-border);
