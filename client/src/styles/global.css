@@ -219,21 +219,15 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   display: flex; align-items: center; gap: 6px;
   padding: 4px 0 0;
   overflow-x: auto;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
   -webkit-overflow-scrolling: touch;
   cursor: grab;
 }
-.toolbar-filters-row:hover {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-border) transparent;
-}
 .toolbar-filters-row::-webkit-scrollbar {
-  height: 0;
-}
-.toolbar-filters-row:hover::-webkit-scrollbar {
   height: 3px;
 }
-.toolbar-filters-row:hover::-webkit-scrollbar-thumb {
+.toolbar-filters-row::-webkit-scrollbar-thumb {
   background: var(--color-border);
   border-radius: 2px;
 }
