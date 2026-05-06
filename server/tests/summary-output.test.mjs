@@ -86,3 +86,19 @@ test('mark long structured output with TLDR as usable', () => {
 
   assert.equal(parsed.isUsable, true);
 });
+
+test('parse legacy structured keys from older AI outputs', () => {
+  const { parseAiSummaryOutput } = loadTsModule('../src/lib/summaryOutput.ts');
+  const parsed = parseAiSummaryOutput(JSON.stringify({
+    tldr: 'Tin chính.',
+    summaryShort: 'Bản ngắn.',
+    hotScore: '9',
+    tags: ['tech'],
+    editorialmarkdown: '## Bối cảnh chính\n\nNội dung phân tích đủ dài để repair metadata cho các bài cũ từng lưu JSON sai key, giúp feed có lại tóm tắt ngắn, điểm nóng và tag mà không cần gọi AI lần nữa.',
+  }), ['Tech']);
+
+  assert.equal(parsed.summaryShort, 'Bản ngắn.');
+  assert.equal(parsed.hotScore, 9);
+  assert.deepEqual(Array.from(parsed.tags), ['Tech']);
+  assert.match(parsed.editorialMarkdown, /repair metadata/);
+});

@@ -11,9 +11,13 @@ export interface ParsedSummaryOutput {
 interface StructuredSummaryOutput {
   tldr?: unknown;
   summary_short?: unknown;
+  summaryShort?: unknown;
   hot_score?: unknown;
+  hotScore?: unknown;
   tags?: unknown;
   editorial_markdown?: unknown;
+  editorialMarkdown?: unknown;
+  editorialmarkdown?: unknown;
 }
 
 function cleanText(value: unknown): string {
@@ -81,16 +85,28 @@ function hasEnoughSummaryText(text: string): boolean {
   return text.replace(/[#*_`\s-]/g, '').length >= 120;
 }
 
+function firstCleanText(...values: unknown[]): string {
+  for (const value of values) {
+    const cleaned = cleanText(value);
+    if (cleaned) return cleaned;
+  }
+  return '';
+}
+
 export function parseAiSummaryOutput(raw: string, allowedTags: string[]): ParsedSummaryOutput {
   const parsed = parseJsonCandidate(raw);
-  const editorialMarkdown = cleanText(parsed?.editorial_markdown);
+  const editorialMarkdown = firstCleanText(
+    parsed?.editorial_markdown,
+    parsed?.editorialMarkdown,
+    parsed?.editorialmarkdown
+  );
 
   if (parsed && editorialMarkdown) {
     const tldr = cleanText(parsed.tldr);
     return {
       tldr,
-      summaryShort: cleanText(parsed.summary_short) || null,
-      hotScore: normalizeScore(parsed.hot_score),
+      summaryShort: firstCleanText(parsed.summary_short, parsed.summaryShort) || null,
+      hotScore: normalizeScore(parsed.hot_score ?? parsed.hotScore),
       tags: normalizeTags(parsed.tags, allowedTags),
       editorialMarkdown,
       usedStructuredOutput: true,
