@@ -221,9 +221,21 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  cursor: grab;
+}
+.toolbar-filters-row:hover {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
 }
 .toolbar-filters-row::-webkit-scrollbar {
-  display: none;
+  height: 0;
+}
+.toolbar-filters-row:hover::-webkit-scrollbar {
+  height: 3px;
+}
+.toolbar-filters-row:hover::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
 }
 .toolbar-divider {
   width: 1px; height: 16px; flex-shrink: 0;

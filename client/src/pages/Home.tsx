@@ -237,6 +237,34 @@ export function Home() {
   const [feedSort, setFeedSort] = useState<FeedSort>('latest');
   const [filterTag, setFilterTag] = useState<string>('');
   const [showFilter, setShowFilter] = useState(false);
+
+  // Drag-to-scroll for filters row on desktop
+  const filtersRowRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef({ isDown: false, startX: 0, scrollLeft: 0 });
+  const handleFiltersDrag = useMemo(() => ({
+    onMouseDown: (e: React.MouseEvent) => {
+      const el = filtersRowRef.current;
+      if (!el) return;
+      dragState.current = { isDown: true, startX: e.pageX - el.offsetLeft, scrollLeft: el.scrollLeft };
+      el.style.cursor = 'grabbing';
+    },
+    onMouseLeave: () => {
+      dragState.current.isDown = false;
+      if (filtersRowRef.current) filtersRowRef.current.style.cursor = '';
+    },
+    onMouseUp: () => {
+      dragState.current.isDown = false;
+      if (filtersRowRef.current) filtersRowRef.current.style.cursor = '';
+    },
+    onMouseMove: (e: React.MouseEvent) => {
+      if (!dragState.current.isDown) return;
+      e.preventDefault();
+      const el = filtersRowRef.current;
+      if (!el) return;
+      const x = e.pageX - el.offsetLeft;
+      el.scrollLeft = dragState.current.scrollLeft - (x - dragState.current.startX);
+    },
+  }), []);
   const [readArticleIds, setReadArticleIds] = useState<string[]>(() => loadReadArticles());
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const [deepLinkLoading, setDeepLinkLoading] = useState(hasArticleDeepLink);
@@ -572,7 +600,7 @@ export function Home() {
                 )}
               </div>
             </div>
-            <div className="toolbar-filters-row">
+            <div className="toolbar-filters-row" ref={filtersRowRef} {...handleFiltersDrag}>
               <button
                 className={`topic-chip ${feedSort === 'latest' ? 'active' : ''}`}
                 onClick={() => setFeedSort('latest')}
