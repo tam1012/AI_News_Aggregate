@@ -251,6 +251,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   scrollbar-color: var(--color-border) transparent;
   cursor: grab;
   padding-bottom: 2px;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .topic-scroll::-webkit-scrollbar { height: 3px; }
 .topic-scroll::-webkit-scrollbar-thumb {
