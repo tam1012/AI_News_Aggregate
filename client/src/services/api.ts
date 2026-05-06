@@ -108,6 +108,15 @@ export const api = {
   resetArticleSummary: (id: string) => request<any>(`/articles/${id}/reset-summary`, { method: 'POST' }),
   rescrapeArticle: (id: string) => request<any>(`/articles/${id}/rescrape`, { method: 'POST' }),
   deleteArticle: (id: string) => request<any>(`/articles/${id}`, { method: 'DELETE' }),
+  getArticleFetchJobs: (params?: { page?: number; limit?: number; status?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.status) qs.set('status', params.status);
+    return request<any>(`/articles/fetch-jobs?${qs}`);
+  },
+  retryArticleFetchJob: (id: string) => request<any>(`/articles/fetch-jobs/${id}/retry`, { method: 'POST' }),
+  deleteArticleFetchJob: (id: string) => request<any>(`/articles/fetch-jobs/${id}`, { method: 'DELETE' }),
 
   // Digests
   getLatestDigest: (lang?: string) => request<any>(`/digests/latest?lang=${lang || 'vi'}`),

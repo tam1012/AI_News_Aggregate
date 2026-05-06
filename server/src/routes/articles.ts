@@ -87,6 +87,78 @@ articles.get('/', async (c) => {
   });
 });
 
+articles.get('/fetch-jobs', async (c) => {
+  const page = parseBoundedInt(c.req.query('page'), 1, 1, 500);
+  const limit = parseBoundedInt(c.req.query('limit'), 50, 1, 100);
+  const status = c.req.query('status');
+  const offset = (page - 1) * limit;
+
+  const params: any[] = [];
+  let where = 'WHERE 1=1';
+  if (status) {
+    if (!['discovered', 'fetching', 'done', 'failed'].includes(status)) {
+      return c.json({ success: false, error: { code: 'VALIDATION', message: 'Invalid fetch job status' } }, 400);
+    }
+    params.push(status);
+    where += ` AND j.status = $${params.length}`;
+  }
+
+  const countResult = await getOne<{ count: string }>(
+    `SELECT COUNT(*) as count FROM article_fetch_jobs j ${where}`,
+    params
+  );
+  const total = parseInt(countResult?.count || '0');
+
+  params.push(limit, offset);
+  const rows = await getMany(
+    `SELECT j.id, j.source_id, j.url, j.title, j.external_id, j.published_at,
+            j.status, j.retry_count, j.last_error, j.created_at, j.updated_at,
+            s.name as source_name, s.type as source_type
+     FROM article_fetch_jobs j
+     LEFT JOIN sources s ON s.id = j.source_id
+     ${where}
+     ORDER BY CASE j.status WHEN 'failed' THEN 0 WHEN 'fetching' THEN 1 WHEN 'discovered' THEN 2 ELSE 3 END,
+              j.updated_at DESC
+     LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params
+  );
+
+  return c.json({
+    success: true,
+    data: rows,
+    meta: { page, limit, total, totalPages: Math.ceil(total / limit), status: status || null },
+  });
+});
+
+articles.post('/fetch-jobs/:id/retry', async (c) => {
+  const { id } = c.req.param();
+  const existing = await getOne('SELECT id FROM article_fetch_jobs WHERE id = $1', [id]);
+  if (!existing) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Fetch job not found' } }, 404);
+  }
+
+  await query(
+    `UPDATE article_fetch_jobs
+     SET status = 'discovered', last_error = NULL, updated_at = NOW()
+     WHERE id = $1`,
+    [id]
+  );
+
+  import('../jobs/scheduler.js').then(m => m.runArticleFetchJob()).catch(console.error);
+
+  return c.json({ success: true, data: { retried: true } });
+});
+
+articles.delete('/fetch-jobs/:id', async (c) => {
+  const { id } = c.req.param();
+  const result = await query('DELETE FROM article_fetch_jobs WHERE id = $1', [id]);
+  if (!result.rowCount) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Fetch job not found' } }, 404);
+  }
+
+  return c.json({ success: true, data: { deleted: true } });
+});
+
 articles.post('/:id/reset-summary', async (c) => {
   const { id } = c.req.param();
   const existing = await getOne('SELECT id FROM articles WHERE id = $1', [id]);
