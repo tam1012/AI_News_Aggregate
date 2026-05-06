@@ -248,15 +248,18 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   display: flex; align-items: center; gap: 6px;
   overflow-x: auto; flex: 1; min-width: 0;
   scrollbar-width: thin;
-  scrollbar-color: var(--color-border) transparent;
+  scrollbar-color: var(--color-text-muted) transparent;
   cursor: grab;
-  padding-bottom: 2px;
+  padding-bottom: 3px;
   user-select: none;
   -webkit-user-select: none;
 }
-.topic-scroll::-webkit-scrollbar { height: 3px; }
+.topic-scroll::-webkit-scrollbar { height: 5px; }
 .topic-scroll::-webkit-scrollbar-thumb {
-  background: var(--color-border); border-radius: 2px;
+  background: var(--color-text-muted); border-radius: 3px;
+}
+.topic-scroll::-webkit-scrollbar-track {
+  background: var(--color-bg-hover); border-radius: 3px;
 }
 .split-feed-toolbar .feed-tabs {
   position: static; top: auto; z-index: auto;

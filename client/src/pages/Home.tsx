@@ -327,17 +327,22 @@ export function Home() {
     [tab, selectedDate]
   );
   const popularTags: { tag: string; count: number }[] = useMemo(() => tagsRaw?.data || [], [tagsRaw]);
-
-  // After tags reload, scroll the active chip back into view
+  // After filter changes, scroll the active chip into center view
   useEffect(() => {
-    if (!filterTag || !filtersRowRef.current) return;
-    const activeChip = filtersRowRef.current.querySelector('.topic-chip.active') as HTMLElement;
-    if (activeChip) {
-      requestAnimationFrame(() => {
-        activeChip.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      });
-    }
-  }, [popularTags, filterTag]);
+    if (!filterTag) return;
+    const timer = setTimeout(() => {
+      const el = filtersRowRef.current;
+      if (!el) return;
+      const activeChip = el.querySelector('.topic-chip.active') as HTMLElement;
+      if (activeChip) {
+        const containerRect = el.getBoundingClientRect();
+        const chipRect = activeChip.getBoundingClientRect();
+        const scrollTarget = el.scrollLeft + (chipRect.left - containerRect.left) - (containerRect.width / 2) + (chipRect.width / 2);
+        el.scrollTo({ left: scrollTarget, behavior: 'smooth' });
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [filterTag]);
 
   const readerLoadingState = getReaderLoadingState({ isFeedLoading: loading, hasArticleDeepLink });
   const detailPaneVisible = shouldShowDetailPane({
