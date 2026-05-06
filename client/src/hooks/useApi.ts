@@ -51,6 +51,26 @@ const FONT_OPTIONS = [
     stack: "'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   },
   {
+    key: 'inter',
+    label: 'Inter',
+    stack: "'Inter', 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  },
+  {
+    key: 'open-sans',
+    label: 'Open Sans',
+    stack: "'Open Sans', 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  },
+  {
+    key: 'roboto',
+    label: 'Roboto',
+    stack: "'Roboto', 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  },
+  {
+    key: 'source-sans-3',
+    label: 'Source Sans 3',
+    stack: "'Source Sans 3', 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  },
+  {
     key: 'google-sans',
     label: 'Google Sans',
     stack: "'Google Sans', 'Product Sans', 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -59,11 +79,6 @@ const FONT_OPTIONS = [
     key: 'system',
     label: 'System',
     stack: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', sans-serif",
-  },
-  {
-    key: 'dm-sans',
-    label: 'DM Sans',
-    stack: "'DM Sans', 'Noto Sans', -apple-system, BlinkMacSystemFont, sans-serif",
   },
 ] as const;
 

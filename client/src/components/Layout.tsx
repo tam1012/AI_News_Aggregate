@@ -12,6 +12,7 @@ export function Layout() {
   const isSources = location.pathname.startsWith('/sources');
   const shellClassName = usesFluidShell(location.pathname) ? 'container-fluid' : 'container';
   const [hasAdminToken, setHasAdminToken] = useState(false);
+  const [showTextMenu, setShowTextMenu] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -55,25 +56,41 @@ export function Layout() {
                 ⚙️
               </NavLink>
             ))}
-            <select
-              className="font-family-select"
-              value={fontFamily}
-              onChange={(e) => setFontFamily(e.target.value as typeof fontFamily)}
-              title="Font chữ"
-              aria-label="Font chữ"
-            >
-              {fontOptions.map((option) => (
-                <option key={option.key} value={option.key}>{option.label}</option>
-              ))}
-            </select>
-            <button
-              className="font-size-btn"
-              onClick={cycleFontSize}
-              title={`Cỡ chữ: ${fontSize}px`}
-            >
-              <span className="font-size-btn-label">Aa</span>
-              <span className="font-size-btn-value">{fontSize}</span>
-            </button>
+            <div className="text-settings-control">
+              <button
+                className="font-size-btn"
+                onClick={() => setShowTextMenu((value) => !value)}
+                title={`Cỡ chữ: ${fontSize}px · Font chữ`}
+                aria-expanded={showTextMenu}
+                aria-haspopup="menu"
+              >
+                <span className="font-size-btn-label">Aa</span>
+                <span className="font-size-btn-value">{fontSize}</span>
+              </button>
+              {showTextMenu && (
+                <div className="text-settings-menu" role="menu">
+                  <button className="text-settings-size" onClick={cycleFontSize} type="button">
+                    <span>Cỡ chữ</span>
+                    <strong>{fontSize}px</strong>
+                  </button>
+                  <div className="text-settings-label">Font chữ</div>
+                  {fontOptions.map((option) => (
+                    <button
+                      key={option.key}
+                      className={`text-settings-option ${fontFamily === option.key ? 'active' : ''}`}
+                      onClick={() => {
+                        setFontFamily(option.key);
+                        setShowTextMenu(false);
+                      }}
+                      type="button"
+                      role="menuitem"
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button
               className="icon-btn"
               onClick={toggleTheme}
