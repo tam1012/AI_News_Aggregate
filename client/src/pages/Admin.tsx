@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { api } from '../services/api';
 import { useEffect } from 'react';
 import { useFetch, useFetchRaw } from '../hooks/useApi';
@@ -25,7 +25,7 @@ type PromptConfigFormData = {
   custom_context: string;
 };
 
-type AdminTab = 'overview' | 'queue' | 'fetchJobs' | 'ai' | 'prompt' | 'articles';
+type AdminTab = 'overview' | 'queue' | 'fetchJobs' | 'ai' | 'prompt';
 type SummaryQueueStatus = 'failed' | 'pending' | 'processing' | 'skipped' | 'done';
 type FetchJobStatus = 'failed' | 'discovered' | 'fetching' | 'done';
 
@@ -168,7 +168,6 @@ export function Admin() {
           { key: 'fetchJobs', label: 'Hàng đợi lấy bài' },
           { key: 'ai', label: 'Nhà cung cấp AI' },
           { key: 'prompt', label: 'Cấu hình prompt' },
-          { key: 'articles', label: 'Bài viết' },
         ].map(t => (
           <button
             key={t.key}
@@ -438,7 +437,7 @@ export function Admin() {
       {tab === 'fetchJobs' && <FetchJobsTab />}
       {tab === 'ai' && <AiProvidersTab />}
       {tab === 'prompt' && <PromptConfigTab />}
-      {tab === 'articles' && <ArticlesTab />}
+
     </div>
   );
 }
@@ -1319,72 +1318,6 @@ function FetchJobsTab() {
           </div>
         </>
       )}
-    </div>
-  );
-}
-
-function ArticlesTab() {
-  const { data: raw, loading, reload } = useFetchRaw(
-    () => api.getArticles({ page: 1, limit: 500 }), []
-  );
-  const articles: any[] = raw?.data || [];
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Xóa bài viết này?')) return;
-    await api.deleteArticle(id);
-    reload();
-  };
-
-  const handleReset = async (id: string) => {
-    await api.resetArticleSummary(id);
-    reload();
-  };
-
-  const handleRescrape = async (id: string) => {
-    try {
-      const res = await api.rescrapeArticle(id);
-      if (res.success) {
-        alert(res.message || 'ÄĂ£ láº¥y láº¡i comment vĂ  gá»i yĂªu cáº§u tĂ³m táº¯t');
-      } else {
-        alert(res.message || 'Không có gì để cập nhật');
-      }
-      reload();
-    } catch (err: any) {
-      alert('Lỗi: ' + err.message);
-    }
-  };
-
-  if (loading) return <div className="loading">Đang tải...</div>;
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-      <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
-        Hiển thị {articles.length} bài mới nhất
-      </div>
-      {articles.map((a: any) => (
-        <div key={a.id} className="card" style={{ padding: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {a.title}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <span>{a.source_name}</span>
-                <span className={`badge badge-${a.summary_status === 'done' ? 'success' : a.summary_status === 'failed' ? 'error' : 'pending'}`}>
-                  {a.summary_status}
-                </span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-              {/voz|reddit/i.test(a.source_name || '') && (
-                <button className="btn btn-sm" style={{ background: '#2563eb', color: '#fff', fontSize: '0.72rem' }} onClick={() => handleRescrape(a.id)} title="Cào lại bình luận mới nhất">Cào lại</button>
-              )}
-              <button className="btn btn-sm" onClick={() => handleReset(a.id)} title="Tóm tắt lại">Tóm tắt lại</button>
-              <button className="btn btn-sm btn-danger" onClick={() => handleDelete(a.id)} title="Xóa">Xóa</button>
-            </div>
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
