@@ -328,21 +328,24 @@ export function Home() {
   );
   const popularTags: { tag: string; count: number }[] = useMemo(() => tagsRaw?.data || [], [tagsRaw]);
   // After filter changes, scroll the active chip into center view
+  const scrollActiveChipToCenter = useCallback(() => {
+    const el = filtersRowRef.current;
+    if (!el) return;
+    const activeChip = el.querySelector('.topic-chip.active') as HTMLElement;
+    if (activeChip) {
+      const containerRect = el.getBoundingClientRect();
+      const chipRect = activeChip.getBoundingClientRect();
+      const scrollTarget = el.scrollLeft + (chipRect.left - containerRect.left) - (containerRect.width / 2) + (chipRect.width / 2);
+      el.scrollTo({ left: Math.max(0, scrollTarget), behavior: 'smooth' });
+    }
+  }, []);
   useEffect(() => {
     if (!filterTag) return;
-    const timer = setTimeout(() => {
-      const el = filtersRowRef.current;
-      if (!el) return;
-      const activeChip = el.querySelector('.topic-chip.active') as HTMLElement;
-      if (activeChip) {
-        const containerRect = el.getBoundingClientRect();
-        const chipRect = activeChip.getBoundingClientRect();
-        const scrollTarget = el.scrollLeft + (chipRect.left - containerRect.left) - (containerRect.width / 2) + (chipRect.width / 2);
-        el.scrollTo({ left: scrollTarget, behavior: 'smooth' });
-      }
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [filterTag]);
+    // Retry at multiple intervals to handle React re-render timing
+    const t1 = setTimeout(scrollActiveChipToCenter, 50);
+    const t2 = setTimeout(scrollActiveChipToCenter, 300);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [filterTag, scrollActiveChipToCenter]);
 
   const readerLoadingState = getReaderLoadingState({ isFeedLoading: loading, hasArticleDeepLink });
   const detailPaneVisible = shouldShowDetailPane({
@@ -640,10 +643,7 @@ export function Home() {
                     <button
                       key={t.tag}
                       className={`topic-chip ${filterTag === t.tag ? 'active' : ''} ${!filterTag && !t.tag ? 'active' : ''}`}
-                      onClick={(e) => {
-                        setFilterTag(filterTag === t.tag ? '' : t.tag);
-                        (e.currentTarget as HTMLElement).scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-                      }}
+                      onClick={() => setFilterTag(filterTag === t.tag ? '' : t.tag)}
                       type="button"
                       title={`${t.count} bài`}
                     >
