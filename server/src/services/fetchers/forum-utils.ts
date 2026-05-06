@@ -28,11 +28,26 @@ function dedupeTextKey(text: string): string {
 }
 
 export function scoreForumComment(body: string, reactions: number, page: number, order: number): number {
-  const lengthBonus = Math.min(body.length / 140, 4);
+  const normalized = normalizeWhitespace(body);
+  const lengthBonus = Math.min(normalized.length / 140, 4);
   const reactionBonus = Math.min(reactions, 50) * 0.35;
   const earlyThreadBonus = page === 1 ? 1.2 : 0;
   const earlyReplyBonus = order < 8 ? 0.6 : 0;
-  return reactionBonus + lengthBonus + earlyThreadBonus + earlyReplyBonus;
+  const questionOrExperienceBonus = /\?|\b(i|i'm|i’ve|we|my|our|tôi|mình|em|anh|team|công ty|kinh nghiệm|dùng|thử|triển khai)\b/i.test(normalized) ? 0.8 : 0;
+  return reactionBonus + lengthBonus + earlyThreadBonus + earlyReplyBonus + questionOrExperienceBonus;
+}
+
+export function isUsefulForumComment(body: string): boolean {
+  const normalized = normalizeWhitespace(body);
+  if (normalized.length < 45) return false;
+  const lowered = normalized.toLowerCase();
+  if (/^([+\-]?1|lol|lmao|haha|hihi|ok|okay|thanks|thank you|first|up|bump|subscribed|following|hóng|hóng\.|chấm|\.)(\s|[.!?])*$/i.test(lowered)) return false;
+  if (/^(same|this|agree|đúng|chuẩn|hay|ngon|tuyệt|vl|vãi|haha|hahaha|kkk|:v|=\))$/i.test(lowered)) return false;
+  const words = normalized.split(/\s+/).filter(Boolean);
+  if (words.length < 8) return false;
+  const uniqueWords = new Set(words.map((word) => word.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean));
+  if (uniqueWords.size < 6) return false;
+  return true;
 }
 
 export function selectForumComments(comments: ForumComment[], maxComments: number): ForumComment[] {
@@ -40,6 +55,7 @@ export function selectForumComments(comments: ForumComment[], maxComments: numbe
   const unique = comments.filter((comment) => {
     const key = dedupeTextKey(comment.body);
     if (!key || key.length < 12 || seen.has(key)) return false;
+    if (!isUsefulForumComment(comment.body)) return false;
     seen.add(key);
     return true;
   });
@@ -62,8 +78,12 @@ export function hasMinimumForumDiscussion(commentCount: number, minComments = 10
   return commentCount >= minComments;
 }
 
-export function shouldInsertForumArticle(kind: 'reddit' | 'voz', commentCount: number, minComments = 10): boolean {
-  return hasMinimumForumDiscussion(commentCount, minComments);
+export function hasMinimumUsefulForumDiscussion(comments: ForumComment[], minUsefulComments = 3): boolean {
+  return comments.filter((comment) => isUsefulForumComment(comment.body)).length >= minUsefulComments;
+}
+
+export function shouldInsertForumArticle(kind: 'reddit' | 'voz', commentCount: number, minComments = 10, usefulComments: ForumComment[] = [], minUsefulComments = 3): boolean {
+  return hasMinimumForumDiscussion(commentCount, minComments) && hasMinimumUsefulForumDiscussion(usefulComments, minUsefulComments);
 }
 
 export function parseVozPosts(html: string, page: number): VozPost[] {

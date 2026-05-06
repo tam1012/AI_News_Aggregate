@@ -460,12 +460,13 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
       } catch {
       }
 
-      if (!shouldInsertForumArticle('reddit', discussionComments.length, REDDIT_MIN_COMMENTS)) {
-        console.log(`[reddit] Skip ${postPath}: only ${discussionComments.length} comments/replies`);
+      const selectedRedditComments = selectForumComments(discussionComments, REDDIT_COMMENT_LIMIT);
+      if (!shouldInsertForumArticle('reddit', discussionComments.length, REDDIT_MIN_COMMENTS, selectedRedditComments)) {
+        console.log(`[reddit] Skip ${postPath}: ${discussionComments.length} comments/replies, ${selectedRedditComments.length} useful`);
         continue;
       }
 
-      const fullContent = buildRedditRawContent(postContent, outboundUrl, discussionComments, discussionComments.length);
+      const fullContent = buildRedditRawContent(postContent, outboundUrl, selectedRedditComments, discussionComments.length);
       const contentHash = createContentHash(item.title + fullContent.substring(0, 300));
       const hashExists = await getOne('SELECT id FROM articles WHERE content_hash = $1', [contentHash]);
       if (hashExists) continue;
@@ -593,12 +594,12 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
               score: scoreForumComment(post.body, post.reactions, post.page, post.order),
             }));
 
-          if (!shouldInsertForumArticle('voz', comments.length, FORUM_MIN_COMMENTS)) {
-            console.log(`[voz] Skip ${url}: only ${comments.length} replies (min ${FORUM_MIN_COMMENTS})`);
+          const selectedComments = selectForumComments(comments, FORUM_MAX_COMMENTS);
+          if (!shouldInsertForumArticle('voz', comments.length, FORUM_MIN_COMMENTS, selectedComments)) {
+            console.log(`[voz] Skip ${url}: ${comments.length} replies, ${selectedComments.length} useful`);
             continue;
           }
 
-          const selectedComments = selectForumComments(comments, FORUM_MAX_COMMENTS);
           fullContent = buildVozRawContent(allPosts, selectedComments, visited.size, comments.length);
         }
       } catch (err: any) {
