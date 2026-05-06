@@ -21,6 +21,26 @@ import {
 } from '../lib/summaryRetryPolicy.js';
 import { runWithJobLock } from '../lib/jobLock.js';
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s`)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+}
+
+function getSourceScrapeTimeoutMs(source: any): number {
+  const configured = Number(process.env.SOURCE_SCRAPE_TIMEOUT_MS || 0);
+  if (Number.isFinite(configured) && configured >= 10_000) return configured;
+
+  const name = String(source.name || '').toLowerCase();
+  const url = String(source.url || '').toLowerCase();
+  if (name.includes('reddit') || url.includes('reddit.com')) return 90_000;
+  if (name.includes('voz') || url.includes('voz.vn')) return 120_000;
+  return 45_000;
+}
+
 // Scrape ALL enabled sources (chay moi gio tai :00)
 async function runScrapeJob() {
   console.log(`[${new Date().toISOString()}] Starting scrape job...`);
@@ -43,15 +63,15 @@ async function runScrapeJob() {
 
     try {
       console.log(`  Scraping [${source.type}] ${source.name}...`);
-      const fetcher = getFetcherForSource(source, sourceFetchers);
-      let result;
-      if (fetcher.discover) {
-        const discovered = await fetcher.discover(source);
-        const enqueued = await enqueueDiscoveredArticles(discovered);
-        result = { itemsFound: discovered.length, itemsInserted: enqueued, errors: [] as string[] };
-      } else {
-        result = await scrapeSource(source);
-      }
+      const result = await withTimeout((async () => {
+        const fetcher = getFetcherForSource(source, sourceFetchers);
+        if (fetcher.discover) {
+          const discovered = await fetcher.discover(source);
+          const enqueued = await enqueueDiscoveredArticles(discovered);
+          return { itemsFound: discovered.length, itemsInserted: enqueued, errors: [] as string[] };
+        }
+        return scrapeSource(source);
+      })(), getSourceScrapeTimeoutMs(source), `Scrape source ${source.name}`);
 
       const nextRunDelayMinutes = result.errors.length > 0
         ? Math.min(scrapeIntervalHours * 60 * 2, 24 * 60)
