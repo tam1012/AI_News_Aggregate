@@ -1120,14 +1120,20 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 /* ===== Topic Filter Chips ===== */
 .topic-chips {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 6px 0 2px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
 }
-.topic-chips::-webkit-scrollbar {
-  display: none;
+@media (max-width: 899px) {
+  .topic-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .topic-chips::-webkit-scrollbar {
+    display: none;
+  }
 }
 .topic-chip {
   flex-shrink: 0;
