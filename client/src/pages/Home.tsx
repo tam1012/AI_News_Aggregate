@@ -362,8 +362,24 @@ export function Home() {
 
   // Lock body scroll when detail open (handled via CSS class for mobile only)
   useEffect(() => {
-    document.body.classList.toggle('detail-open', detailPaneVisible);
-    return () => { document.body.classList.remove('detail-open'); };
+    if (!detailPaneVisible) {
+      document.body.classList.remove('detail-open');
+      document.body.style.removeProperty('top');
+      document.body.style.removeProperty('width');
+      return;
+    }
+
+    const scrollY = window.scrollY;
+    document.body.classList.add('detail-open');
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+
+    return () => {
+      document.body.classList.remove('detail-open');
+      document.body.style.removeProperty('top');
+      document.body.style.removeProperty('width');
+      window.scrollTo({ top: scrollY, behavior: 'instant' });
+    };
   }, [detailPaneVisible]);
 
   // Add split-view-active class for desktop body overflow lock
@@ -785,10 +801,9 @@ function ArticleDetail({
   const sourceLabel = extractSourceLabel(article);
   const title = cleanTitle(article.title);
 
-  // Auto-scroll to top when article changes
+  // Auto-scroll detail panel to top when article changes
   useEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
-    window.scrollTo({ top: 0, behavior: 'instant' });
   }, [article.id]);
 
   // Split summary into TL;DR and Body

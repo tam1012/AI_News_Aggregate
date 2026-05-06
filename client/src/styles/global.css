@@ -918,6 +918,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 
 @media (max-width: 899px) {
   body.detail-open {
+    position: fixed;
     overflow: hidden;
   }
 
