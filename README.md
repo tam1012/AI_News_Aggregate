@@ -197,18 +197,27 @@ Một số file `.sql`, script test/debug, ảnh và tài liệu review ở root
 
 ### 1. Scrape
 
-`startCronJobs()` gọi `runScrapeJob()` theo chu kỳ `SCRAPE_INTERVAL_HOURS`.
+`startCronJobs()` gọi `runScrapeJob()` ở phút `00` mỗi `SCRAPE_INTERVAL_HOURS` giờ để kiểm tra source nào đến hạn.
 
-`runScrapeJob()` lấy tất cả source đang bật:
+Mỗi source có lịch riêng bằng `fetch_interval_minutes` và `next_run_at`:
+
+- Source mới mặc định `fetch_interval_minutes = 60`, tức 1 giờ/lần.
+- Mỗi lần scrape thành công, source được đặt `next_run_at = NOW() + fetch_interval_minutes`.
+- Nếu scrape có lỗi một phần, lượt sau bị giãn gấp đôi interval, tối đa 24 giờ.
+- Nếu scrape fail hẳn, `consecutive_failures` tăng và dùng exponential backoff, tối đa 24 giờ.
+- Cron chính vẫn đánh thức theo `SCRAPE_INTERVAL_HOURS` để quét danh sách đến hạn, nên source 60 phút sẽ chạy ở lượt cron gần nhất sau khi đến hạn.
+
+`runScrapeJob()` chỉ lấy source đang bật và đã đến hạn:
 
 ```sql
 SELECT id, type, name, url, language, category, fetch_interval_minutes, parser_config
 FROM sources
 WHERE is_enabled = true
-ORDER BY name ASC
+  AND (next_run_at IS NULL OR next_run_at <= NOW())
+ORDER BY COALESCE(next_run_at, created_at) ASC, name ASC
 ```
 
-Sau đó `scrapeSource()` chọn nhánh xử lý:
+Sau đó `scrapeSource()` hoặc fetcher chuyên biệt chọn nhánh xử lý:
 
 - URL Reddit -> `scrapeRedditSource()`
 - URL VOZ -> `scrapeVozSource()`
@@ -397,7 +406,7 @@ Biến quan trọng:
 | `ADMIN_TOKEN` | Token admin cho endpoint mutate/protected |
 | `PUBLIC_SITE_URL` | Base URL public để sinh Open Graph link |
 | `CORS_ORIGIN` | Origin được phép gọi API |
-| `SCRAPE_INTERVAL_HOURS` | Chu kỳ scrape/summarize/digest chính |
+| `SCRAPE_INTERVAL_HOURS` | Chu kỳ cron kiểm tra source đến hạn và tạo digest, mặc định `3` giờ |
 | `MAX_ARTICLES_PER_SOURCE` | Số bài tối đa lấy từ mỗi source mỗi lượt |
 | `MAX_AI_CALLS_PER_RUN` | Số bài tối đa tóm tắt mỗi lượt |
 | `DIGEST_ARTICLE_LIMIT` | Số bài tối đa đưa vào mỗi bản tin, mặc định 100, trần 200 |
@@ -583,7 +592,7 @@ Sau khi `docker compose up -d --build` thành công:
 
 2. **Thêm nguồn tin** — Mở `https://your-domain/sources`, thêm nguồn RSS, web hoặc kênh YouTube. Backend tự nhận diện URL Reddit/VOZ/YouTube và chuyển sang scraper riêng.
 
-3. **Chờ cron hoặc trigger thủ công** — Cron scrape sẽ chạy mỗi `SCRAPE_INTERVAL_HOURS` giờ. Để test ngay, vào `/admin` → bấm nút "Cào tin" và "Tóm tắt".
+3. **Chờ cron hoặc trigger thủ công** — Source mới mặc định cào lại mỗi 60 phút, nhưng cron chính kiểm tra các source đến hạn mỗi `SCRAPE_INTERVAL_HOURS` giờ. Để test ngay, vào `/admin` → bấm nút "Cào tin", "Fetch bài" và "Tóm tắt".
 
 4. **Kiểm tra** — Sau khi scrape + summarize xong, bài sẽ hiện trên trang chủ với TL;DR preview.
 
@@ -660,10 +669,12 @@ Lưu ý: đổi URL smoke test public trong `deploy.yml` nếu dùng domain khá
 
 | Job | Lịch | Việc làm |
 |---|---|---|
-| Scrape & Summarize | `0 */SCRAPE_INTERVAL_HOURS * * *` | Scrape tất cả source bật, rồi summarize bài mới |
-| Forum Rescrape | `0,30 * * * *` | Cào lại Reddit/VOZ mới, bỏ qua phút `00` nếu trùng giờ scrape chính |
-| Digest | `30 */SCRAPE_INTERVAL_HOURS * * *` | Tạo bản tin sau scrape chính |
-| Retry | `*/10 * * * *` | Reset bài kẹt/failed và retry comment Reddit |
+| Source discovery | `0 */SCRAPE_INTERVAL_HOURS * * *` | Kiểm tra source đến hạn theo `next_run_at`; source mặc định 60 phút/lần, lỗi thì backoff tối đa 24 giờ |
+| Article Fetch Queue | `*/5 * * * *` | Claim URL đã discover trong `article_fetch_jobs`, fetch nội dung chi tiết, rồi tạo article pending summary |
+| Summarize | `*/10 * * * *` | Claim bài `pending`, gọi AI, cập nhật `done/skipped/failed` |
+| Forum Rescrape | `0,30 * * * *` | Cào lại Reddit/VOZ mới, bỏ qua phút `00` nếu trùng giờ source discovery |
+| Digest | `30 */SCRAPE_INTERVAL_HOURS * * *` | Tạo bản tin từ các bài đã tóm tắt trong 24 giờ gần nhất |
+| Retry | `*/10 * * * *` | Reset bài/queue kẹt, retry failed còn hạn và retry comment Reddit |
 | Cleanup | `43 2 * * *` | Xóa scrape logs cũ, dọn raw_content bài cũ, reset processing kẹt |
 
 Cleanup hiện tại:

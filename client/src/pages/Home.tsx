@@ -163,10 +163,11 @@ function ReadmeWelcome() {
       <div style={{ textAlign: 'left', background: 'var(--color-bg)', padding: '24px', borderRadius: 'var(--radius)', fontSize: '0.95rem', lineHeight: '1.7' }}>
         <h3 style={{ marginBottom: '12px' }}>Cách hoạt động:</h3>
         <ul style={{ paddingLeft: '20px', marginBottom: '20px', color: 'var(--color-text-secondary)' }}>
-          <li><strong>Cào tin (Mỗi 3 giờ):</strong> Hệ thống tự động quét toàn bộ nguồn tin RSS, báo mạng, Reddit và VOZ vào các khung giờ 0h, 3h, 6h, 9h, 12h, 15h, 18h, 21h.</li>
-          <li><strong>Cào lại bình luận (Mỗi 30 phút):</strong> Các bài từ Reddit và VOZ sẽ được cào lại tối đa 2 lần để cập nhật bình luận mới nhất.</li>
-          <li><strong>Tóm tắt (Tự động):</strong> AI sẽ đọc toàn bộ nội dung gốc và viết lại thành bản tóm tắt chi tiết bằng tiếng Việt.</li>
-          <li><strong>Bản tin (Mỗi 3 giờ):</strong> Gom nhóm tất cả tin tức trong ngày thành một "Bản tin thời sự" duy nhất.</li>
+          <li><strong>Cào nguồn (mặc định mỗi 60 phút/source):</strong> Cứ 3 giờ hệ thống kiểm tra các nguồn đến hạn theo <code>next_run_at</code>; nguồn mới mặc định 60 phút/lần, nguồn lỗi sẽ tự backoff tối đa 24 giờ.</li>
+          <li><strong>Fetch bài chi tiết (mỗi 5 phút):</strong> URL mới từ RSS, Reddit, VOZ, YouTube hoặc GitHub Trending được đưa vào queue riêng rồi fetch nội dung chi tiết độc lập.</li>
+          <li><strong>Cào lại bình luận forum (mỗi 30 phút):</strong> Các bài Reddit và VOZ mới được cào lại tối đa 2 lần để cập nhật bình luận mới nhất.</li>
+          <li><strong>Tóm tắt AI (mỗi 10 phút + khi cần):</strong> AI đọc nội dung gốc và viết lại thành bản tóm tắt tiếng Việt; job retry cũng chạy mỗi 10 phút để mở kẹt lỗi tạm thời.</li>
+          <li><strong>Bản tin (mỗi 3 giờ, phút 30):</strong> Gom nhóm tin đã tóm tắt trong ngày thành một "Bản tin thời sự" duy nhất.</li>
         </ul>
 
         <h3 style={{ marginBottom: '12px' }}>Tính năng chính:</h3>
@@ -629,7 +630,7 @@ export function Home() {
             )}
 
             <div className="reader-footer">
-              <p>🤖 Tin tức và YouTube cập nhật mỗi 3 giờ · Bình luận forum cập nhật mỗi 30 phút · Tóm tắt bằng AI</p>
+              <p>🤖 Nguồn mặc định cào mỗi 60 phút và tự backoff khi lỗi · Fetch bài mỗi 5 phút · Tóm tắt AI mỗi 10 phút</p>
             </div>
           </div>
         </div>
