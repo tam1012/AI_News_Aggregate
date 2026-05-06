@@ -286,6 +286,26 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 
 /* ===== Feed Container ===== */
+.feed-sort-toggle {
+  display: flex;
+  gap: 6px;
+  padding: 8px 0 2px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+.feed-sort-option {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: 5px 11px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.feed-sort-option.active {
+  border-color: var(--color-accent);
+  background: rgba(184, 134, 11, 0.1);
+  color: var(--color-accent);
+}
 .feed-container { padding: 8px 0 24px; }
 
 .offline-cache-banner {

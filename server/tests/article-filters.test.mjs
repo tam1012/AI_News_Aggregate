@@ -50,6 +50,7 @@ test('article filters validate score, status, and date', () => {
   assert.throws(() => buildArticleListFilters({ date: '04-05-2026' }), /date must be YYYY-MM-DD/);
   assert.throws(() => buildArticleListFilters({ minScore: '11' }), /minScore must be between 1 and 10/);
   assert.throws(() => buildArticleListFilters({ feedTab: 'bad' }), /Invalid feedTab/);
+  assert.throws(() => buildArticleListFilters({ sort: 'bad' }), /Invalid sort/);
 });
 
 test('article filters add feed tab predicates before pagination', () => {
@@ -59,6 +60,16 @@ test('article filters add feed tab predicates before pagination', () => {
   assert.match(buildArticleListFilters({ feedTab: 'reddit' }).where, /reddit/);
   assert.match(buildArticleListFilters({ feedTab: 'voz' }).where, /voz/);
   assert.match(buildArticleListFilters({ feedTab: 'youtube' }).where, /s\.type = 'youtube'/);
+});
+
+test('article filters expose latest and hot ordering modes', () => {
+  const { buildArticleListFilters, buildArticleListOrderBy } = loadTsModule('../src/lib/articleFilters.ts');
+
+  assert.equal(buildArticleListFilters({}).sort, 'latest');
+  assert.equal(buildArticleListFilters({ sort: 'hot' }).sort, 'hot');
+  assert.match(buildArticleListOrderBy('latest'), /published_at/);
+  assert.match(buildArticleListOrderBy('hot'), /hot_score/);
+  assert.match(buildArticleListOrderBy('hot'), /published_at/);
 });
 
 test('article local date text SQL serializes as YYYY-MM-DD instead of a UTC Date object', () => {

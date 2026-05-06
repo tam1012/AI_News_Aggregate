@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { getMany, getOne, query } from '../db/index.js';
-import { LOCAL_DATE_SQL, LOCAL_DATE_TEXT_SQL, buildArticleListFilters } from '../lib/articleFilters.js';
+import { LOCAL_DATE_SQL, LOCAL_DATE_TEXT_SQL, buildArticleListFilters, buildArticleListOrderBy } from '../lib/articleFilters.js';
 import { decodeArticleRows, decodeArticleTextFields } from '../lib/htmlEntities.js';
 
 const articles = new Hono();
@@ -47,11 +47,12 @@ articles.get('/', async (c) => {
   const tag = c.req.query('tag');
   const minScore = c.req.query('minScore');
   const feedTab = c.req.query('feedTab');
+  const sort = c.req.query('sort');
   const offset = (page - 1) * limit;
 
   let filters;
   try {
-    filters = buildArticleListFilters({ sourceId, status, date, tag, minScore, feedTab });
+    filters = buildArticleListFilters({ sourceId, status, date, tag, minScore, feedTab, sort });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'VALIDATION', message: err.message } }, 400);
   }
@@ -63,6 +64,7 @@ articles.get('/', async (c) => {
   const total = parseInt(countResult?.count || '0');
 
   const params = [...filters.params];
+  const orderBy = buildArticleListOrderBy(filters.sort);
   let paramIndex = filters.nextParamIndex;
   params.push(limit, offset);
   const rows = await getMany(
@@ -75,7 +77,7 @@ articles.get('/', async (c) => {
      FROM articles a
      LEFT JOIN sources s ON s.id = a.source_id
      ${filters.where}
-     ORDER BY COALESCE(a.published_at, a.created_at) DESC
+     ${orderBy}
      LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
     params
   );
@@ -83,7 +85,7 @@ articles.get('/', async (c) => {
   return c.json({
     success: true,
     data: decodeArticleRows(rows),
-    meta: { page, limit, total, totalPages: Math.ceil(total / limit), date: date || null, tag: tag || null, minScore: minScore || null, feedTab: feedTab || null },
+    meta: { page, limit, total, totalPages: Math.ceil(total / limit), date: date || null, tag: tag || null, minScore: minScore || null, feedTab: feedTab || null, sort: filters.sort },
   });
 });
 

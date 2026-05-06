@@ -3,6 +3,9 @@ export const LOCAL_DATE_TEXT_SQL = `TO_CHAR(${LOCAL_DATE_SQL}, 'YYYY-MM-DD')`;
 
 const VALID_SUMMARY_STATUSES = ['pending', 'processing', 'done', 'failed', 'skipped'];
 const VALID_FEED_TABS = ['news', 'voz', 'reddit', 'youtube'];
+const VALID_ARTICLE_SORTS = ['latest', 'hot'];
+
+export type ArticleListSort = 'latest' | 'hot';
 
 export interface ArticleListFilterInput {
   sourceId?: string;
@@ -11,12 +14,14 @@ export interface ArticleListFilterInput {
   tag?: string;
   minScore?: string;
   feedTab?: string;
+  sort?: string;
 }
 
 export interface ArticleListFilters {
   where: string;
   params: any[];
   nextParamIndex: number;
+  sort: ArticleListSort;
 }
 
 function parseMinScore(value?: string): number | null {
@@ -41,6 +46,11 @@ export function buildArticleListFilters(input: ArticleListFilterInput): ArticleL
     throw new Error('Invalid feedTab');
   }
 
+  if (input.sort && !VALID_ARTICLE_SORTS.includes(input.sort)) {
+    throw new Error('Invalid sort');
+  }
+
+  const sort: ArticleListSort = input.sort === 'hot' ? 'hot' : 'latest';
   const minScore = parseMinScore(input.minScore);
   const params: any[] = [];
   const clauses = ['1=1'];
@@ -80,5 +90,15 @@ export function buildArticleListFilters(input: ArticleListFilterInput): ArticleL
     where: `WHERE ${clauses.join(' AND ')}`,
     params,
     nextParamIndex: paramIndex,
+    sort,
   };
+}
+
+export function buildArticleListOrderBy(sort: ArticleListSort): string {
+  if (sort === 'hot') {
+    return `ORDER BY COALESCE(a.hot_score, 0) DESC,
+             COALESCE(a.published_at, a.created_at) DESC`;
+  }
+
+  return 'ORDER BY COALESCE(a.published_at, a.created_at) DESC';
 }

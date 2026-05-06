@@ -203,6 +203,7 @@ function ReadmeWelcome() {
 }
 
 type FeedTab = 'news' | 'voz' | 'reddit' | 'youtube';
+type FeedSort = 'latest' | 'hot';
 
 function classifyArticle(article: any): FeedTab {
   const name = (article.source_name || '').toLowerCase();
@@ -233,6 +234,7 @@ export function Home() {
   const [selected, setSelected] = useState<any | null>(null);
   const [tab, setTab] = useState<'news' | 'voz' | 'reddit' | 'youtube' | 'digest'>(initialTab);
   const [filterSource, setFilterSource] = useState<string>('all');
+  const [feedSort, setFeedSort] = useState<FeedSort>('latest');
   const [showFilter, setShowFilter] = useState(false);
   const [readArticleIds, setReadArticleIds] = useState<string[]>(() => loadReadArticles());
   const [copyToast, setCopyToast] = useState<string | null>(null);
@@ -265,9 +267,9 @@ export function Home() {
     () => {
       // Don't fetch until we have a date, unless there are no dates at all
       if (availableDates.length > 0 && !selectedDate) return Promise.resolve({ data: [], meta: { total: 0, page: 1, totalPages: 0 } });
-      return api.getArticles({ page: 1, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab });
+      return api.getArticles({ page: 1, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab, sort: feedSort });
     },
-    [selectedDate, filterSource, availableDates.length, tab]
+    [selectedDate, filterSource, availableDates.length, tab, feedSort]
   );
 
   useEffect(() => {
@@ -328,7 +330,7 @@ export function Home() {
     setIsLoadingMore(true);
     setLoadMoreError(null);
     try {
-      const response = await api.getArticles({ page: nextPage, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab });
+      const response = await api.getArticles({ page: nextPage, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab, sort: feedSort });
       setArticlePages(prev => [...prev, ...(response?.data || [])]);
       setArticlePage(nextPage);
     } catch (err: any) {
@@ -336,7 +338,7 @@ export function Home() {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [articlePage, filterSource, hasMoreArticles, isLoadingMore, selectedDate, tab]);
+  }, [articlePage, feedSort, filterSource, hasMoreArticles, isLoadingMore, selectedDate, tab]);
 
   // Date navigation handlers
   const handlePrevDate = () => {
@@ -560,6 +562,23 @@ export function Home() {
               )}
             </div>
           </div>
+          <div className="feed-sort-toggle" aria-label="Sắp xếp tin">
+            <button
+              className={`feed-sort-option ${feedSort === 'latest' ? 'active' : ''}`}
+              onClick={() => setFeedSort('latest')}
+              type="button"
+            >
+              Mới nhất
+            </button>
+            <button
+              className={`feed-sort-option ${feedSort === 'hot' ? 'active' : ''}`}
+              onClick={() => setFeedSort('hot')}
+              type="button"
+            >
+              Tin nóng
+            </button>
+          </div>
+
           {/* Active filter indicator */}
           {filterSource !== 'all' && (
             <div className="filter-active">

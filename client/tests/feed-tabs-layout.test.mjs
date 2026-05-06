@@ -84,3 +84,16 @@ test('feed uses server-side tab pagination and exposes load-more control', () =>
   assert.match(homeSource, /handleLoadMoreArticles/);
   assert.match(homeSource, /Tải thêm bài cũ/);
 });
+
+test('feed exposes latest and hot ranking controls backed by API sort', () => {
+  const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
+  const apiSource = readFileSync(resolve(__dirname, '../src/services/api.ts'), 'utf8');
+  const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
+
+  assert.match(apiSource, /sort\?: 'latest' \| 'hot'/);
+  assert.match(apiSource, /qs\.set\('sort', params\.sort\)/);
+  assert.match(homeSource, /type FeedSort = 'latest' \| 'hot'/);
+  assert.match(homeSource, /Tin nóng/);
+  assert.match(homeSource, /sort: feedSort/);
+  assert.match(css, /\.feed-sort-toggle\s*\{/);
+});
