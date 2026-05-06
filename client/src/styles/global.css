@@ -1027,6 +1027,27 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
     top: calc(55px + var(--safe-top));
   }
 
+  .visible-on-mobile-only.feed-tabs {
+    justify-content: flex-start;
+    gap: 6px;
+    width: 100vw;
+    max-width: 100vw;
+    margin-left: calc(50% - 50vw);
+    padding: 10px 16px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  .visible-on-mobile-only.feed-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .visible-on-mobile-only.feed-tabs .feed-tab {
+    flex: 0 0 auto;
+    padding: 7px 16px;
+  }
+
   .feed-refresh-row {
     position: sticky;
     top: 0;

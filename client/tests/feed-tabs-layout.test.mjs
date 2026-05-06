@@ -44,6 +44,19 @@ test('mobile reader exposes refresh row and floating scroll-to-top affordance st
   assert.match(homeSource, /className="scroll-top-button"/);
 });
 
+test('mobile digest tab bar scrolls horizontally without page overflow', () => {
+  const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
+  const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
+  const mobileTabsRule = css.match(/\.visible-on-mobile-only\.feed-tabs\s*\{([^}]+)\}/)?.[1] || '';
+  const mobileTabRule = css.match(/\.visible-on-mobile-only\.feed-tabs \.feed-tab\s*\{([^}]+)\}/)?.[1] || '';
+
+  assert.match(homeSource, /className="feed-tabs visible-on-mobile-only"/);
+  assert.match(mobileTabsRule, /max-width:\s*100vw/);
+  assert.match(mobileTabsRule, /overflow-x:\s*auto/);
+  assert.match(mobileTabsRule, /justify-content:\s*flex-start/);
+  assert.match(mobileTabRule, /flex:\s*0 0 auto/);
+});
+
 test('mobile feed and detail styles prioritize compact reading', () => {
   const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
   const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
