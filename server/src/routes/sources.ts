@@ -99,7 +99,7 @@ sources.post('/', async (c) => {
     await query(
       `INSERT INTO sources (id, type, name, url, language, category, fetch_interval_minutes, parser_config, next_run_at, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $9)`,
-      [id, type, name, normalizedUrl, language || 'vi', category || null, fetch_interval_minutes || 180, parser_config ? JSON.stringify(parser_config) : null, now]
+      [id, type, name, normalizedUrl, language || 'vi', category || null, fetch_interval_minutes || 60, parser_config ? JSON.stringify(parser_config) : null, now]
     );
 
     const row = await getOne('SELECT * FROM sources WHERE id = $1', [id]);

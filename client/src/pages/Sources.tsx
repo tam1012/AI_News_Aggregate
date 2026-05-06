@@ -24,7 +24,7 @@ export function Sources() {
     url: '',
     language: 'vi',
     category: '',
-    fetch_interval_minutes: 180,
+    fetch_interval_minutes: 60,
     parser_config: undefined as any,
   });
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -87,7 +87,7 @@ export function Sources() {
       } else {
         await api.createSource(formData);
       }
-      setFormData({ type: 'rss', name: '', url: '', language: 'vi', category: '', fetch_interval_minutes: 180, parser_config: undefined });
+      setFormData({ type: 'rss', name: '', url: '', language: 'vi', category: '', fetch_interval_minutes: 60, parser_config: undefined });
       setEditingId(null);
       setShowForm(false);
       setDetectUrl('');
@@ -107,7 +107,7 @@ export function Sources() {
       url: source.url,
       language: source.language,
       category: source.category || '',
-      fetch_interval_minutes: source.fetch_interval_minutes || 180,
+      fetch_interval_minutes: source.fetch_interval_minutes || 60,
       parser_config: source.parser_config,
     });
     setEditingId(source.id);
@@ -284,7 +284,7 @@ export function Sources() {
             <div className="form-group" style={{ display: 'none' }}>
               <label>Tần suất lấy tin (phút)</label>
               <input type="number" min="30" value={formData.fetch_interval_minutes}
-                onChange={(e) => setFormData({ ...formData, fetch_interval_minutes: parseInt(e.target.value) || 180 })} />
+                onChange={(e) => setFormData({ ...formData, fetch_interval_minutes: parseInt(e.target.value) || 60 })} />
             </div>
           </div>
 

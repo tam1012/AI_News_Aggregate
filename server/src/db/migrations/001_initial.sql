@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS sources (
   language TEXT DEFAULT 'vi',
   category TEXT,
   is_enabled BOOLEAN NOT NULL DEFAULT true,
-  fetch_interval_minutes INTEGER NOT NULL DEFAULT 180,
+  fetch_interval_minutes INTEGER NOT NULL DEFAULT 60,
   parser_config JSONB,
   last_checked_at TIMESTAMPTZ,
   last_success_at TIMESTAMPTZ,
