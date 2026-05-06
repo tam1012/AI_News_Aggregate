@@ -107,6 +107,37 @@ function forumStatsValue(row: any, key: string): number {
   return Number(row?.[key] || row?.forum?.[key] || 0);
 }
 
+function sourceQualityLabel(status: string): string {
+  const labels: Record<string, string> = {
+    healthy: 'Ổn',
+    low_yield: 'Ít bài mới',
+    failing: 'Đang lỗi',
+    stale: 'Lâu chưa thành công',
+    disabled: 'Đã tắt',
+  };
+  return labels[status] || status;
+}
+
+function sourceQualityBadgeClass(status: string): string {
+  if (status === 'healthy') return 'success';
+  if (status === 'disabled') return 'pending';
+  if (status === 'low_yield' || status === 'stale') return 'pending';
+  return 'error';
+}
+
+function sourceQualityNote(source: any): string {
+  if (source.status === 'disabled') return 'Nguồn đang tắt, không cào tự động.';
+  if (source.status === 'failing') return source.lastErrorMessage || `${source.consecutiveFailures || 0} lần lỗi liên tiếp.`;
+  if (source.status === 'stale') return 'Nguồn bật nhưng lâu chưa có lần cào thành công.';
+  if (source.status === 'low_yield') return 'Có cào và tìm thấy bài nhưng gần đây không thêm được bài mới.';
+  return 'Nguồn đang hoạt động bình thường.';
+}
+
+function percentText(value: unknown): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  return `${Math.round(value * 100)}%`;
+}
+
 export function Admin() {
   const [tab, setTab] = useState<AdminTab>('overview');
   const { data: health, loading, error, reload } = useFetch<any>(() => api.getHealth());
@@ -195,6 +226,8 @@ export function Admin() {
                       ['Đang bật', health.sources?.enabled],
                       ['Đến hạn cào', health.sources?.due],
                       ['Đang backoff', health.sources?.backed_off],
+                      ['Nguồn ổn', health.sourceQualitySummary?.healthy],
+                      ['Ít bài mới', health.sourceQualitySummary?.low_yield],
                     ].map(([label, value]) => (
                       <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.86rem' }}>
                         <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
@@ -238,6 +271,58 @@ export function Admin() {
                   </div>
                 </div>
               </div>
+
+              {health.sourceQuality?.length > 0 && (
+                <div className="card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontWeight: 700 }}>Chất lượng nguồn tin</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
+                        Theo dõi nguồn lỗi, nguồn ít bài mới và tỷ lệ thêm bài trong 24h gần nhất.
+                      </div>
+                    </div>
+                    <button className="btn btn-sm" onClick={() => window.location.href = '/sources'}>Mở trang Nguồn tin</button>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, marginBottom: 12 }}>
+                    {[
+                      ['Ổn', health.sourceQualitySummary?.healthy, 'var(--color-success)'],
+                      ['Ít bài mới', health.sourceQualitySummary?.low_yield, 'var(--color-warning)'],
+                      ['Đang lỗi', health.sourceQualitySummary?.failing, 'var(--color-error)'],
+                      ['Lâu chưa thành công', health.sourceQualitySummary?.stale, 'var(--color-warning)'],
+                      ['Đã tắt', health.sourceQualitySummary?.disabled, 'var(--color-text-muted)'],
+                    ].map(([label, value, color]) => (
+                      <div key={String(label)} style={{ padding: '10px 12px', border: '1px solid var(--color-border-light)', borderRadius: 8 }}>
+                        <div style={{ fontSize: '1.35rem', lineHeight: 1, fontWeight: 800, color: String(color) }}>{value || 0}</div>
+                        <div style={{ fontSize: '0.78rem', fontWeight: 600, marginTop: 6 }}>{label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {health.sourceQuality
+                      .filter((source: any) => source.status !== 'healthy')
+                      .slice(0, 8)
+                      .map((source: any, i: number) => (
+                        <div key={source.id} style={{ fontSize: '0.8rem', paddingTop: i === 0 ? 0 : 8, borderTop: i === 0 ? 'none' : '1px solid var(--color-border-light)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <strong>{source.name}</strong>
+                            <span className={`badge badge-${sourceQualityBadgeClass(source.status)}`}>{sourceQualityLabel(source.status)}</span>
+                          </div>
+                          <div style={{ color: 'var(--color-text-muted)', marginTop: 3 }}>
+                            24h: {source.runs24h || 0} lần cào · tìm thấy {source.itemsFound24h || 0} · thêm {source.itemsInserted24h || 0} · tỷ lệ thêm {percentText(source.insertRate24h)}
+                          </div>
+                          <div style={{ color: source.status === 'failing' ? 'var(--color-error)' : 'var(--color-text-muted)', marginTop: 3 }}>
+                            {sourceQualityNote(source).substring(0, 180)}
+                          </div>
+                        </div>
+                      ))}
+                    {health.sourceQuality.filter((source: any) => source.status !== 'healthy').length === 0 && (
+                      <div style={{ color: 'var(--color-text-muted)', fontSize: '0.82rem' }}>Tất cả nguồn đang ổn.</div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {health.forum && ((health.forum.totals24h?.length || 0) > 0 || (health.forum.recent?.length || 0) > 0) && (
                 <div className="card">

@@ -34,3 +34,14 @@ test('admin overview exposes forum observability labels', () => {
   assert.match(source, /Lỗi fetch comment/);
   assert.match(source, /health\.forum\.totals24h/);
 });
+
+test('admin overview exposes source quality labels in Vietnamese', () => {
+  const source = readFileSync(resolve(__dirname, '../src/pages/Admin.tsx'), 'utf8');
+
+  assert.match(source, /Chất lượng nguồn tin/);
+  assert.match(source, /Ít bài mới/);
+  assert.match(source, /Đang lỗi/);
+  assert.match(source, /Lâu chưa thành công/);
+  assert.match(source, /Mở trang Nguồn tin/);
+  assert.match(source, /health\.sourceQualitySummary/);
+});

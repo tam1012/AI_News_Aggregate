@@ -17,6 +17,21 @@ function num(value: unknown): number {
   return Number(value || 0);
 }
 
+type SourceQualityStatus = 'healthy' | 'low_yield' | 'failing' | 'stale' | 'disabled';
+
+function getSourceQualityStatus(source: any): SourceQualityStatus {
+  if (!source.is_enabled) return 'disabled';
+  if (num(source.consecutive_failures) > 0) return 'failing';
+  if (!source.last_success_at) return 'stale';
+  const lastSuccessMs = new Date(source.last_success_at).getTime();
+  if (Number.isFinite(lastSuccessMs) && Date.now() - lastSuccessMs > 3 * 24 * 60 * 60 * 1000) return 'stale';
+  const runs24h = num(source.runs_24h);
+  const found24h = num(source.items_found_24h);
+  const inserted24h = num(source.items_inserted_24h);
+  if (runs24h >= 2 && found24h > 0 && inserted24h === 0) return 'low_yield';
+  return 'healthy';
+}
+
 health.get('/', async (c) => {
   try {
     const dbCheck = await getOne('SELECT NOW() as time');
@@ -93,6 +108,58 @@ health.get('/', async (c) => {
        LIMIT 8`
     );
 
+    const sourceQualityRows = await getMany(
+      `SELECT s.id, s.name, s.type, s.is_enabled, s.last_checked_at, s.last_success_at,
+              s.last_error_message, s.consecutive_failures, s.next_run_at,
+              COUNT(sl.id) FILTER (WHERE sl.started_at >= NOW() - INTERVAL '24 hours') as runs_24h,
+              COALESCE(SUM(sl.items_found) FILTER (WHERE sl.started_at >= NOW() - INTERVAL '24 hours'), 0) as items_found_24h,
+              COALESCE(SUM(sl.items_inserted) FILTER (WHERE sl.started_at >= NOW() - INTERVAL '24 hours'), 0) as items_inserted_24h,
+              COUNT(sl.id) FILTER (WHERE sl.started_at >= NOW() - INTERVAL '24 hours' AND sl.status = 'failed') as failed_runs_24h,
+              COUNT(sl.id) FILTER (WHERE sl.started_at >= NOW() - INTERVAL '7 days') as runs_7d,
+              COALESCE(SUM(sl.items_found) FILTER (WHERE sl.started_at >= NOW() - INTERVAL '7 days'), 0) as items_found_7d,
+              COALESCE(SUM(sl.items_inserted) FILTER (WHERE sl.started_at >= NOW() - INTERVAL '7 days'), 0) as items_inserted_7d,
+              COUNT(sl.id) FILTER (WHERE sl.started_at >= NOW() - INTERVAL '7 days' AND sl.status = 'failed') as failed_runs_7d
+       FROM sources s
+       LEFT JOIN scrape_logs sl ON sl.source_id = s.id
+       GROUP BY s.id
+       ORDER BY s.is_enabled DESC, s.consecutive_failures DESC, s.last_success_at ASC NULLS FIRST, s.name ASC`
+    );
+
+    const sourceQuality = sourceQualityRows.map((row: any) => {
+      const status = getSourceQualityStatus(row);
+      const found24h = num(row.items_found_24h);
+      const inserted24h = num(row.items_inserted_24h);
+      const found7d = num(row.items_found_7d);
+      const inserted7d = num(row.items_inserted_7d);
+      return {
+        id: row.id,
+        name: row.name,
+        type: row.type,
+        isEnabled: Boolean(row.is_enabled),
+        status,
+        lastCheckedAt: row.last_checked_at,
+        lastSuccessAt: row.last_success_at,
+        lastErrorMessage: row.last_error_message,
+        consecutiveFailures: num(row.consecutive_failures),
+        nextRunAt: row.next_run_at,
+        runs24h: num(row.runs_24h),
+        itemsFound24h: found24h,
+        itemsInserted24h: inserted24h,
+        failedRuns24h: num(row.failed_runs_24h),
+        insertRate24h: found24h > 0 ? inserted24h / found24h : null,
+        runs7d: num(row.runs_7d),
+        itemsFound7d: found7d,
+        itemsInserted7d: inserted7d,
+        failedRuns7d: num(row.failed_runs_7d),
+        insertRate7d: found7d > 0 ? inserted7d / found7d : null,
+      };
+    });
+
+    const sourceQualitySummary = sourceQuality.reduce((acc: Record<string, number>, row: any) => {
+      acc[row.status] = (acc[row.status] || 0) + 1;
+      return acc;
+    }, { healthy: 0, low_yield: 0, failing: 0, stale: 0, disabled: 0 });
+
     const forum = {
       totals24h: forumTotals.map((row) => ({
         kind: row.kind,
@@ -136,6 +203,8 @@ health.get('/', async (c) => {
           retryable_failed: parseInt(articleFetchJobsCount?.retryable_failed || '0'),
         },
         lastDigest: lastDigest || null,
+        sourceQuality,
+        sourceQualitySummary,
         forum,
         recentLogs,
       },
