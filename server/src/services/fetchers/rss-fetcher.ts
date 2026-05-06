@@ -19,7 +19,49 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
 }
 
 function stripHtml(html: string): string {
-  return cheerio.load(html).text().replace(/\s+/g, ' ').trim();
+  const normalized = html.replace(/^<!\[CDATA\[/, '').replace(/\]\]>$/, '');
+  return cheerio.load(normalized).text().replace(/\s+/g, ' ').trim();
+}
+
+function getText($item: cheerio.Cheerio<any>, selector: string): string {
+  return $item.find(selector).first().text().trim();
+}
+
+function getXmlChildHtml($item: cheerio.Cheerio<any>, selector: string): string {
+  const child = $item.find(selector).first();
+  return child.html()?.trim() || child.text().trim();
+}
+
+export function parseRssItems(xml: string): RssParser.Item[] {
+  const $ = cheerio.load(xml, { xmlMode: true });
+  return $('item').toArray().flatMap((element) => {
+    const $item = $(element);
+    const title = getText($item, 'title');
+    const link = getText($item, 'link');
+    if (!title || !link) return [];
+
+    return [{
+      title,
+      link,
+      guid: getText($item, 'guid') || link,
+      pubDate: getText($item, 'pubDate') || getText($item, 'published') || getText($item, 'updated'),
+      creator: getText($item, 'creator') || getText($item, 'dc\\:creator'),
+      contentSnippet: stripHtml(getXmlChildHtml($item, 'description')),
+      content: getXmlChildHtml($item, 'encoded') || getXmlChildHtml($item, 'content\\:encoded') || getXmlChildHtml($item, 'description'),
+      enclosure: { url: $item.find('enclosure').first().attr('url') || '' },
+    }];
+  });
+}
+
+async function parseFeedItems(xml: string): Promise<RssParser.Item[]> {
+  try {
+    const feed = await rssParser.parseString(xml);
+    return feed.items;
+  } catch {
+    const items = parseRssItems(xml);
+    if (items.length === 0) throw new Error('Feed not recognized as RSS 1 or 2.');
+    return items;
+  }
 }
 
 export const rssFetcher: SourceFetcher = {
@@ -40,16 +82,16 @@ export const rssFetcher: SourceFetcher = {
     if (!response.ok) throw new Error(`Status code ${response.status}`);
 
     const xml = await response.text();
-    const feed = await rssParser.parseString(xml);
-    const items = feed.items.slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 20));
+    const items = (await parseFeedItems(xml)).slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 20));
 
     return items.flatMap((item) => {
+      const rawItem = item as RssParser.Item & Record<string, any>;
       if (!item.link || !item.title) return [];
       const url = normalizePublicHttpUrl(item.link);
       if (!url) return [];
 
       const rawExcerpt = item.contentSnippet || item.content || '';
-      const rawContent = item.content || item['content:encoded'] || '';
+      const rawContent = item.content || rawItem['content:encoded'] || '';
       let imageUrl: string | null = null;
       if (item.enclosure?.url) {
         imageUrl = item.enclosure.url;
@@ -65,7 +107,7 @@ export const rssFetcher: SourceFetcher = {
         externalId: item.guid || null,
         publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : null,
         payload: {
-          author: item.creator || item.author || null,
+          author: item.creator || rawItem.author || null,
           rawExcerpt: stripHtml(rawExcerpt),
           rawContent: stripHtml(rawContent),
           contentHashSeed: item.title + rawExcerpt,
