@@ -28,7 +28,8 @@ async function runScrapeJob() {
     `SELECT id, type, name, url, language, category, fetch_interval_minutes, parser_config
      FROM sources
      WHERE is_enabled = true
-     ORDER BY name ASC`
+       AND (next_run_at IS NULL OR next_run_at <= NOW())
+     ORDER BY COALESCE(next_run_at, created_at) ASC, name ASC`
   );
 
   console.log(`  Found ${allSources.length} enabled sources to scrape`);
@@ -49,13 +50,17 @@ async function runScrapeJob() {
         result = await scrapeSource(source);
       }
 
-      // Update source status
+      const nextRunDelayMinutes = result.errors.length > 0
+        ? Math.min(source.fetch_interval_minutes * 2, 24 * 60)
+        : source.fetch_interval_minutes;
+
       await query(
         `UPDATE sources SET
            last_checked_at = NOW(), last_success_at = NOW(),
-           consecutive_failures = 0, last_error_message = NULL
+           consecutive_failures = 0, last_error_message = NULL,
+           next_run_at = NOW() + ($2 * INTERVAL '1 minute')
          WHERE id = $1`,
-        [source.id]
+        [source.id, nextRunDelayMinutes]
       );
 
       // Log
@@ -71,12 +76,19 @@ async function runScrapeJob() {
     } catch (err: any) {
       console.error(`    -> ERROR: ${err.message}`);
 
+      const failureCount = await getOne<{ consecutive_failures: number }>(
+        'SELECT consecutive_failures + 1 as consecutive_failures FROM sources WHERE id = $1',
+        [source.id]
+      );
+      const backoffMinutes = Math.min(source.fetch_interval_minutes * Math.pow(2, Math.max((failureCount?.consecutive_failures || 1) - 1, 0)), 24 * 60);
+
       await query(
         `UPDATE sources SET
            last_checked_at = NOW(), consecutive_failures = consecutive_failures + 1,
-           last_error_message = $1
+           last_error_message = $1,
+           next_run_at = NOW() + ($3 * INTERVAL '1 minute')
          WHERE id = $2`,
-        [err.message.substring(0, 500), source.id]
+        [err.message.substring(0, 500), source.id, backoffMinutes]
       );
 
       await query(

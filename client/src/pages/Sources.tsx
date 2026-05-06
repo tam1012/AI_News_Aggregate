@@ -2,6 +2,15 @@
 import { api } from '../services/api';
 import { useFetch } from '../hooks/useApi';
 
+function formatNextRun(nextRunAt: string | null | undefined): string {
+  if (!nextRunAt) return 'chưa lên lịch';
+  const nextRun = new Date(nextRunAt).getTime();
+  const diffMinutes = Math.ceil((nextRun - Date.now()) / 60000);
+  if (diffMinutes <= 0) return 'đến hạn';
+  if (diffMinutes < 60) return `còn ${diffMinutes} phút`;
+  return `còn ${Math.ceil(diffMinutes / 60)} giờ`;
+}
+
 export function Sources() {
   const { data: sources, loading, error, reload } = useFetch(() => api.getSources());
   const sourceList = Array.isArray(sources) ? sources : [];
@@ -305,7 +314,8 @@ export function Sources() {
                 <div className="source-url">{source.url}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
                   {source.language} | {source.category || 'Chưa phân loại'} | Mỗi {source.fetch_interval_minutes} phút
-                  {source.last_success_at && ` | Lần cuối: ${new Date(source.last_success_at).toLocaleString('vi-VN')}`}
+                  {source.last_success_at && ` | Thành công: ${new Date(source.last_success_at).toLocaleString('vi-VN')}`}
+                  {` | Lần tới: ${formatNextRun(source.next_run_at)}`}
                 </div>
                 {source.last_error_message && (
                   <div style={{ fontSize: '0.75rem', color: 'var(--color-error)', marginTop: 2 }}>

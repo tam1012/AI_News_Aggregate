@@ -131,8 +131,11 @@ export function Admin() {
             <div style={{ display: 'grid', gap: 12 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
                 <div className="card" style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{health.sources?.enabled || 0}</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: health.sources?.failing > 0 ? 'var(--color-warning)' : 'inherit' }}>{health.sources?.enabled || 0}</div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>Nguồn tin</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
+                    {health.sources?.due || 0} đến hạn · {health.sources?.backed_off || 0} backoff
+                  </div>
                 </div>
                 <div className="card" style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{health.articles?.total || 0}</div>

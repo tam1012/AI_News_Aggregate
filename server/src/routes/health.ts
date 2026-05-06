@@ -17,8 +17,13 @@ health.get('/', async (c) => {
   try {
     const dbCheck = await getOne('SELECT NOW() as time');
 
-    const sourcesCount = await getOne<{ total: string; enabled: string }>(
-      `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_enabled = true) as enabled FROM sources`
+    const sourcesCount = await getOne<{ total: string; enabled: string; due: string; failing: string; backed_off: string }>(
+      `SELECT COUNT(*) as total,
+              COUNT(*) FILTER (WHERE is_enabled = true) as enabled,
+              COUNT(*) FILTER (WHERE is_enabled = true AND (next_run_at IS NULL OR next_run_at <= NOW())) as due,
+              COUNT(*) FILTER (WHERE is_enabled = true AND consecutive_failures > 0) as failing,
+              COUNT(*) FILTER (WHERE is_enabled = true AND consecutive_failures > 0 AND next_run_at > NOW()) as backed_off
+       FROM sources`
     );
 
     const articlesCount = await getOne<{ total: string; pending: string; processing: string; done: string; failed: string; skipped: string; retryable_failed: string }>(
@@ -59,6 +64,9 @@ health.get('/', async (c) => {
         sources: {
           total: parseInt(sourcesCount?.total || '0'),
           enabled: parseInt(sourcesCount?.enabled || '0'),
+          due: parseInt(sourcesCount?.due || '0'),
+          failing: parseInt(sourcesCount?.failing || '0'),
+          backed_off: parseInt(sourcesCount?.backed_off || '0'),
         },
         articles: {
           total: parseInt(articlesCount?.total || '0'),
