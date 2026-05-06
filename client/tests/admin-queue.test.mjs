@@ -11,8 +11,7 @@ test('admin exposes a dedicated summary queue tab', () => {
 
   assert.match(source, /type AdminTab = 'overview' \| 'queue'/);
   assert.match(source, /\{ key: 'queue', label: 'Hàng đợi tóm tắt' \}/);
-  assert.match(source, /tab === 'queue' && <SummaryQueueTab \/>/);
-});
+  assert.match(source, /tab === 'queue' && <SummaryQueueTab/);});
 
 test('summary queue filters articles by summary status and shows operational fields', () => {
   const source = readFileSync(resolve(__dirname, '../src/pages/Admin.tsx'), 'utf8');

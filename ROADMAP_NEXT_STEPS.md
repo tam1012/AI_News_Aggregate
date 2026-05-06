@@ -298,6 +298,26 @@ Commit liên quan:
 
 - `a7a7698 feat: add hot feed ranking`
 
+### 2.20. Admin panel cleanup & interactive dashboard
+
+Đã làm xong và deploy.
+
+- Xóa tab "Bài viết" trùng lặp hoàn toàn với "Hàng đợi tóm tắt".
+- Dashboard metrics clickable:
+  - "Bài chờ tóm tắt" → nhảy sang tab Hàng đợi tóm tắt, filter "Chờ".
+  - "Tóm tắt lỗi" → nhảy sang tab Hàng đợi tóm tắt, filter "Lỗi".
+  - "URL chưa lấy bài" → nhảy sang tab Hàng đợi lấy bài, filter "Chờ fetch".
+  - "Tình trạng nguồn tin" → nhảy sang trang Nguồn tin.
+- Hover effect + cursor pointer + tooltip giải thích ý nghĩa từng metric.
+- Ký hiệu `›` cho mục clickable.
+- Admin giảm từ 6 tab xuống 5 tab.
+- File Admin.tsx giảm ~70 dòng.
+
+Commits liên quan:
+
+- `949240a refactor: remove redundant Articles tab from admin panel`
+- `fba9269 feat: make admin dashboard metrics clickable with tab navigation`
+
 ### 2.19. Deploy workflow ổn định hơn
 
 Đã làm xong.
@@ -317,7 +337,7 @@ npm --prefix "D:\Antigravity\newstamhv" test --workspace=server
 npm --prefix "D:\Antigravity\newstamhv" test --workspace=client
 ```
 
-Gần nhất sau hot feed ranking:
+Gần nhất sau admin panel cleanup (06/05/2026):
 
 - Build full project: pass.
 - Server tests: 50/50 pass.
@@ -325,13 +345,14 @@ Gần nhất sau hot feed ranking:
 
 Production gần nhất:
 
-- VPS commit gần nhất: `a7a7698 feat: add hot feed ranking`.
+- VPS commit gần nhất: `fba9269 feat: make admin dashboard metrics clickable with tab navigation`.
 - `newstamhv-app` healthy.
 - `newstamhv-db` healthy.
 - `/`: 200.
 - `/api/health/live`: 200.
 - `/api/articles?limit=5&status=done&sort=hot`: 200.
 - `/api/articles?limit=5&status=done&sort=latest`: 200.
+- Admin: 5 tabs, clickable metrics verified.
 
 ## 4. Những việc nên làm tiếp
 

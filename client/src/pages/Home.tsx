@@ -235,6 +235,7 @@ export function Home() {
   const [tab, setTab] = useState<'news' | 'voz' | 'reddit' | 'youtube' | 'digest'>(initialTab);
   const [filterSource, setFilterSource] = useState<string>('all');
   const [feedSort, setFeedSort] = useState<FeedSort>('latest');
+  const [filterTag, setFilterTag] = useState<string>('');
   const [showFilter, setShowFilter] = useState(false);
   const [readArticleIds, setReadArticleIds] = useState<string[]>(() => loadReadArticles());
   const [copyToast, setCopyToast] = useState<string | null>(null);
@@ -267,9 +268,9 @@ export function Home() {
     () => {
       // Don't fetch until we have a date, unless there are no dates at all
       if (availableDates.length > 0 && !selectedDate) return Promise.resolve({ data: [], meta: { total: 0, page: 1, totalPages: 0 } });
-      return api.getArticles({ page: 1, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab, sort: feedSort });
+      return api.getArticles({ page: 1, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab, sort: feedSort, tag: filterTag || undefined });
     },
-    [selectedDate, filterSource, availableDates.length, tab, feedSort]
+    [selectedDate, filterSource, availableDates.length, tab, feedSort, filterTag]
   );
 
   useEffect(() => {
@@ -291,6 +292,13 @@ export function Home() {
   // Actually, to make filter work properly across dates, we should fetch /sources.
   const { data: sourcesRaw } = useFetchRaw(() => api.getSources(), []);
   const sources = useMemo(() => (sourcesRaw?.data || []).filter((s: any) => s.is_enabled), [sourcesRaw]);
+
+  // Fetch popular tags for topic chips
+  const { data: tagsRaw } = useFetchRaw(
+    () => api.getArticleTags({ feedTab: tab === 'digest' ? 'news' : tab, date: selectedDate || undefined }),
+    [tab, selectedDate]
+  );
+  const popularTags: { tag: string; count: number }[] = useMemo(() => tagsRaw?.data || [], [tagsRaw]);
   const readerLoadingState = getReaderLoadingState({ isFeedLoading: loading, hasArticleDeepLink });
   const detailPaneVisible = shouldShowDetailPane({
     tab,
@@ -330,7 +338,7 @@ export function Home() {
     setIsLoadingMore(true);
     setLoadMoreError(null);
     try {
-      const response = await api.getArticles({ page: nextPage, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab, sort: feedSort });
+      const response = await api.getArticles({ page: nextPage, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab, sort: feedSort, tag: filterTag || undefined });
       setArticlePages(prev => [...prev, ...(response?.data || [])]);
       setArticlePage(nextPage);
     } catch (err: any) {
@@ -338,7 +346,7 @@ export function Home() {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [articlePage, feedSort, filterSource, hasMoreArticles, isLoadingMore, selectedDate, tab]);
+  }, [articlePage, feedSort, filterSource, filterTag, hasMoreArticles, isLoadingMore, selectedDate, tab]);
 
   // Date navigation handlers
   const handlePrevDate = () => {
@@ -520,6 +528,7 @@ export function Home() {
                     }
                     navigateTab(t);
                     setSelected(null);
+                    setFilterTag('');
                   }}
                 >
                   {t === 'news' ? 'Tin mới' : t === 'voz' ? 'VOZ' : t === 'reddit' ? 'Reddit' : 'YT'}
@@ -578,6 +587,30 @@ export function Home() {
               Tin nóng
             </button>
           </div>
+
+          {/* Topic filter chips */}
+          {popularTags.length > 0 && (
+            <div className="topic-chips" aria-label="Lọc theo chủ đề">
+              <button
+                className={`topic-chip ${!filterTag ? 'active' : ''}`}
+                onClick={() => setFilterTag('')}
+                type="button"
+              >
+                Tất cả
+              </button>
+              {popularTags.slice(0, 10).map(t => (
+                <button
+                  key={t.tag}
+                  className={`topic-chip ${filterTag === t.tag ? 'active' : ''}`}
+                  onClick={() => setFilterTag(filterTag === t.tag ? '' : t.tag)}
+                  type="button"
+                  title={`${t.count} bài`}
+                >
+                  {t.tag}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Active filter indicator */}
           {filterSource !== 'all' && (

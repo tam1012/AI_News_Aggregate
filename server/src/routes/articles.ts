@@ -11,6 +11,46 @@ function parseBoundedInt(value: string | undefined, fallback: number, min: numbe
   return Math.min(Math.max(parsed, min), max);
 }
 
+// Danh sach tag pho bien (de UI hien topic filter chips)
+articles.get('/tags', async (c) => {
+  const feedTab = c.req.query('feedTab');
+  const date = c.req.query('date');
+
+  let where = `WHERE a.summary_status = 'done'`;
+  const params: any[] = [];
+  let paramIndex = 1;
+
+  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    where += ` AND ${LOCAL_DATE_SQL} = $${paramIndex++}`;
+    params.push(date);
+  }
+
+  // feedTab filter (reuse same logic as article list)
+  if (feedTab === 'youtube') {
+    where += ` AND (s.type = 'youtube' OR a.url ILIKE '%youtube.com%' OR a.url ILIKE '%youtu.be%')`;
+  } else if (feedTab === 'reddit') {
+    where += ` AND (s.name ILIKE '%reddit%' OR a.url ILIKE '%reddit.com%' OR a.title ILIKE '[r/%')`;
+  } else if (feedTab === 'voz') {
+    where += ` AND (s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`;
+  } else if (feedTab === 'news') {
+    where += ` AND NOT (s.type = 'youtube' OR a.url ILIKE '%youtube.com%' OR a.url ILIKE '%youtu.be%' OR s.name ILIKE '%reddit%' OR a.url ILIKE '%reddit.com%' OR a.title ILIKE '[r/%' OR s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`;
+  }
+
+  const rows = await getMany(
+    `SELECT tag, COUNT(*)::int as count
+     FROM articles a
+     LEFT JOIN sources s ON s.id = a.source_id,
+     LATERAL unnest(a.tags) AS tag
+     ${where}
+     GROUP BY tag
+     ORDER BY count DESC
+     LIMIT 20`,
+    params
+  );
+
+  return c.json({ success: true, data: rows });
+});
+
 // Danh sach ngay co bai viet (de UI hien date picker)
 articles.get('/dates', async (c) => {
   const sourceId = c.req.query('sourceId');

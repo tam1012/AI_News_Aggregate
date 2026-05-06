@@ -106,6 +106,12 @@ export const api = {
     if (sourceId) qs.set('sourceId', sourceId);
     return request<any>(`/articles/dates?${qs}`);
   },
+  getArticleTags: (params?: { feedTab?: string; date?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.feedTab) qs.set('feedTab', params.feedTab);
+    if (params?.date) qs.set('date', params.date);
+    return request<any>(`/articles/tags?${qs}`);
+  },
   getArticle: (id: string) => request<any>(`/articles/${id}`),
   resetArticleSummary: (id: string) => request<any>(`/articles/${id}/reset-summary`, { method: 'POST' }),
   rescrapeArticle: (id: string) => request<any>(`/articles/${id}/rescrape`, { method: 'POST' }),
