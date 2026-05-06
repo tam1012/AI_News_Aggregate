@@ -17,7 +17,7 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         script: |
           cd /home/ubuntu/newstamhv
-          git pull origin main
+          git pull --ff-only origin main
           export NVM_DIR="$HOME/.nvm"
           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
           if [ -n "${{ secrets.RAPIDAPI_KEY }}" ]; then
@@ -83,14 +83,30 @@ jobs:
           }
           NODE
 
-          if ! curl -fsS https://synthnews.site/api/health/live >/dev/null; then
-            echo "public live health smoke failed"
-            exit 1
-          fi
+          for i in {1..30}; do
+            if curl -fsS https://synthnews.site/api/health/live >/dev/null; then
+              break
+            fi
+            if [ "$i" = "30" ]; then
+              echo "public live health smoke failed"
+              docker compose ps
+              docker compose logs --tail=120 app
+              exit 1
+            fi
+            sleep 5
+          done
 
-          if ! curl -fsS https://synthnews.site/api/articles?limit=3\&status=done | grep -q '"success":true'; then
-            echo "public articles smoke failed"
-            exit 1
-          fi
+          for i in {1..12}; do
+            if curl -fsS https://synthnews.site/api/articles?limit=3\&status=done | grep -q '"success":true'; then
+              break
+            fi
+            if [ "$i" = "12" ]; then
+              echo "public articles smoke failed"
+              docker compose ps
+              docker compose logs --tail=120 app
+              exit 1
+            fi
+            sleep 5
+          done
 
           docker compose ps
