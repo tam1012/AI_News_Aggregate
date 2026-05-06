@@ -76,6 +76,25 @@ function formatExtraConfig(value: unknown): string {
   }
 }
 
+function numberText(value: unknown): string {
+  return String(Number(value || 0));
+}
+
+function statusLabel(value: string): string {
+  const labels: Record<string, string> = {
+    success: 'Thành công',
+    partial: 'Một phần',
+    failed: 'Lỗi',
+    pending: 'Đang chờ',
+    discovered: 'Chờ lấy bài',
+    fetching: 'Đang lấy bài',
+    done: 'Đã xong',
+    skipped: 'Bỏ qua',
+    processing: 'Đang xử lý',
+  };
+  return labels[value] || value;
+}
+
 export function Admin() {
   const [tab, setTab] = useState<AdminTab>('overview');
   const { data: health, loading, error, reload } = useFetch<any>(() => api.getHealth());
@@ -101,12 +120,12 @@ export function Admin() {
 
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
         {[
-          { key: 'overview', label: '📊 Tổng quan' },
-          { key: 'queue', label: 'Queue' },
-          { key: 'fetchJobs', label: 'Fetch Jobs' },
-          { key: 'ai', label: '🤖 AI Providers' },
-          { key: 'prompt', label: 'Prompt' },
-          { key: 'articles', label: '📄 Bài viết' },
+          { key: 'overview', label: 'Tổng quan' },
+          { key: 'queue', label: 'Hàng đợi tóm tắt' },
+          { key: 'fetchJobs', label: 'Hàng đợi lấy bài' },
+          { key: 'ai', label: 'Nhà cung cấp AI' },
+          { key: 'prompt', label: 'Cấu hình prompt' },
+          { key: 'articles', label: 'Bài viết' },
         ].map(t => (
           <button
             key={t.key}
@@ -129,92 +148,132 @@ export function Admin() {
             </div>
           ) : health ? (
             <div style={{ display: 'grid', gap: 12 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
-                <div className="card" style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: health.sources?.failing > 0 ? 'var(--color-warning)' : 'inherit' }}>{health.sources?.enabled || 0}</div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>Nguồn tin</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
-                    {health.sources?.due || 0} đến hạn · {health.sources?.backed_off || 0} backoff
+              <div className="card" style={{ borderColor: health.sources?.failing || health.articles?.failed || health.articleFetchJobs?.failed ? 'var(--color-warning)' : 'var(--color-border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>Cần xử lý</div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
+                      Những mục này đáng xem trước nếu hệ thống chạy không như ý.
+                    </div>
                   </div>
+                  <button className="btn btn-sm" onClick={reload}>Tải lại số liệu</button>
                 </div>
-                <div className="card" style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{health.articles?.total || 0}</div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>Bài viết</div>
-                </div>
-                <div className="card" style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{health.articles?.done || 0}</div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>Đã tóm tắt</div>
-                </div>
-                <div className="card" style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: health.articles?.pending > 0 ? 'var(--color-warning)' : 'inherit' }}>
-                    {health.articles?.pending || 0}
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>Chờ xử lý</div>
-                </div>
-                <div className="card" style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: health.articleFetchJobs?.failed > 0 ? 'var(--color-error)' : health.articleFetchJobs?.discovered > 0 ? 'var(--color-warning)' : 'inherit' }}>
-                    {health.articleFetchJobs?.discovered || 0}
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>URL chờ fetch</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
+                  {[
+                    ['Nguồn đang lỗi', health.sources?.failing, health.sources?.failing > 0 ? 'var(--color-error)' : 'var(--color-success)', `${numberText(health.sources?.backed_off)} nguồn đang chờ thử lại`],
+                    ['URL chưa lấy bài', health.articleFetchJobs?.discovered, health.articleFetchJobs?.failed > 0 ? 'var(--color-error)' : 'var(--color-warning)', `${numberText(health.articleFetchJobs?.failed)} lỗi · ${numberText(health.articleFetchJobs?.retryable_failed)} có thể thử lại`],
+                    ['Bài chờ tóm tắt', health.articles?.pending, health.articles?.failed > 0 ? 'var(--color-error)' : 'var(--color-warning)', `${numberText(health.articles?.failed)} lỗi · ${numberText(health.articles?.retryable_failed)} sẽ thử lại`],
+                    ['Bài bị bỏ qua', health.articles?.skipped, 'var(--color-text-muted)', 'Thường do nội dung quá ngắn hoặc AI từ chối'],
+                  ].map(([label, value, color, note]) => (
+                    <div key={String(label)} style={{ padding: '10px 12px', border: '1px solid var(--color-border-light)', borderRadius: 8 }}>
+                      <div style={{ fontSize: '1.55rem', lineHeight: 1, fontWeight: 800, color: String(color) }}>{value || 0}</div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 600, marginTop: 6 }}>{label}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: 3 }}>{note}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              <div className="card">
-                <div style={{ fontWeight: 600, marginBottom: 10 }}>Kích hoạt thủ công</div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button className="btn btn-sm" onClick={() => trigger('scrape', api.triggerScrape)} disabled={!!actionLoading}>
-                    {actionLoading === 'scrape' ? 'Đang chạy...' : '🔄 Cào tin'}
-                  </button>
-                  <button className="btn btn-sm" onClick={() => trigger('fetch-articles', api.triggerFetchArticles)} disabled={!!actionLoading}>
-                    {actionLoading === 'fetch-articles' ? 'Đang chạy...' : '📥 Fetch bài'}
-                  </button>
-                  <button className="btn btn-sm" onClick={() => trigger('summarize', api.triggerSummarize)} disabled={!!actionLoading}>
-                    {actionLoading === 'summarize' ? 'Đang chạy...' : '📝 Tóm tắt'}
-                  </button>
-                  <button className="btn btn-sm" onClick={() => trigger('digest', api.triggerDigest)} disabled={!!actionLoading}>
-                    {actionLoading === 'digest' ? 'Đang chạy...' : '📰 Tạo bản tin'}
-                  </button>
-                  <button className="btn btn-sm" onClick={reload}>Tải lại</button>
-                </div>
-              </div>
-
-              {health.articleFetchJobs && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
                 <div className="card">
-                  <div style={{ fontWeight: 600, marginBottom: 10 }}>Article Fetch Queue</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 10 }}>Tình trạng nguồn tin</div>
+                  <div style={{ display: 'grid', gap: 8 }}>
                     {[
-                      ['Tổng', health.articleFetchJobs.total],
-                      ['Discovered', health.articleFetchJobs.discovered],
-                      ['Fetching', health.articleFetchJobs.fetching],
-                      ['Done', health.articleFetchJobs.done],
-                      ['Failed', health.articleFetchJobs.failed],
-                      ['Retryable', health.articleFetchJobs.retryable_failed],
+                      ['Tổng nguồn', health.sources?.total],
+                      ['Đang bật', health.sources?.enabled],
+                      ['Đến hạn cào', health.sources?.due],
+                      ['Đang backoff', health.sources?.backed_off],
                     ].map(([label, value]) => (
-                      <div key={label} style={{ padding: '8px 10px', border: '1px solid var(--color-border-light)', borderRadius: 6 }}>
-                        <div style={{ fontSize: '1rem', fontWeight: 700 }}>{value || 0}</div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>{label}</div>
+                      <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.86rem' }}>
+                        <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
+                        <strong>{value || 0}</strong>
                       </div>
                     ))}
                   </div>
                 </div>
+
+                <div className="card">
+                  <div style={{ fontWeight: 700, marginBottom: 10 }}>Tình trạng bài viết</div>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {[
+                      ['Tổng bài', health.articles?.total],
+                      ['Đã tóm tắt', health.articles?.done],
+                      ['Đang tóm tắt', health.articles?.processing],
+                      ['Tóm tắt lỗi', health.articles?.failed],
+                    ].map(([label, value]) => (
+                      <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.86rem' }}>
+                        <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
+                        <strong>{value || 0}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div style={{ fontWeight: 700, marginBottom: 10 }}>Hàng đợi lấy bài</div>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {[
+                      ['Tổng URL', health.articleFetchJobs?.total],
+                      ['Chờ lấy bài', health.articleFetchJobs?.discovered],
+                      ['Đang lấy bài', health.articleFetchJobs?.fetching],
+                      ['Lấy bài lỗi', health.articleFetchJobs?.failed],
+                    ].map(([label, value]) => (
+                      <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.86rem' }}>
+                        <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
+                        <strong>{value || 0}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {health.lastDigest && (
+                <div className="card">
+                  <div style={{ fontWeight: 700, marginBottom: 6 }}>Bản tin gần nhất</div>
+                  <div style={{ fontSize: '0.86rem' }}>{health.lastDigest.title || `Bản tin ${health.lastDigest.digest_date}`}</div>
+                  <div style={{ fontSize: '0.76rem', color: 'var(--color-text-muted)', marginTop: 3 }}>
+                    {health.lastDigest.article_count || 0} bài · ngày {health.lastDigest.digest_date}
+                  </div>
+                </div>
               )}
+
+              <div className="card">
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>Chạy thủ công</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: 10 }}>
+                  Dùng khi anh muốn ép hệ thống chạy ngay, không cần chờ lịch tự động.
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button className="btn btn-sm" onClick={() => trigger('scrape', api.triggerScrape)} disabled={!!actionLoading}>
+                    {actionLoading === 'scrape' ? 'Đang chạy...' : 'Cào nguồn đến hạn'}
+                  </button>
+                  <button className="btn btn-sm" onClick={() => trigger('fetch-articles', api.triggerFetchArticles)} disabled={!!actionLoading}>
+                    {actionLoading === 'fetch-articles' ? 'Đang chạy...' : 'Lấy nội dung bài'}
+                  </button>
+                  <button className="btn btn-sm" onClick={() => trigger('summarize', api.triggerSummarize)} disabled={!!actionLoading}>
+                    {actionLoading === 'summarize' ? 'Đang chạy...' : 'Tóm tắt bài'}
+                  </button>
+                  <button className="btn btn-sm" onClick={() => trigger('digest', api.triggerDigest)} disabled={!!actionLoading}>
+                    {actionLoading === 'digest' ? 'Đang chạy...' : 'Tạo bản tin'}
+                  </button>
+                </div>
+              </div>
 
               {health.recentLogs?.length > 0 && (
                 <div className="card">
-                  <div style={{ fontWeight: 600, marginBottom: 10 }}>Log gần đây</div>
+                  <div style={{ fontWeight: 700, marginBottom: 10 }}>Lần cào gần đây</div>
                   {health.recentLogs.map((log: any, i: number) => (
-                    <div key={i} style={{ fontSize: '0.82rem', padding: '6px 0', borderBottom: i < health.recentLogs.length - 1 ? '1px solid var(--color-border-light)' : 'none' }}>
+                    <div key={i} style={{ fontSize: '0.82rem', padding: '8px 0', borderBottom: i < health.recentLogs.length - 1 ? '1px solid var(--color-border-light)' : 'none' }}>
                       <span className={`badge badge-${log.status === 'success' ? 'success' : log.status === 'failed' ? 'error' : 'pending'}`}>
-                        {log.status}
+                        {statusLabel(log.status)}
                       </span>
                       {' '}
                       <span style={{ color: 'var(--color-text-muted)' }}>
                         {new Date(log.started_at).toLocaleString('vi-VN')}
                       </span>
-                      {log.items_inserted > 0 && <span> · {log.items_inserted} bài mới</span>}
+                      <span> · tìm thấy {log.items_found || 0}, thêm mới {log.items_inserted || 0}</span>
                       {log.error_message && (
                         <div style={{ color: 'var(--color-error)', fontSize: '0.75rem', marginTop: 2 }}>
-                          {log.error_message.substring(0, 100)}
+                          {log.error_message.substring(0, 140)}
                         </div>
                       )}
                     </div>
@@ -260,12 +319,12 @@ function getPromptConfigWarnings(formData: PromptConfigFormData): string[] {
   const payload = buildPromptConfigPayload(formData);
   const warnings: string[] = [];
   if (!payload.output_language) warnings.push('Ngôn ngữ output đang trống.');
-  if (payload.allowed_tags.length === 0) warnings.push('Allowed tags cần ít nhất 1 tag để AI trả JSON hợp lệ.');
-  if (payload.allowed_tags.length > 24) warnings.push('Allowed tags quá nhiều có thể làm AI chọn tag thiếu nhất quán.');
-  if (payload.topic_priorities.length === 0) warnings.push('Topic priorities đang trống, hot_score sẽ ít định hướng hơn.');
-  if (payload.digest_headings.length === 0) warnings.push('Digest headings đang trống, digest sẽ khó gom nhóm ổn định.');
-  if (payload.custom_context.length > 1500) warnings.push('Custom context dài hơn 1500 ký tự có thể làm prompt tốn token và kém ổn định.');
-  if (/[<>]/.test(payload.custom_context)) warnings.push('Custom context không được chứa dấu < hoặc >.');
+  if (payload.allowed_tags.length === 0) warnings.push('Danh sách nhãn cần ít nhất 1 nhãn để AI trả kết quả hợp lệ.');
+  if (payload.allowed_tags.length > 24) warnings.push('Danh sách nhãn quá nhiều có thể làm AI chọn nhãn thiếu nhất quán.');
+  if (payload.topic_priorities.length === 0) warnings.push('Chủ đề ưu tiên đang trống, điểm nóng sẽ ít định hướng hơn.');
+  if (payload.digest_headings.length === 0) warnings.push('Nhóm bản tin đang trống, bản tin sẽ khó gom nhóm ổn định.');
+  if (payload.custom_context.length > 1500) warnings.push('Ngữ cảnh bổ sung dài hơn 1500 ký tự có thể tốn token và kém ổn định.');
+  if (/[<>]/.test(payload.custom_context)) warnings.push('Ngữ cảnh bổ sung không được chứa dấu < hoặc >.');
   return warnings;
 }
 
@@ -332,7 +391,7 @@ function PromptConfigTab() {
   };
 
   const resetDefaultConfig = async () => {
-    if (!confirm('Reset prompt config về mặc định?')) return;
+    if (!confirm('Đưa cấu hình prompt về mặc định?')) return;
     setSaving(true);
     setSaveMessage('');
     try {
@@ -361,17 +420,17 @@ function PromptConfigTab() {
     <form className="card" onSubmit={handleSubmit}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 12 }}>
         <div>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>Prompt config</div>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>Cấu hình prompt</div>
           <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
             Cấu hình này áp dụng cho bài tóm tắt mới và digest mới. Mỗi dòng là một giá trị.
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <button type="button" className="btn btn-sm" onClick={() => setShowPreview(value => !value)}>
-            {showPreview ? 'Ẩn preview' : 'Preview JSON'}
+            {showPreview ? 'Ẩn preview' : 'Xem trước JSON'}
           </button>
           <button type="button" className="btn btn-sm" onClick={applyDefaultConfig} disabled={saving}>Nạp mặc định</button>
-          <button type="button" className="btn btn-sm btn-danger" onClick={resetDefaultConfig} disabled={saving}>Reset mặc định</button>
+          <button type="button" className="btn btn-sm btn-danger" onClick={resetDefaultConfig} disabled={saving}>Đưa về mặc định</button>
         </div>
       </div>
 
@@ -399,7 +458,7 @@ function PromptConfigTab() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
         <div className="form-group">
-          <label>Topic priorities</label>
+          <label>Chủ đề ưu tiên</label>
           <textarea
             rows={7}
             value={formData.topic_priorities}
@@ -407,7 +466,7 @@ function PromptConfigTab() {
           />
         </div>
         <div className="form-group">
-          <label>Allowed tags</label>
+          <label>Nhãn được phép</label>
           <textarea
             rows={7}
             value={formData.allowed_tags}
@@ -417,7 +476,7 @@ function PromptConfigTab() {
       </div>
 
       <div className="form-group">
-        <label>Digest headings</label>
+        <label>Nhóm tiêu đề bản tin</label>
         <textarea
           rows={5}
           value={formData.digest_headings}
@@ -426,7 +485,7 @@ function PromptConfigTab() {
       </div>
 
       <div className="form-group">
-        <label>Custom context</label>
+        <label>Ngữ cảnh bổ sung</label>
         <textarea
           rows={5}
           value={formData.custom_context}
@@ -500,16 +559,16 @@ function AiProvidersTab() {
     setTesting(id);
     try {
       const result = await api.testAiProvider(id);
-      setTestResult(prev => ({ ...prev, [id]: `✅ ${result.data?.response?.substring(0, 100) || 'OK'}` }));
+      setTestResult(prev => ({ ...prev, [id]: `Thành công: ${result.data?.response?.substring(0, 100) || 'OK'}` }));
     } catch (err: any) {
-      setTestResult(prev => ({ ...prev, [id]: `❌ ${err.message}` }));
+      setTestResult(prev => ({ ...prev, [id]: `Lỗi: ${err.message}` }));
     } finally {
       setTesting('');
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Xóa provider này?')) return;
+    if (!confirm('Xóa nhà cung cấp AI này?')) return;
     try {
       await api.deleteAiProvider(id);
       reload();
@@ -577,7 +636,7 @@ function AiProvidersTab() {
       };
 
       if (Number.isNaN(payload.temperature)) {
-        throw new Error('Temperature phải là số hợp lệ');
+        throw new Error('Độ sáng tạo phải là số hợp lệ');
       }
 
       if (editingId) {
@@ -615,30 +674,30 @@ function AiProvidersTab() {
     <div style={{ display: 'grid', gap: 10 }}>
       <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontWeight: 600 }}>Quản lý AI Providers</div>
+          <div style={{ fontWeight: 600 }}>Quản lý nhà cung cấp AI</div>
           <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
-            Thêm provider dự phòng, đổi model, test kết nối và kích hoạt provider đang dùng.
+            Thêm dịch vụ AI dự phòng, đổi model, thử kết nối và kích hoạt dịch vụ đang dùng.
           </div>
         </div>
-        <button className="btn btn-primary" onClick={openCreateForm}>Thêm AI Provider</button>
+        <button className="btn btn-primary" onClick={openCreateForm}>Thêm nhà cung cấp AI</button>
       </div>
 
       {showForm && (
         <form className="card" onSubmit={handleSubmit}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-            <h3>{editingId ? 'Sửa AI Provider' : 'Thêm AI Provider'}</h3>
+            <h3>{editingId ? 'Sửa nhà cung cấp AI' : 'Thêm nhà cung cấp AI'}</h3>
             <button type="button" className="btn btn-sm" onClick={resetForm}>
               Hủy
             </button>
           </div>
 
           {loadingDetails ? (
-            <div className="loading">Đang tải chi tiết provider...</div>
+            <div className="loading">Đang tải chi tiết nhà cung cấp...</div>
           ) : (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div className="form-group">
-                  <label>Tên provider *</label>
+                  <label>Tên nhà cung cấp *</label>
                   <input
                     type="text"
                     required
@@ -648,7 +707,7 @@ function AiProvidersTab() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Loại provider *</label>
+                  <label>Loại nhà cung cấp *</label>
                   <select value={formData.provider_type} onChange={(e) => setFormData({ ...formData, provider_type: e.target.value })}>
                     {AI_PROVIDER_TYPES.map(type => (
                       <option key={type} value={type}>{type}</option>
@@ -685,7 +744,7 @@ function AiProvidersTab() {
                   <input
                     type="text"
                     value={formData.project_id}
-                    placeholder="Dùng cho Vertex hoặc provider tương tự"
+                    placeholder="Dùng cho Vertex hoặc dịch vụ tương tự"
                     onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
                   />
                 </div>
@@ -706,7 +765,7 @@ function AiProvidersTab() {
                   <input
                     type="password"
                     value={formData.api_key}
-                    placeholder={editingId ? 'Để trống để giữ nguyên key hiện tại' : 'Nhập API key nếu provider cần'}
+                    placeholder={editingId ? 'Để trống để giữ nguyên key hiện tại' : 'Nhập API key nếu dịch vụ cần'}
                     onChange={(e) => {
                       setFormData({ ...formData, api_key: e.target.value });
                       if (e.target.value) setClearApiKey(false);
@@ -714,7 +773,7 @@ function AiProvidersTab() {
                   />
                   {editingId && hasExistingApiKey && (
                     <div style={{ marginTop: 6, fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
-                      Provider này đang có API key lưu sẵn.
+                      Nhà cung cấp này đang có API key lưu sẵn.
                     </div>
                   )}
                   {editingId && hasExistingApiKey && (
@@ -738,7 +797,7 @@ function AiProvidersTab() {
                   <textarea
                     rows={5}
                     value={formData.service_account_json}
-                    placeholder={editingId ? 'Để trống để giữ nguyên service account hiện tại' : 'Dán JSON nếu provider cần'}
+                    placeholder={editingId ? 'Để trống để giữ nguyên service account hiện tại' : 'Dán JSON nếu dịch vụ cần'}
                     onChange={(e) => {
                       setFormData({ ...formData, service_account_json: e.target.value });
                       if (e.target.value) setClearServiceAccount(false);
@@ -746,7 +805,7 @@ function AiProvidersTab() {
                   />
                   {editingId && hasExistingServiceAccount && (
                     <div style={{ marginTop: 6, fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
-                      Provider này đang có service account JSON lưu sẵn.
+                      Nhà cung cấp này đang có service account JSON lưu sẵn.
                     </div>
                   )}
                   {editingId && hasExistingServiceAccount && (
@@ -769,7 +828,7 @@ function AiProvidersTab() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div className="form-group">
-                  <label>Max tokens</label>
+                  <label>Số token tối đa</label>
                   <input
                     type="number"
                     min="1"
@@ -778,7 +837,7 @@ function AiProvidersTab() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Temperature</label>
+                  <label>Độ sáng tạo</label>
                   <input
                     type="number"
                     min="0"
@@ -791,7 +850,7 @@ function AiProvidersTab() {
               </div>
 
               <div className="form-group">
-                <label>Extra config (JSON)</label>
+                <label>Cấu hình thêm (JSON)</label>
                 <textarea
                   rows={6}
                   value={formData.extra_config}
@@ -803,7 +862,7 @@ function AiProvidersTab() {
               {formError && <div style={{ color: 'var(--color-error)', marginBottom: 12, fontSize: '0.875rem' }}>{formError}</div>}
 
               <button type="submit" className="btn btn-primary" disabled={saving}>
-                {saving ? 'Đang lưu...' : editingId ? 'Cập nhật AI Provider' : 'Thêm AI Provider'}
+                {saving ? 'Đang lưu...' : editingId ? 'Cập nhật nhà cung cấp AI' : 'Thêm nhà cung cấp AI'}
               </button>
             </>
           )}
@@ -816,10 +875,10 @@ function AiProvidersTab() {
             <div>
               <div style={{ fontWeight: 600 }}>
                 {p.name}
-                {p.is_active && <span className="badge badge-success" style={{ marginLeft: 6 }}>Active</span>}
+                {p.is_active && <span className="badge badge-success" style={{ marginLeft: 6 }}>Đang dùng</span>}
               </div>
               <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
-                {p.provider_type} · {p.model} · {p.total_calls} calls
+                {p.provider_type} · {p.model} · {p.total_calls} lượt gọi
               </div>
               {p.last_error_message && (
                 <div style={{ fontSize: '0.75rem', color: 'var(--color-error)', marginTop: 2 }}>
@@ -838,7 +897,7 @@ function AiProvidersTab() {
                 {loadingDetails && editingId === p.id ? '...' : 'Sửa'}
               </button>
               <button className="btn btn-sm" onClick={() => handleTest(p.id)} disabled={testing === p.id}>
-                {testing === p.id ? '...' : 'Test'}
+                {testing === p.id ? '...' : 'Thử'}
               </button>
               <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)}>Xóa</button>
             </div>
@@ -847,7 +906,7 @@ function AiProvidersTab() {
       ))}
 
       {(!providers || providers.length === 0) && (
-        <div className="empty-state"><p>Chưa có AI provider nào.</p></div>
+        <div className="empty-state"><p>Chưa có nhà cung cấp AI nào.</p></div>
       )}
     </div>
   );
@@ -901,14 +960,14 @@ function SummaryQueueTab() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
       <div className="card" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontWeight: 700 }}>Summary Queue</div>
+          <div style={{ fontWeight: 700 }}>Hàng đợi tóm tắt</div>
           <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
             Theo dõi bài đang chờ, đang xử lý hoặc lỗi tóm tắt.
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <button className="btn btn-sm" onClick={handleTriggerSummarize} disabled={!!actionLoading}>
-            {actionLoading === 'trigger-summarize' ? 'Đang chạy...' : 'Chạy summarize'}
+            {actionLoading === 'trigger-summarize' ? 'Đang chạy...' : 'Chạy tóm tắt'}
           </button>
           <button className="btn btn-sm" onClick={reload} disabled={loading}>Tải lại</button>
         </div>
@@ -947,12 +1006,12 @@ function SummaryQueueTab() {
                     {a.title}
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <span>{a.source_name || 'Unknown source'}</span>
+                    <span>{a.source_name || 'Không rõ nguồn'}</span>
                     {a.published_at && <span>{new Date(a.published_at).toLocaleString('vi-VN')}</span>}
                     <span className={`badge badge-${a.summary_status === 'done' ? 'success' : a.summary_status === 'failed' ? 'error' : 'pending'}`}>
-                      {a.summary_status}
+                      {statusLabel(a.summary_status)}
                     </span>
-                    <span>retry: {a.retry_count || 0}</span>
+                    <span>đã thử lại: {a.retry_count || 0}</span>
                   </div>
                   {a.last_summary_error && (
                     <div style={{ color: 'var(--color-error)', fontSize: '0.75rem', marginTop: 8, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
@@ -1018,7 +1077,7 @@ function FetchJobsTab() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Xóa fetch job này?')) return;
+    if (!confirm('Xóa mục lấy bài này?')) return;
     await runAction(`delete-${id}`, () => api.deleteArticleFetchJob(id));
   };
 
@@ -1030,9 +1089,9 @@ function FetchJobsTab() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
       <div className="card" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontWeight: 700 }}>Fetch Jobs</div>
+          <div style={{ fontWeight: 700 }}>Hàng đợi lấy bài</div>
           <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
-            Theo dõi URL đang chờ crawl, đang fetch hoặc lỗi trước khi tạo bài viết.
+            Theo dõi URL đang chờ lấy nội dung, đang lấy hoặc bị lỗi trước khi tạo bài viết.
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -1056,7 +1115,7 @@ function FetchJobsTab() {
       </div>
 
       {loading ? (
-        <div className="loading">Đang tải fetch jobs...</div>
+        <div className="loading">Đang tải hàng đợi lấy bài...</div>
       ) : error ? (
         <div className="empty-state">
           <p style={{ color: 'var(--color-error)' }}>{error}</p>
@@ -1065,7 +1124,7 @@ function FetchJobsTab() {
       ) : (
         <>
           <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
-            Hiển thị {jobs.length} / {meta.total || 0} job · Trang {meta.page || page}/{meta.totalPages || 1}
+            Hiển thị {jobs.length} / {meta.total || 0} mục · Trang {meta.page || page}/{meta.totalPages || 1}
           </div>
 
           {jobs.map((job: any) => (
@@ -1076,11 +1135,11 @@ function FetchJobsTab() {
                     {job.title || job.url}
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <span>{job.source_name || 'Unknown source'}</span>
+                    <span>{job.source_name || 'Không rõ nguồn'}</span>
                     <span className={`badge badge-${job.status === 'done' ? 'success' : job.status === 'failed' ? 'error' : 'pending'}`}>
-                      {job.status}
+                      {statusLabel(job.status)}
                     </span>
-                    <span>retry: {job.retry_count || 0}</span>
+                    <span>đã thử lại: {job.retry_count || 0}</span>
                     {job.updated_at && <span>{new Date(job.updated_at).toLocaleString('vi-VN')}</span>}
                   </div>
                   <a href={job.url} target="_blank" rel="noreferrer" style={{ display: 'block', fontSize: '0.75rem', marginTop: 6, overflowWrap: 'anywhere' }}>
@@ -1093,7 +1152,7 @@ function FetchJobsTab() {
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 4, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                  <button className="btn btn-sm" onClick={() => handleRetry(job.id)} disabled={!!actionLoading}>Retry</button>
+                  <button className="btn btn-sm" onClick={() => handleRetry(job.id)} disabled={!!actionLoading}>Thử lại</button>
                   <button className="btn btn-sm btn-danger" onClick={() => handleDelete(job.id)} disabled={!!actionLoading}>Xóa</button>
                 </div>
               </div>
@@ -1101,7 +1160,7 @@ function FetchJobsTab() {
           ))}
 
           {jobs.length === 0 && (
-            <div className="empty-state"><p>Không có fetch job nào ở trạng thái này.</p></div>
+            <div className="empty-state"><p>Không có mục lấy bài nào ở trạng thái này.</p></div>
           )}
 
           <div style={{ display: 'flex', justifyContent: 'center', gap: 8, alignItems: 'center' }}>
@@ -1171,8 +1230,8 @@ function ArticlesTab() {
               {/voz|reddit/i.test(a.source_name || '') && (
                 <button className="btn btn-sm" style={{ background: '#2563eb', color: '#fff', fontSize: '0.72rem' }} onClick={() => handleRescrape(a.id)} title="Cào lại bình luận mới nhất">Cào lại</button>
               )}
-              <button className="btn btn-sm" onClick={() => handleReset(a.id)} title="Tóm tắt lại">🔄</button>
-              <button className="btn btn-sm btn-danger" onClick={() => handleDelete(a.id)} title="Xóa">🗑</button>
+              <button className="btn btn-sm" onClick={() => handleReset(a.id)} title="Tóm tắt lại">Tóm tắt lại</button>
+              <button className="btn btn-sm btn-danger" onClick={() => handleDelete(a.id)} title="Xóa">Xóa</button>
             </div>
           </div>
         </div>
