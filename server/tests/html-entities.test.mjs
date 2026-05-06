@@ -65,3 +65,14 @@ test('decode article text fields repairs mojibake and strips unsafe controls', (
   assert.equal(row.title, title);
   assert.equal(row.summary_text, summary);
 });
+
+test('decode article text fields does not re-encode valid Vietnamese text', () => {
+  const { decodeArticleTextFields } = loadTsModule('../src/lib/htmlEntities.ts', {
+    entities: { decodeHTML },
+  });
+
+  const summary = '## Phát ngôn gây tranh cãi của tỷ phú bất động sản New York\n\nTrong buổi họp báo cáo kết quả kinh doanh quý.';
+  const row = decodeArticleTextFields({ id: 'art_valid', summary_text: summary });
+
+  assert.equal(row.summary_text, summary);
+});
