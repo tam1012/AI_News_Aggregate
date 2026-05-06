@@ -51,6 +51,7 @@ test('article filters validate score, status, and date', () => {
   assert.throws(() => buildArticleListFilters({ minScore: '11' }), /minScore must be between 1 and 10/);
   assert.throws(() => buildArticleListFilters({ feedTab: 'bad' }), /Invalid feedTab/);
   assert.throws(() => buildArticleListFilters({ sort: 'bad' }), /Invalid sort/);
+  assert.throws(() => buildArticleListFilters({ qualityIssue: 'bad' }), /Invalid qualityIssue/);
 });
 
 test('article filters add feed tab predicates before pagination', () => {
@@ -70,6 +71,17 @@ test('article filters expose latest and hot ordering modes', () => {
   assert.match(buildArticleListOrderBy('latest'), /published_at/);
   assert.match(buildArticleListOrderBy('hot'), /hot_score/);
   assert.match(buildArticleListOrderBy('hot'), /published_at/);
+});
+
+test('article filters add quality issue predicates for admin review', () => {
+  const { buildArticleListFilters } = loadTsModule('../src/lib/articleFilters.ts');
+
+  assert.match(buildArticleListFilters({ qualityIssue: 'missing_tldr' }).where, /btrim\(a\.tldr\) = ''/);
+  assert.match(buildArticleListFilters({ qualityIssue: 'missing_summary_short' }).where, /btrim\(a\.summary_short\) = ''/);
+  assert.match(buildArticleListFilters({ qualityIssue: 'missing_tags' }).where, /cardinality\(a\.tags\) = 0/);
+  assert.match(buildArticleListFilters({ qualityIssue: 'missing_hot_score' }).where, /a\.hot_score IS NULL/);
+  assert.match(buildArticleListFilters({ qualityIssue: 'short_summary' }).where, /length\(btrim\(COALESCE\(a\.summary_text, ''\)\)\) < 200/);
+  assert.match(buildArticleListFilters({ qualityIssue: 'short_summary' }).where, /a\.summary_status = 'done'/);
 });
 
 test('article local date text SQL serializes as YYYY-MM-DD instead of a UTC Date object', () => {

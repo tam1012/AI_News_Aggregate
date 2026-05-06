@@ -88,11 +88,12 @@ articles.get('/', async (c) => {
   const minScore = c.req.query('minScore');
   const feedTab = c.req.query('feedTab');
   const sort = c.req.query('sort');
+  const qualityIssue = c.req.query('qualityIssue');
   const offset = (page - 1) * limit;
 
   let filters;
   try {
-    filters = buildArticleListFilters({ sourceId, status, date, tag, minScore, feedTab, sort });
+    filters = buildArticleListFilters({ sourceId, status, date, tag, minScore, feedTab, sort, qualityIssue });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'VALIDATION', message: err.message } }, 400);
   }
@@ -125,7 +126,7 @@ articles.get('/', async (c) => {
   return c.json({
     success: true,
     data: decodeArticleRows(rows),
-    meta: { page, limit, total, totalPages: Math.ceil(total / limit), date: date || null, tag: tag || null, minScore: minScore || null, feedTab: feedTab || null, sort: filters.sort },
+    meta: { page, limit, total, totalPages: Math.ceil(total / limit), date: date || null, tag: tag || null, minScore: minScore || null, feedTab: feedTab || null, sort: filters.sort, qualityIssue: qualityIssue || null },
   });
 });
 

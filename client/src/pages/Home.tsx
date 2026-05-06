@@ -347,6 +347,11 @@ export function Home() {
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [filterTag, scrollActiveChipToCenter]);
 
+  useEffect(() => {
+    if (!filterTag || popularTags.some(t => t.tag === filterTag)) return;
+    setFilterTag('');
+  }, [filterTag, popularTags]);
+
   const readerLoadingState = getReaderLoadingState({ isFeedLoading: loading, hasArticleDeepLink });
   const detailPaneVisible = shouldShowDetailPane({
     tab,
@@ -634,15 +639,23 @@ export function Home() {
                   onClick={() => setFeedSort('hot')}
                   type="button"
                 >
-                  🔥 Nóng
+                  Tin nóng
                 </button>
               </div>
               {popularTags.length > 0 && (
                 <div className="topic-scroll" ref={filtersRowRef} {...handleFiltersDrag}>
+                  <button
+                    className={`topic-chip ${filterTag ? '' : 'active'}`}
+                    onClick={() => setFilterTag('')}
+                    type="button"
+                    title="Hiển thị tất cả chủ đề"
+                  >
+                    Tất cả
+                  </button>
                   {popularTags.slice(0, 10).map(t => (
                     <button
                       key={t.tag}
-                      className={`topic-chip ${filterTag === t.tag ? 'active' : ''} ${!filterTag && !t.tag ? 'active' : ''}`}
+                      className={`topic-chip ${filterTag === t.tag ? 'active' : ''}`}
                       onClick={() => setFilterTag(filterTag === t.tag ? '' : t.tag)}
                       type="button"
                       title={`${t.count} bài`}

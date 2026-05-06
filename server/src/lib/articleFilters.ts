@@ -4,8 +4,10 @@ export const LOCAL_DATE_TEXT_SQL = `TO_CHAR(${LOCAL_DATE_SQL}, 'YYYY-MM-DD')`;
 const VALID_SUMMARY_STATUSES = ['pending', 'processing', 'done', 'failed', 'skipped'];
 const VALID_FEED_TABS = ['news', 'voz', 'reddit', 'youtube'];
 const VALID_ARTICLE_SORTS = ['latest', 'hot'];
+const VALID_QUALITY_ISSUES = ['missing_tldr', 'missing_summary_short', 'missing_tags', 'missing_hot_score', 'short_summary'];
 
 export type ArticleListSort = 'latest' | 'hot';
+export type ArticleQualityIssue = 'missing_tldr' | 'missing_summary_short' | 'missing_tags' | 'missing_hot_score' | 'short_summary';
 
 export interface ArticleListFilterInput {
   sourceId?: string;
@@ -15,6 +17,7 @@ export interface ArticleListFilterInput {
   minScore?: string;
   feedTab?: string;
   sort?: string;
+  qualityIssue?: string;
 }
 
 export interface ArticleListFilters {
@@ -48,6 +51,10 @@ export function buildArticleListFilters(input: ArticleListFilterInput): ArticleL
 
   if (input.sort && !VALID_ARTICLE_SORTS.includes(input.sort)) {
     throw new Error('Invalid sort');
+  }
+
+  if (input.qualityIssue && !VALID_QUALITY_ISSUES.includes(input.qualityIssue)) {
+    throw new Error('Invalid qualityIssue');
   }
 
   const sort: ArticleListSort = input.sort === 'hot' ? 'hot' : 'latest';
@@ -84,6 +91,21 @@ export function buildArticleListFilters(input: ArticleListFilterInput): ArticleL
     clauses.push(`(s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`);
   } else if (input.feedTab === 'news') {
     clauses.push(`NOT (s.type = 'youtube' OR a.url ILIKE '%youtube.com%' OR a.url ILIKE '%youtu.be%' OR s.name ILIKE '%reddit%' OR a.url ILIKE '%reddit.com%' OR a.title ILIKE '[r/%' OR s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`);
+  }
+
+  if (input.qualityIssue) {
+    clauses.push(`a.summary_status = 'done'`);
+    if (input.qualityIssue === 'missing_tldr') {
+      clauses.push(`(a.tldr IS NULL OR btrim(a.tldr) = '')`);
+    } else if (input.qualityIssue === 'missing_summary_short') {
+      clauses.push(`(a.summary_short IS NULL OR btrim(a.summary_short) = '')`);
+    } else if (input.qualityIssue === 'missing_tags') {
+      clauses.push(`(a.tags IS NULL OR cardinality(a.tags) = 0)`);
+    } else if (input.qualityIssue === 'missing_hot_score') {
+      clauses.push(`a.hot_score IS NULL`);
+    } else if (input.qualityIssue === 'short_summary') {
+      clauses.push(`length(btrim(COALESCE(a.summary_text, ''))) < 200`);
+    }
   }
 
   return {
