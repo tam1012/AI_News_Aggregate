@@ -216,8 +216,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   display: flex; align-items: center; gap: 4px;
 }
 .toolbar-filters-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 4px 0 0;
+  display: flex; align-items: center; gap: 10px;
+  padding: 5px 0 2px;
 }
 /* Sort toggle - fixed pair */
 .sort-toggle {
@@ -227,7 +227,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   overflow: hidden;
 }
 .sort-btn {
-  padding: 3px 10px;
+  padding: 4px 12px;
   font-size: 0.74rem; font-weight: 600;
   background: transparent;
   color: var(--color-text-muted);
@@ -245,7 +245,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 /* Topic chips - scrollable */
 .topic-scroll {
-  display: flex; align-items: center; gap: 5px;
+  display: flex; align-items: center; gap: 6px;
   overflow-x: auto; flex: 1; min-width: 0;
   scrollbar-width: thin;
   scrollbar-color: var(--color-border) transparent;
@@ -1168,7 +1168,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-muted);
-  padding: 4px 12px;
+  padding: 4px 14px;
   font-size: 0.76rem;
   font-weight: 600;
   transition: all 0.15s;
