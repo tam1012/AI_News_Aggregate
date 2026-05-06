@@ -600,35 +600,29 @@ export function Home() {
                 )}
               </div>
             </div>
-            <div className="toolbar-filters-row" ref={filtersRowRef} {...handleFiltersDrag}>
-              <button
-                className={`topic-chip ${feedSort === 'latest' ? 'active' : ''}`}
-                onClick={() => setFeedSort('latest')}
-                type="button"
-              >
-                Mới nhất
-              </button>
-              <button
-                className={`topic-chip ${feedSort === 'hot' ? 'active' : ''}`}
-                onClick={() => setFeedSort('hot')}
-                type="button"
-              >
-                🔥 Nóng
-              </button>
+            <div className="toolbar-filters-row">
+              <div className="sort-toggle">
+                <button
+                  className={`sort-btn ${feedSort === 'latest' ? 'active' : ''}`}
+                  onClick={() => setFeedSort('latest')}
+                  type="button"
+                >
+                  Mới nhất
+                </button>
+                <button
+                  className={`sort-btn ${feedSort === 'hot' ? 'active' : ''}`}
+                  onClick={() => setFeedSort('hot')}
+                  type="button"
+                >
+                  🔥 Nóng
+                </button>
+              </div>
               {popularTags.length > 0 && (
-                <>
-                  <span className="toolbar-divider" />
-                  <button
-                    className={`topic-chip ${!filterTag ? 'active' : ''}`}
-                    onClick={() => setFilterTag('')}
-                    type="button"
-                  >
-                    Tất cả
-                  </button>
+                <div className="topic-scroll" ref={filtersRowRef} {...handleFiltersDrag}>
                   {popularTags.slice(0, 10).map(t => (
                     <button
                       key={t.tag}
-                      className={`topic-chip ${filterTag === t.tag ? 'active' : ''}`}
+                      className={`topic-chip ${filterTag === t.tag ? 'active' : ''} ${!filterTag && !t.tag ? 'active' : ''}`}
                       onClick={() => setFilterTag(filterTag === t.tag ? '' : t.tag)}
                       type="button"
                       title={`${t.count} bài`}
@@ -636,7 +630,7 @@ export function Home() {
                       {t.tag}
                     </button>
                   ))}
-                </>
+                </div>
               )}
             </div>
           </div>
