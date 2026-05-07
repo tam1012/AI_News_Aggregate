@@ -37,6 +37,14 @@ test('split feed toolbar keeps compact tabs separate from the filter button on n
   assert.match(toolbarTabRule, /font-size:\s*0\.82rem/);
 });
 
+test('desktop split view widens reader without changing feed column width', () => {
+  const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
+
+  assert.match(css, /max-width:\s*min\(1680px, calc\(100vw - 32px\)\)/);
+  assert.match(css, /\.split-left\s*\{[\s\S]*flex:\s*0 0 360px/);
+  assert.match(css, /@media \(min-width:\s*1200px\)\s*\{[\s\S]*\.split-left\s*\{[\s\S]*flex:\s*0 0 400px/);
+});
+
 test('mobile reader exposes refresh row and floating scroll-to-top affordance styles', () => {
   const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
   const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
