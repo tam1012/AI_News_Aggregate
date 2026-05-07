@@ -34,6 +34,7 @@ interface DigestPromptInput {
 const DIGEST_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 const DEFAULT_DIGEST_ARTICLE_LIMIT = 100;
 const MAX_DIGEST_ARTICLE_LIMIT = 200;
+const DEFAULT_SUMMARY_AI_TIMEOUT_MS = 180000;
 const DEFAULT_DIGEST_AI_TIMEOUT_MS = 180000;
 
 function getVietnamDateParts(date: Date): { year: string; month: string; day: string; hour: string; minute: string } {
@@ -136,6 +137,12 @@ function isAiTimeout(err: unknown): boolean {
   return /timeout|timed out|aborted/i.test(`${name} ${message}`);
 }
 
+function getSummaryAiTimeoutMs(): number {
+  const parsed = parseInt(process.env.SUMMARY_AI_TIMEOUT_MS || process.env.AI_REQUEST_TIMEOUT_MS || '', 10);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  return DEFAULT_SUMMARY_AI_TIMEOUT_MS;
+}
+
 function getDigestAiTimeoutMs(): number {
   const parsed = parseInt(process.env.DIGEST_AI_TIMEOUT_MS || '', 10);
   if (Number.isFinite(parsed) && parsed > 0) return parsed;
@@ -159,17 +166,18 @@ export async function summarizeArticle(article: ArticleForSummary, promptConfig?
     : buildNewsPrompt(article, content, config);
 
   try {
-    const result = await callAi(prompt);
+    const aiOptions = { timeoutMs: getSummaryAiTimeoutMs() };
+    const result = await callAi(prompt, aiOptions);
     const parsed = parseAiSummaryOutput(result.trim(), config.allowed_tags);
     if (!parsed.isUsable) {
-      const repaired = await callAi(buildSummaryRepairPrompt(result, config));
+      const repaired = await callAi(buildSummaryRepairPrompt(result, config), aiOptions);
       return parseAiSummaryOutput(repaired.trim(), config.allowed_tags);
     }
     return parsed;
   } catch (err: any) {
     if (isAiSafetyRejection(err)) {
       try {
-        const fallbackResult = await callAi(buildSafeFallbackPrompt(article, content, config));
+        const fallbackResult = await callAi(buildSafeFallbackPrompt(article, content, config), { timeoutMs: getSummaryAiTimeoutMs() });
         return parseAiSummaryOutput(fallbackResult.trim(), config.allowed_tags);
       } catch (fallbackErr: any) {
         console.error(`Safe fallback failed for article ${article.id}:`, fallbackErr.message);
