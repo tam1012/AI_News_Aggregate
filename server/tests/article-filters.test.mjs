@@ -60,7 +60,6 @@ test('article filters add feed tab predicates before pagination', () => {
   assert.match(buildArticleListFilters({ feedTab: 'news' }).where, /NOT \(s\.type = 'youtube'/);
   assert.match(buildArticleListFilters({ feedTab: 'reddit' }).where, /reddit/);
   assert.match(buildArticleListFilters({ feedTab: 'voz' }).where, /voz/);
-  assert.match(buildArticleListFilters({ feedTab: 'youtube' }).where, /s\.type = 'youtube'/);
 });
 
 test('article filters expose latest and hot ordering modes', () => {

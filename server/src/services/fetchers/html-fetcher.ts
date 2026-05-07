@@ -3,10 +3,56 @@ import { normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
 import { BROWSER_UA } from './http-utils.js';
 import { insertArticleIfNew } from './article-writer.js';
 import { SourceFetcher } from './types.js';
+import { learnSelectorProfileFromHtml } from './selector-learning.js';
+import {
+  extractWithSelectorProfile,
+  getDomainFromUrl,
+  getSourceProfile,
+  isExtractionUsable,
+  recordProfileFailure,
+  recordProfileSuccess,
+  rowToSelectorProfile,
+  saveSourceProfile,
+} from './selector-profile.js';
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = parseInt(value || '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function getMetaContent($: cheerio.CheerioAPI, selector: string): string {
+  return $(selector).first().attr('content')?.trim() || '';
+}
+
+async function extractWithAiSelector(html: string, pageUrl: string) {
+  const domain = getDomainFromUrl(pageUrl);
+  if (!domain) return null;
+
+  const cached = await getSourceProfile(domain);
+  if (cached) {
+    try {
+      const profile = rowToSelectorProfile(cached);
+      const extraction = extractWithSelectorProfile(html, pageUrl, profile);
+      if (isExtractionUsable(extraction.content, profile.minTextLength)) {
+        await recordProfileSuccess(cached.id);
+        return { extraction, matchedSelector: extraction.matchedSelector, sourceProfileId: cached.id };
+      }
+      await recordProfileFailure(cached.id, new Error('Cached selector profile produced short content'));
+    } catch (err) {
+      await recordProfileFailure(cached.id, err);
+    }
+  }
+
+  try {
+    const learned = await learnSelectorProfileFromHtml(pageUrl, html);
+    if (!learned) return null;
+    const saved = await saveSourceProfile(domain, learned.profile);
+    await recordProfileSuccess(saved.id);
+    return { extraction: learned.extraction, matchedSelector: learned.extraction.matchedSelector, sourceProfileId: saved.id };
+  } catch (err: any) {
+    console.warn(`Failed to learn selector profile for ${domain}: ${err.message}`);
+    return null;
+  }
 }
 
 export const htmlFetcher: SourceFetcher = {
@@ -63,20 +109,43 @@ export const htmlFetcher: SourceFetcher = {
     });
     if (!articleRes.ok) throw new Error(`Status code ${articleRes.status}`);
     const articleHtml = await articleRes.text();
+    const aiExtraction = await extractWithAiSelector(articleHtml, job.url);
+    if (aiExtraction) {
+      const { extraction, matchedSelector, sourceProfileId } = aiExtraction;
+      const title = extraction.title || job.title;
+      const excerpt = truncate(extraction.content, 500);
+      return {
+        source,
+        url: job.url,
+        title,
+        publishedAt: extraction.publishedAt || job.published_at,
+        rawExcerpt: excerpt,
+        rawContent: extraction.content,
+        contentHashSeed: title + excerpt,
+        imageUrl: extraction.imageUrl,
+        metadata: { extractor: 'ai-selector', matchedSelector, sourceProfileId },
+      };
+    }
+
     const $article = cheerio.load(articleHtml);
 
     if (config.removeSelectors) {
       for (const sel of config.removeSelectors) $article(sel).remove();
     }
 
-    const title = $article(config.titleSelector || 'h1').first().text().trim() || job.title;
+    const title = $article(config.titleSelector || 'h1').first().text().trim() ||
+      getMetaContent($article, 'meta[property="og:title"]') ||
+      $article('title').first().text().trim() ||
+      job.title;
     if (!title) return null;
 
-    const content = $article(config.contentSelector || 'article').text().trim();
+    const content = $article(config.contentSelector || 'article').text().replace(/\s+/g, ' ').trim();
     const excerpt = truncate(content, 500);
 
     let imageUrl: string | null = null;
-    const imgSrc = $article(config.imageSelector || 'article img, .article img, .content img').first().attr('src');
+    const imgSrc = $article(config.imageSelector || 'article img, .article img, .content img').first().attr('src') ||
+      getMetaContent($article, 'meta[property="og:image"]') ||
+      getMetaContent($article, 'meta[name="twitter:image"]');
     if (imgSrc) {
       try {
         imageUrl = normalizePublicHttpUrl(new URL(imgSrc, job.url).toString());

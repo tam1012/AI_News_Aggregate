@@ -5,6 +5,17 @@ import { normalizePublicHttpUrl, truncate } from '../../lib/utils.js';
 import { BROWSER_UA } from './http-utils.js';
 import { insertArticleIfNew } from './article-writer.js';
 import { SourceFetcher } from './types.js';
+import { learnSelectorProfileFromHtml } from './selector-learning.js';
+import {
+  extractWithSelectorProfile,
+  getDomainFromUrl,
+  getSourceProfile,
+  isExtractionUsable,
+  recordProfileFailure,
+  recordProfileSuccess,
+  rowToSelectorProfile,
+  saveSourceProfile,
+} from './selector-profile.js';
 
 const rssParser = new RssParser({
   timeout: 15000,
@@ -76,7 +87,38 @@ function extractArticleText($: cheerio.CheerioAPI): string {
   return best;
 }
 
-async function fetchFullArticle(jobUrl: string): Promise<{ title: string; content: string; imageUrl: string | null; publishedAt: string | null }> {
+async function extractWithAiSelector(html: string, pageUrl: string) {
+  const domain = getDomainFromUrl(pageUrl);
+  if (!domain) return null;
+
+  const cached = await getSourceProfile(domain);
+  if (cached) {
+    try {
+      const profile = rowToSelectorProfile(cached);
+      const extraction = extractWithSelectorProfile(html, pageUrl, profile);
+      if (isExtractionUsable(extraction.content, profile.minTextLength)) {
+        await recordProfileSuccess(cached.id);
+        return { extraction, sourceProfileId: cached.id };
+      }
+      await recordProfileFailure(cached.id, new Error('Cached selector profile produced short content'));
+    } catch (err) {
+      await recordProfileFailure(cached.id, err);
+    }
+  }
+
+  try {
+    const learned = await learnSelectorProfileFromHtml(pageUrl, html);
+    if (!learned) return null;
+    const saved = await saveSourceProfile(domain, learned.profile);
+    await recordProfileSuccess(saved.id);
+    return { extraction: learned.extraction, sourceProfileId: saved.id };
+  } catch (err: any) {
+    console.warn(`Failed to learn selector profile for ${domain}: ${err.message}`);
+    return null;
+  }
+}
+
+async function fetchFullArticle(jobUrl: string): Promise<{ title: string; content: string; imageUrl: string | null; publishedAt: string | null; metadata?: any }> {
   const response = await fetch(jobUrl, {
     headers: {
       'User-Agent': BROWSER_UA,
@@ -87,6 +129,18 @@ async function fetchFullArticle(jobUrl: string): Promise<{ title: string; conten
   if (!response.ok) throw new Error(`Status code ${response.status}`);
 
   const html = await response.text();
+  const aiExtraction = await extractWithAiSelector(html, jobUrl);
+  if (aiExtraction) {
+    const { extraction, sourceProfileId } = aiExtraction;
+    return {
+      title: extraction.title,
+      content: extraction.content,
+      imageUrl: extraction.imageUrl,
+      publishedAt: extraction.publishedAt,
+      metadata: { extractor: 'ai-selector', matchedSelector: extraction.matchedSelector, sourceProfileId },
+    };
+  }
+
   const $ = cheerio.load(html);
   const title = $('h1').first().text().replace(/\s+/g, ' ').trim() ||
     getMetaContent($, 'meta[property="og:title"]') ||
@@ -223,6 +277,7 @@ export const rssFetcher: SourceFetcher = {
       rawContent,
       contentHashSeed: `${fullArticle?.title || job.title}${rawContent || rssExcerpt}`,
       imageUrl: fullArticle?.imageUrl || payload.imageUrl || null,
+      metadata: fullArticle?.metadata || null,
     };
   },
   async fetch(source) {
