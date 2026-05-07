@@ -20,7 +20,13 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
 }
 
 function decodeText(value: string): string {
-  return decodeHTML(value).replace(/\s+/g, ' ').trim();
+  return decodeHTML(value)
+    .replace(/&apos;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function stripHtml(html: string): string {
