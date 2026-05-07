@@ -237,9 +237,7 @@ export function Home() {
   const [feedSort, setFeedSort] = useState<FeedSort>('latest');
   const [filterTag, setFilterTag] = useState<string>('');
   const [showFilter, setShowFilter] = useState(false);
-  const [showSortMenu, setShowSortMenu] = useState(false);
   const [showTagMenu, setShowTagMenu] = useState(false);
-  const sortMenuRef = useRef<HTMLDivElement>(null);
   const tagMenuRef = useRef<HTMLDivElement>(null);
 
   // Drag-to-scroll for filters row on desktop
@@ -358,14 +356,11 @@ export function Home() {
   }, [filterTag, popularTags]);
 
   useEffect(() => {
-    if (!showFilter && !showSortMenu && !showTagMenu) return;
+    if (!showFilter && !showTagMenu) return;
 
     const handleClickOutside = (event: MouseEvent) => {
       if (showFilter && !filterControlRef.current?.contains(event.target as Node)) {
         setShowFilter(false);
-      }
-      if (showSortMenu && !sortMenuRef.current?.contains(event.target as Node)) {
-        setShowSortMenu(false);
       }
       if (showTagMenu && !tagMenuRef.current?.contains(event.target as Node)) {
         setShowTagMenu(false);
@@ -374,7 +369,7 @@ export function Home() {
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showFilter, showSortMenu, showTagMenu]);
+  }, [showFilter, showTagMenu]);
 
   const readArticleSet = useMemo(() => new Set(readArticleIds), [readArticleIds]);
 
@@ -651,31 +646,6 @@ export function Home() {
                   </button>
                 </div>
               )}
-              <div className="compact-sort-control" ref={sortMenuRef}>
-                <button
-                  className={`compact-sort-btn ${showSortMenu ? 'open' : ''}`}
-                  onClick={() => setShowSortMenu(prev => !prev)}
-                  type="button"
-                >
-                  {feedSort === 'latest' ? 'Mới nhất' : 'Tin nóng'} ▾
-                </button>
-                {showSortMenu && (
-                  <div className="compact-sort-dropdown">
-                    <button
-                      className={`filter-option ${feedSort === 'latest' ? 'active' : ''}`}
-                      onClick={() => { setFeedSort('latest'); setShowSortMenu(false); }}
-                    >
-                      Mới nhất
-                    </button>
-                    <button
-                      className={`filter-option ${feedSort === 'hot' ? 'active' : ''}`}
-                      onClick={() => { setFeedSort('hot'); setShowSortMenu(false); }}
-                    >
-                      Tin nóng
-                    </button>
-                  </div>
-                )}
-              </div>
               <div className="feed-filter-control" ref={filterControlRef}>
                 <button
                   className={`compact-sort-btn ${filterSource !== 'all' ? 'active' : ''}`}

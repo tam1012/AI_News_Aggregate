@@ -538,10 +538,6 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   font-family: var(--font-heading);
   font-size: 1.02rem; font-weight: 700; line-height: 1.3;
   margin-bottom: 3px; color: var(--color-text);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .feed-item-preview {
@@ -584,21 +580,19 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
     margin-bottom: 6px;
   }
   .feed-item-title {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
     font-size: 1.02rem;
     line-height: 1.32;
     margin-bottom: 5px;
+    /* No line-clamp — show full title */
+    display: block;
+    overflow: visible;
   }
   .feed-item-preview {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
     font-size: 0.83rem;
     line-height: 1.48;
+    /* No line-clamp — show full preview */
+    display: block;
+    overflow: visible;
   }
   .feed-item-body { gap: 9px; }
   .feed-item-thumb {
