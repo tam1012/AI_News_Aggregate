@@ -16,6 +16,16 @@ test('desktop split feed tabs scroll within the left pane instead of overflowing
   assert.match(feedTabRule, /white-space:\s*nowrap/);
 });
 
+test('dark theme uses GitHub-style neutral dark tokens', () => {
+  const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
+  const darkThemeRule = css.match(/\[data-theme="dark"\]\s*\{([^}]+)\}/)?.[1] || '';
+
+  assert.match(darkThemeRule, /--color-bg:\s*#0d1117/);
+  assert.match(darkThemeRule, /--color-bg-card:\s*#161b22/);
+  assert.match(darkThemeRule, /--color-accent:\s*#58a6ff/);
+  assert.match(darkThemeRule, /--color-border:\s*#30363d/);
+});
+
 test('split feed toolbar keeps compact tabs separate from the filter button on narrow panes', () => {
   const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
   const toolbarTabsRule = css.match(/\.split-feed-toolbar \.feed-tabs\s*\{([^}]+)\}/)?.[1] || '';
