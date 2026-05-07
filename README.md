@@ -197,15 +197,15 @@ Một số file `.sql`, script test/debug, ảnh và tài liệu review ở root
 
 ### 1. Scrape
 
-`startCronJobs()` gọi `runScrapeJob()` ở phút `00` mỗi `SCRAPE_INTERVAL_HOURS` giờ để kiểm tra source nào đến hạn.
+`startCronJobs()` gọi `runScrapeJob()` mỗi 5 phút và chạy thêm một lượt sau khi server khởi động 30 giây để kiểm tra source nào đến hạn.
 
 Mỗi source có lịch riêng bằng `fetch_interval_minutes` và `next_run_at`:
 
 - Source mới mặc định `fetch_interval_minutes = 60`, tức 1 giờ/lần.
-- Mỗi lần scrape thành công, source được đặt `next_run_at = NOW() + fetch_interval_minutes`.
+- Mỗi lần scrape thành công, source được đặt `next_run_at = NOW() + fetch_interval_minutes` kèm jitter nhỏ để rải tải.
 - Nếu scrape có lỗi một phần, lượt sau bị giãn gấp đôi interval, tối đa 24 giờ.
 - Nếu scrape fail hẳn, `consecutive_failures` tăng và dùng exponential backoff, tối đa 24 giờ.
-- Cron chính vẫn đánh thức theo `SCRAPE_INTERVAL_HOURS` để quét danh sách đến hạn, nên source 60 phút sẽ chạy ở lượt cron gần nhất sau khi đến hạn.
+- Cron chính kiểm tra mỗi 5 phút, nên source quá hạn sẽ được pick trong lượt gần nhất thay vì chờ tới giờ tròn.
 
 `runScrapeJob()` chỉ lấy source đang bật và đã đến hạn:
 
@@ -406,7 +406,7 @@ Biến quan trọng:
 | `ADMIN_TOKEN` | Token admin cho endpoint mutate/protected |
 | `PUBLIC_SITE_URL` | Base URL public để sinh Open Graph link |
 | `CORS_ORIGIN` | Origin được phép gọi API |
-| `SCRAPE_INTERVAL_HOURS` | Chu kỳ cron kiểm tra source đến hạn và tạo digest, mặc định `3` giờ |
+| `SCRAPE_INTERVAL_HOURS` | Chu kỳ tạo digest và tránh trùng forum rescrape, mặc định `3` giờ; source discovery luôn check mỗi 5 phút |
 | `MAX_ARTICLES_PER_SOURCE` | Số bài tối đa lấy từ mỗi source mỗi lượt |
 | `MAX_AI_CALLS_PER_RUN` | Số bài tối đa tóm tắt mỗi lượt |
 | `DIGEST_ARTICLE_LIMIT` | Số bài tối đa đưa vào mỗi bản tin, mặc định 100, trần 200 |
@@ -592,7 +592,7 @@ Sau khi `docker compose up -d --build` thành công:
 
 2. **Thêm nguồn tin** — Mở `https://your-domain/sources`, thêm nguồn RSS, web hoặc kênh YouTube. Backend tự nhận diện URL Reddit/VOZ/YouTube và chuyển sang scraper riêng.
 
-3. **Chờ cron hoặc trigger thủ công** — Source mới mặc định cào lại mỗi 60 phút, nhưng cron chính kiểm tra các source đến hạn mỗi `SCRAPE_INTERVAL_HOURS` giờ. Để test ngay, vào `/admin` → bấm nút "Cào tin", "Fetch bài" và "Tóm tắt".
+3. **Chờ cron hoặc trigger thủ công** — Source mới mặc định cào lại mỗi 60 phút, cron chính kiểm tra nguồn đến hạn mỗi 5 phút. Để test ngay, vào `/admin` → bấm nút "Cào tin", "Fetch bài" và "Tóm tắt".
 
 4. **Kiểm tra** — Sau khi scrape + summarize xong, bài sẽ hiện trên trang chủ với TL;DR preview.
 
@@ -669,10 +669,10 @@ Lưu ý: đổi URL smoke test public trong `deploy.yml` nếu dùng domain khá
 
 | Job | Lịch | Việc làm |
 |---|---|---|
-| Source discovery | `0 */SCRAPE_INTERVAL_HOURS * * *` | Kiểm tra source đến hạn theo `next_run_at`; source mặc định 60 phút/lần, lỗi thì backoff tối đa 24 giờ |
+| Source discovery | `*/5 * * * *` + startup check | Kiểm tra source đến hạn theo `next_run_at`; source mặc định 60 phút/lần, có jitter nhỏ, lỗi thì backoff tối đa 24 giờ |
 | Article Fetch Queue | `*/5 * * * *` | Claim URL đã discover trong `article_fetch_jobs`, fetch nội dung chi tiết, rồi tạo article pending summary |
 | Summarize | `*/10 * * * *` | Claim bài `pending`, gọi AI, cập nhật `done/skipped/failed` |
-| Forum Rescrape | `0,30 * * * *` | Cào lại Reddit/VOZ mới, bỏ qua phút `00` nếu trùng giờ source discovery |
+| Forum Rescrape | `0,30 * * * *` | Cào lại Reddit/VOZ mới, bỏ qua phút `00` theo nhịp digest để giảm tải |
 | Digest | `30 */SCRAPE_INTERVAL_HOURS * * *` | Tạo bản tin từ các bài đã tóm tắt trong 24 giờ gần nhất |
 | Retry | `*/10 * * * *` | Reset bài/queue kẹt, retry failed còn hạn và retry comment Reddit |
 | Cleanup | `43 2 * * *` | Xóa scrape logs cũ, dọn raw_content bài cũ, reset processing kẹt |

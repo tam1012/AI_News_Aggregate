@@ -33,7 +33,7 @@ test('retry policy resets failed summaries below retry limit and timeout failure
   assert.match(statement.sql, /retry_count < \$1/);
   assert.match(statement.sql, /last_summary_error/);
   assert.match(statement.sql, /summary_status = 'pending'/);
-  assert.deepEqual(Array.from(statement.params), [3, 15, '%timeout%', '%aborted%']);
+  assert.deepEqual(Array.from(statement.params), [3, 15, '%timeout%', '%aborted%', '%524%', '%<!doctype html%']);
 });
 
 test('retry policy resets stale processing summaries back to pending', () => {

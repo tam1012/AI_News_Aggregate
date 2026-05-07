@@ -41,7 +41,14 @@ function getSourceScrapeTimeoutMs(source: any): number {
   return 45_000;
 }
 
-// Scrape ALL enabled sources (chay moi gio tai :00)
+function addScrapeJitter(minutes: number): number {
+  if (minutes <= 10) return minutes;
+  const jitterWindow = Math.min(10, Math.max(2, Math.floor(minutes * 0.1)));
+  const jitter = Math.floor(Math.random() * (jitterWindow * 2 + 1)) - jitterWindow;
+  return Math.max(5, minutes + jitter);
+}
+
+// Scrape enabled sources that are due by next_run_at.
 async function runScrapeJob() {
   console.log(`[${new Date().toISOString()}] Starting scrape job...`);
 
@@ -73,9 +80,9 @@ async function runScrapeJob() {
         return scrapeSource(source);
       })(), getSourceScrapeTimeoutMs(source), `Scrape source ${source.name}`);
 
-      const nextRunDelayMinutes = result.errors.length > 0
+      const nextRunDelayMinutes = addScrapeJitter(result.errors.length > 0
         ? Math.min(scrapeIntervalHours * 60 * 2, 24 * 60)
-        : scrapeIntervalHours * 60;
+        : scrapeIntervalHours * 60);
 
       await query(
         `UPDATE sources SET
@@ -104,7 +111,7 @@ async function runScrapeJob() {
         'SELECT consecutive_failures + 1 as consecutive_failures FROM sources WHERE id = $1',
         [source.id]
       );
-      const backoffMinutes = Math.min(scrapeIntervalHours * 60 * Math.pow(2, Math.max((failureCount?.consecutive_failures || 1) - 1, 0)), 24 * 60);
+      const backoffMinutes = addScrapeJitter(Math.min(scrapeIntervalHours * 60 * Math.pow(2, Math.max((failureCount?.consecutive_failures || 1) - 1, 0)), 24 * 60));
 
       await query(
         `UPDATE sources SET
@@ -265,7 +272,11 @@ async function runRetryJob() {
 export function startCronJobs() {
   const intervalHours = parseInt(process.env.SCRAPE_INTERVAL_HOURS || '1');
 
-  cron.schedule('0 * * * *', async () => {
+  setTimeout(() => {
+    runWithJobLock('scrape', runScrapeJob).catch(console.error);
+  }, 30_000).unref?.();
+
+  cron.schedule('*/5 * * * *', async () => {
     runWithJobLock('scrape', runScrapeJob).catch(console.error);
   });
 
@@ -313,7 +324,7 @@ export function startCronJobs() {
   });
 
   console.log(`Cron jobs scheduled:`);
-  console.log(`  - Scrape due sources: hourly at :00`);
+  console.log(`  - Scrape due sources: every 5 minutes plus startup check`);
   console.log(`  - Article Fetch: every 5 minutes`);
   console.log(`  - Summarize: every 10 minutes`);
   console.log(`  - Forum Rescrape: every 30 mins (max 2 times per article)`);

@@ -128,7 +128,7 @@ function ReadmeWelcome() {
       <div style={{ textAlign: 'left', background: 'var(--color-bg)', padding: '24px', borderRadius: 'var(--radius)', fontSize: '0.95rem', lineHeight: '1.7' }}>
         <h3 style={{ marginBottom: '12px' }}>Cách hoạt động:</h3>
         <ul style={{ paddingLeft: '20px', marginBottom: '20px', color: 'var(--color-text-secondary)' }}>
-          <li><strong>Cào nguồn (mặc định mỗi 60 phút/source):</strong> Cứ 3 giờ hệ thống kiểm tra các nguồn đến hạn theo <code>next_run_at</code>; nguồn mới mặc định 60 phút/lần, nguồn lỗi sẽ tự backoff tối đa 24 giờ.</li>
+          <li><strong>Cào nguồn (mặc định mỗi 60 phút/source):</strong> Cứ 5 phút hệ thống kiểm tra các nguồn đến hạn theo <code>next_run_at</code>; nguồn mới mặc định 60 phút/lần, nguồn lỗi sẽ tự backoff tối đa 24 giờ.</li>
           <li><strong>Fetch bài chi tiết (mỗi 5 phút):</strong> URL mới từ RSS, Reddit, VOZ hoặc GitHub Trending được đưa vào queue riêng rồi fetch nội dung chi tiết độc lập.</li>
           <li><strong>Cào lại bình luận forum (mỗi 30 phút):</strong> Các bài Reddit và VOZ mới được cào lại tối đa 2 lần để cập nhật bình luận mới nhất.</li>
           <li><strong>Tóm tắt AI (mỗi 10 phút + khi cần):</strong> AI đọc nội dung gốc và viết lại thành bản tóm tắt tiếng Việt; job retry cũng chạy mỗi 10 phút để mở kẹt lỗi tạm thời.</li>
