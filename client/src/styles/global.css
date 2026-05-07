@@ -481,10 +481,10 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 /* ===== Date Heading ===== */
 .feed-date-heading {
   font-family: var(--font-heading);
-  font-size: 1.65rem; font-weight: 700; font-style: italic;
-  text-align: center; padding: 20px 0 16px;
+  font-size: 1.8rem; font-weight: 700; font-style: italic;
+  text-align: center; padding: 18px 0 12px;
   color: var(--color-text);
-  letter-spacing: -0.3px;
+  letter-spacing: -0.4px;
 }
 
 /* ===== Date Navigator ===== */
@@ -500,34 +500,32 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 
 /* ===== Feed Item (list row) ===== */
 .feed-item {
-  padding: 14px 16px;
-  margin: 0 -16px;
-  border-bottom: 1px solid var(--color-border-light);
-  border-left: 3px solid transparent;
-  border-radius: var(--radius-sm);
+  padding: 16px 0;
+  margin: 0;
+  border-bottom: none;
+  border-left: none;
+  border-radius: 0;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition: opacity 0.15s;
   position: relative;
 }
-.feed-item:hover { 
-  background: var(--color-bg-card); 
-  z-index: 2;
-  border-bottom-color: transparent;
+.feed-item + .feed-item {
+  border-top: 1px solid var(--color-border-light);
 }
-.feed-item:active { background: var(--color-bg-hover); transform: translateY(0); }
+.feed-item:hover { opacity: 0.85; }
+.feed-item:active { opacity: 0.7; }
 .feed-item.active {
-  background: var(--color-bg-hover);
-  border-left-color: var(--color-accent);
+  opacity: 1;
 }
 
 .feed-item-meta {
   display: flex; align-items: center; gap: 10px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 .feed-item-source {
-  font-size: 0.65rem; font-weight: 500;
+  font-size: 0.7rem; font-weight: 500;
   color: var(--color-text-muted);
-  text-transform: uppercase; letter-spacing: 0.08em;
+  text-transform: uppercase; letter-spacing: 0.06em;
 }
 .feed-item-time {
   font-size: 0.7rem; color: var(--color-text-muted);
@@ -536,79 +534,49 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 
 .feed-item-title {
   font-family: var(--font-heading);
-  font-size: 1.02rem; font-weight: 700; line-height: 1.3;
-  margin-bottom: 3px; color: var(--color-text);
+  font-size: 1.1rem; font-weight: 700; line-height: 1.35;
+  margin-bottom: 6px; color: var(--color-text);
 }
 
 .feed-item-preview {
-  font-size: 0.84rem; line-height: 1.5;
+  font-size: 0.88rem; line-height: 1.6;
   color: var(--color-text-secondary);
 }
 
-/* Desktop: hide thumbnail in feed for compact density */
-@media (min-width: 900px) {
-  .split-left .feed-item-thumb {
-    display: none;
-  }
-  .split-left .feed-item {
-    padding: 11px 16px;
-  }
-  .split-left .feed-item-title {
-    font-size: 0.95rem;
-  }
+/* Hide thumbnails everywhere — clean feed like NewsDigest */
+.feed-item-thumb {
+  display: none !important;
 }
 
-/* Feed item with thumbnail */
+/* Feed item with thumbnail (hidden but keep layout) */
 .feed-item-body {
-  display: flex; gap: 10px; align-items: flex-start;
+  display: block;
 }
-.feed-item-text { flex: 1; min-width: 0; }
-.feed-item-thumb {
-  flex-shrink: 0; width: 64px; height: 64px;
-  border-radius: var(--radius-sm); object-fit: cover;
-  background: var(--color-bg-hover);
-}
+.feed-item-text { min-width: 0; }
+
 @media (max-width: 640px) {
-  .feed-container { padding: 6px 0 18px; }
+  .feed-container { padding: 6px 0 80px; /* extra bottom padding for floating tabs */ }
   .feed-item {
-    padding: 13px 12px;
-    margin: 0 -12px;
-    border-radius: 10px;
+    padding: 16px 0;
   }
   .feed-item-meta {
     gap: 8px;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
   }
   .feed-item-title {
-    font-size: 1.02rem;
-    line-height: 1.32;
-    margin-bottom: 5px;
-    /* No line-clamp — show full title */
-    display: block;
-    overflow: visible;
+    font-size: 1.12rem;
+    line-height: 1.38;
+    margin-bottom: 8px;
   }
   .feed-item-preview {
-    font-size: 0.83rem;
-    line-height: 1.48;
-    /* No line-clamp — show full preview */
-    display: block;
-    overflow: visible;
-  }
-  .feed-item-body { gap: 9px; }
-  .feed-item-thumb {
-    width: 64px;
-    height: 64px;
-    border-radius: 10px;
+    font-size: 0.88rem;
+    line-height: 1.6;
   }
 }
 
 @media (max-width: 380px) {
-  .feed-item-thumb {
-    width: 64px;
-    height: 64px;
-  }
   .feed-item-preview {
-    -webkit-line-clamp: 2;
+    font-size: 0.85rem;
   }
 }
 
@@ -1259,4 +1227,26 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 [data-theme="dark"] .topic-chip.active {
   background: rgba(212, 168, 85, 0.12);
+}
+
+/* ===== Mobile Bottom Tab Bar (NewsDigest style) ===== */
+@media (max-width: 899px) {
+  .split-feed-toolbar .toolbar-tabs-row {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 100;
+    background: var(--color-bg);
+    border-top: 1px solid var(--color-border);
+    padding: 8px 16px;
+    justify-content: center;
+    gap: 6px;
+    box-shadow: 0 -2px 12px var(--color-shadow);
+  }
+  .split-feed-toolbar .toolbar-compact-row {
+    padding: 6px 0 4px;
+  }
+  .split-feed-toolbar {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
 }
