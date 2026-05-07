@@ -286,7 +286,11 @@ export function Home() {
     () => api.getArticleDates(filterSource === 'all' ? undefined : filterSource),
     [filterSource]
   );
-  const availableDates: { date: string, count: number }[] = useMemo(() => datesRaw?.data || [], [datesRaw]);
+  const availableDates: { date: string, count: number }[] = useMemo(() => {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    return (datesRaw?.data || []).filter((d: { date: string }) => new Date(d.date) <= today);
+  }, [datesRaw]);
 
   // Set default selected date
   useEffect(() => {
