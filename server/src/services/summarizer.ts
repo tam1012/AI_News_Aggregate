@@ -150,7 +150,7 @@ export async function summarizeArticle(article: ArticleForSummary, promptConfig?
                   article.source_name?.toLowerCase().includes('voz') ||
                   article.title?.startsWith('[r/');
 
-  if (!isForum && content.length < 80) {
+  if (!isForum && content.length < 500) {
     throw new SummarySkippedError(`Skipped: source content too short (${content.length} characters)`);
   }
 

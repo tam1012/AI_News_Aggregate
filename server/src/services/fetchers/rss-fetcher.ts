@@ -1,6 +1,6 @@
 import RssParser from 'rss-parser';
 import * as cheerio from 'cheerio';
-import { normalizePublicHttpUrl } from '../../lib/utils.js';
+import { normalizePublicHttpUrl, truncate } from '../../lib/utils.js';
 import { BROWSER_UA } from './http-utils.js';
 import { insertArticleIfNew } from './article-writer.js';
 import { SourceFetcher } from './types.js';
@@ -30,6 +30,75 @@ function getText($item: cheerio.Cheerio<any>, selector: string): string {
 function getXmlChildHtml($item: cheerio.Cheerio<any>, selector: string): string {
   const child = $item.find(selector).first();
   return child.html()?.trim() || child.text().trim();
+}
+
+function getMetaContent($: cheerio.CheerioAPI, selector: string): string {
+  return $(selector).first().attr('content')?.trim() || '';
+}
+
+function extractArticleText($: cheerio.CheerioAPI): string {
+  $('script, style, noscript, iframe, svg, form, button, input, textarea, nav, header, footer, aside, .ads, .advertisement, .related, .social, .share, .comment, .comments').remove();
+
+  const selectors = [
+    'article [itemprop="articleBody"]',
+    '[itemprop="articleBody"]',
+    'article',
+    '.maincontent',
+    '.article-detail',
+    '.article-content',
+    '.ArticleContent',
+    '.content-detail',
+    '.detail-content',
+    '.news-content',
+    '.entry-content',
+    '.post-content',
+    '.story-body',
+    'main',
+  ];
+
+  let best = '';
+  for (const selector of selectors) {
+    const text = $(selector).first().text().replace(/\s+/g, ' ').trim();
+    if (text.length > best.length) best = text;
+  }
+
+  return best;
+}
+
+async function fetchFullArticle(jobUrl: string): Promise<{ title: string; content: string; imageUrl: string | null; publishedAt: string | null }> {
+  const response = await fetch(jobUrl, {
+    headers: {
+      'User-Agent': BROWSER_UA,
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) throw new Error(`Status code ${response.status}`);
+
+  const html = await response.text();
+  const $ = cheerio.load(html);
+  const title = $('h1').first().text().replace(/\s+/g, ' ').trim() ||
+    getMetaContent($, 'meta[property="og:title"]') ||
+    $('title').first().text().replace(/\s+/g, ' ').trim();
+  const content = extractArticleText($);
+  const imageUrl = getMetaContent($, 'meta[property="og:image"]') || getMetaContent($, 'meta[name="twitter:image"]') || null;
+  const publishedAt = $('time[datetime]').first().attr('datetime') ||
+    getMetaContent($, 'meta[property="article:published_time"]') ||
+    getMetaContent($, 'meta[name="pubdate"]') ||
+    null;
+
+  let normalizedPublishedAt: string | null = null;
+  if (publishedAt) {
+    const date = new Date(publishedAt);
+    if (!Number.isNaN(date.getTime())) normalizedPublishedAt = date.toISOString();
+  }
+
+  return {
+    title,
+    content,
+    imageUrl: imageUrl ? normalizePublicHttpUrl(new URL(imageUrl, jobUrl).toString()) : null,
+    publishedAt: normalizedPublishedAt,
+  };
 }
 
 export function parseRssItems(xml: string): RssParser.Item[] {
@@ -118,17 +187,31 @@ export const rssFetcher: SourceFetcher = {
   },
   async fetchArticle(job, source) {
     const payload = job.payload_json || {};
+    const rssExcerpt = payload.rawExcerpt || '';
+    const rssContent = payload.rawContent || '';
+    let fullArticle: Awaited<ReturnType<typeof fetchFullArticle>> | null = null;
+
+    try {
+      fullArticle = await fetchFullArticle(job.url);
+    } catch (err: any) {
+      console.warn(`Failed to fetch full RSS article ${job.url}: ${err.message}`);
+    }
+
+    const fullContent = fullArticle?.content || '';
+    const rawContent = fullContent.length > rssContent.length ? fullContent : rssContent;
+    const rawExcerpt = rawContent ? truncate(rawContent, 500) : rssExcerpt;
+
     return {
       source,
       externalId: job.external_id,
       url: job.url,
-      title: job.title,
+      title: fullArticle?.title || job.title,
       author: payload.author || null,
-      publishedAt: job.published_at,
-      rawExcerpt: payload.rawExcerpt || '',
-      rawContent: payload.rawContent || '',
-      contentHashSeed: payload.contentHashSeed || job.title,
-      imageUrl: payload.imageUrl || null,
+      publishedAt: fullArticle?.publishedAt || job.published_at,
+      rawExcerpt,
+      rawContent,
+      contentHashSeed: `${fullArticle?.title || job.title}${rawContent || rssExcerpt}`,
+      imageUrl: fullArticle?.imageUrl || payload.imageUrl || null,
     };
   },
   async fetch(source) {
