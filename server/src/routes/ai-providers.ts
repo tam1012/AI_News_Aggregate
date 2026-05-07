@@ -4,6 +4,32 @@ import { generateId } from '../lib/utils.js';
 
 const aiProviders = new Hono();
 
+const AI_ROUTING_SETTING_KEY = 'ai_provider_routing';
+
+async function getAiRoutingSettings() {
+  const row = await getOne<{ value_json: string }>(
+    'SELECT value_json FROM app_settings WHERE key = $1',
+    [AI_ROUTING_SETTING_KEY]
+  );
+  if (!row?.value_json) return { primary_provider_id: null, fallback_provider_id: null };
+
+  try {
+    const parsed = JSON.parse(row.value_json) || {};
+    return {
+      primary_provider_id: parsed.primary_provider_id || null,
+      fallback_provider_id: parsed.fallback_provider_id || null,
+    };
+  } catch {
+    return { primary_provider_id: null, fallback_provider_id: null };
+  }
+}
+
+async function providerExists(id: string | null | undefined): Promise<boolean> {
+  if (!id) return true;
+  const row = await getOne('SELECT id FROM ai_providers WHERE id = $1', [id]);
+  return Boolean(row);
+}
+
 // Danh sach providers
 aiProviders.get('/', async (c) => {
   const rows = await getMany(
@@ -15,6 +41,40 @@ aiProviders.get('/', async (c) => {
   );
   // KHONG tra ve api_key va service_account_json trong list
   return c.json({ success: true, data: rows });
+});
+
+aiProviders.get('/routing', async (c) => {
+  const routing = await getAiRoutingSettings();
+  return c.json({ success: true, data: routing });
+});
+
+aiProviders.patch('/routing', async (c) => {
+  const body = await c.req.json();
+  const primaryProviderId = body.primary_provider_id || null;
+  const fallbackProviderId = body.fallback_provider_id || null;
+
+  if (!await providerExists(primaryProviderId) || !await providerExists(fallbackProviderId)) {
+    return c.json({ success: false, error: { code: 'VALIDATION', message: 'Provider not found' } }, 400);
+  }
+
+  const value = JSON.stringify({
+    primary_provider_id: primaryProviderId,
+    fallback_provider_id: fallbackProviderId,
+  });
+
+  await query(
+    `INSERT INTO app_settings (key, value_json, updated_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json, updated_at = NOW()`,
+    [AI_ROUTING_SETTING_KEY, value]
+  );
+
+  if (primaryProviderId) {
+    await query('UPDATE ai_providers SET is_active = false');
+    await query('UPDATE ai_providers SET is_active = true WHERE id = $1', [primaryProviderId]);
+  }
+
+  return c.json({ success: true, data: JSON.parse(value) });
 });
 
 // Chi tiet 1 provider (van mask sensitive fields)
@@ -157,6 +217,13 @@ aiProviders.post('/:id/activate', async (c) => {
   await query('UPDATE ai_providers SET is_active = false');
   // Bat provider nay
   await query('UPDATE ai_providers SET is_active = true WHERE id = $1', [id]);
+  const routing = await getAiRoutingSettings();
+  await query(
+    `INSERT INTO app_settings (key, value_json, updated_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json, updated_at = NOW()`,
+    [AI_ROUTING_SETTING_KEY, JSON.stringify({ ...routing, primary_provider_id: id })]
+  );
 
   return c.json({ success: true, data: { activated: true } });
 });

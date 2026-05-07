@@ -679,6 +679,7 @@ function PromptConfigTab() {
 
 function AiProvidersTab() {
   const { data: providers, loading, reload } = useFetch<any[]>(() => api.getAiProviders());
+  const { data: routing, reload: reloadRouting } = useFetch<any>(() => api.getAiProviderRouting());
   const [testResult, setTestResult] = useState<Record<string, string>>({});
   const [testing, setTesting] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -691,6 +692,15 @@ function AiProvidersTab() {
   const [hasExistingServiceAccount, setHasExistingServiceAccount] = useState(false);
   const [clearApiKey, setClearApiKey] = useState(false);
   const [clearServiceAccount, setClearServiceAccount] = useState(false);
+  const [savingRouting, setSavingRouting] = useState(false);
+  const [routingMessage, setRoutingMessage] = useState('');
+  const [primaryProviderId, setPrimaryProviderId] = useState('');
+  const [fallbackProviderId, setFallbackProviderId] = useState('');
+
+  useEffect(() => {
+    setPrimaryProviderId(routing?.primary_provider_id || providers?.find((p: any) => p.is_active)?.id || '');
+    setFallbackProviderId(routing?.fallback_provider_id || '');
+  }, [routing, providers]);
 
   const resetForm = () => {
     setFormData(createEmptyAiProviderForm());
@@ -716,10 +726,29 @@ function AiProvidersTab() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleSaveRouting = async () => {
+    setSavingRouting(true);
+    setRoutingMessage('');
+    try {
+      await api.updateAiProviderRouting({
+        primary_provider_id: primaryProviderId || null,
+        fallback_provider_id: fallbackProviderId || null,
+      });
+      setRoutingMessage('Đã lưu cấu hình AI fallback');
+      reload();
+      reloadRouting();
+    } catch (err: any) {
+      setRoutingMessage('Lỗi: ' + err.message);
+    } finally {
+      setSavingRouting(false);
+    }
+  };
+
   const handleActivate = async (id: string) => {
     try {
       await api.activateAiProvider(id);
       reload();
+      reloadRouting();
     } catch (err: any) {
       alert('Lỗi: ' + err.message);
     }
@@ -846,10 +875,47 @@ function AiProvidersTab() {
         <div>
           <div style={{ fontWeight: 600 }}>Quản lý nhà cung cấp AI</div>
           <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
-            Thêm dịch vụ AI dự phòng, đổi model, thử kết nối và kích hoạt dịch vụ đang dùng.
+            Chọn model chính, model dự phòng, đổi model và thử kết nối.
           </div>
         </div>
         <button className="btn btn-primary" onClick={openCreateForm}>Thêm nhà cung cấp AI</button>
+      </div>
+
+      <div className="card" style={{ display: 'grid', gap: 10 }}>
+        <div>
+          <div style={{ fontWeight: 600 }}>Cấu hình fallback</div>
+          <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
+            Luôn dùng model chính trước. Khi lỗi tạm thời như 429, timeout hoặc 5xx thì tự chuyển sang model dự phòng cho bài đó.
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Model chính</label>
+            <select value={primaryProviderId} onChange={(e) => setPrimaryProviderId(e.target.value)}>
+              <option value="">Dùng provider đang kích hoạt</option>
+              {(providers || []).map((p: any) => (
+                <option key={p.id} value={p.id}>{p.name} · {p.model}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Model dự phòng</label>
+            <select value={fallbackProviderId} onChange={(e) => setFallbackProviderId(e.target.value)}>
+              <option value="">Không dùng fallback</option>
+              {(providers || []).map((p: any) => (
+                <option key={p.id} value={p.id} disabled={p.id === primaryProviderId}>{p.name} · {p.model}</option>
+              ))}
+            </select>
+          </div>
+          <button className="btn btn-primary" onClick={handleSaveRouting} disabled={savingRouting || !providers?.length}>
+            {savingRouting ? 'Đang lưu...' : 'Lưu'}
+          </button>
+        </div>
+        {routingMessage && (
+          <div style={{ fontSize: '0.82rem', color: routingMessage.startsWith('Lỗi') ? 'var(--color-error)' : 'var(--color-success)' }}>
+            {routingMessage}
+          </div>
+        )}
       </div>
 
       {showForm && (
@@ -1045,7 +1111,8 @@ function AiProvidersTab() {
             <div>
               <div style={{ fontWeight: 600 }}>
                 {p.name}
-                {p.is_active && <span className="badge badge-success" style={{ marginLeft: 6 }}>Đang dùng</span>}
+                {p.id === primaryProviderId && <span className="badge badge-success" style={{ marginLeft: 6 }}>Chính</span>}
+                {p.id === fallbackProviderId && <span className="badge badge-pending" style={{ marginLeft: 6 }}>Dự phòng</span>}
               </div>
               <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
                 {p.provider_type} · {p.model} · {p.total_calls} lượt gọi

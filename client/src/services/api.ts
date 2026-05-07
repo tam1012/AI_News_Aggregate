@@ -136,6 +136,8 @@ export const api = {
   // AI Providers
   getAiProviders: () => request<any>('/ai-providers'),
   getAiProvider: (id: string) => request<any>(`/ai-providers/${id}`),
+  getAiProviderRouting: () => request<any>('/ai-providers/routing'),
+  updateAiProviderRouting: (data: any) => request<any>('/ai-providers/routing', { method: 'PATCH', body: JSON.stringify(data) }),
   createAiProvider: (data: any) => request<any>('/ai-providers', { method: 'POST', body: JSON.stringify(data) }),
   updateAiProvider: (id: string, data: any) => request<any>(`/ai-providers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteAiProvider: (id: string) => request<any>(`/ai-providers/${id}`, { method: 'DELETE' }),

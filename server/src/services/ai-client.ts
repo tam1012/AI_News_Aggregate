@@ -22,6 +22,11 @@ interface AiCallOptions {
   timeoutMs?: number;
 }
 
+interface AiRoutingSettings {
+  primary_provider_id?: string | null;
+  fallback_provider_id?: string | null;
+}
+
 function resolveOpenAiCompatibleEndpoint(rawEndpoint: string | null | undefined, fallback = ''): string {
   const endpoint = (rawEndpoint || fallback || '').trim();
   if (!endpoint) return '';
@@ -87,15 +92,58 @@ export async function getActiveProvider(): Promise<AiProvider | null> {
   );
 }
 
+async function getProviderById(id: string | null | undefined): Promise<AiProvider | null> {
+  if (!id) return null;
+  return getOne<AiProvider>('SELECT * FROM ai_providers WHERE id = $1', [id]);
+}
+
+async function getAiRoutingSettings(): Promise<AiRoutingSettings> {
+  const row = await getOne<{ value_json: string }>(
+    'SELECT value_json FROM app_settings WHERE key = $1',
+    ['ai_provider_routing']
+  );
+  if (!row?.value_json) return {};
+
+  try {
+    return JSON.parse(row.value_json) || {};
+  } catch {
+    return {};
+  }
+}
+
+function isRetryableAiError(err: any): boolean {
+  const message = String(err?.message || err || '').toLowerCase();
+  if (/\b(429|408|500|502|503|504)\b/.test(message)) return true;
+  return message.includes('rate limit') ||
+    message.includes('too many requests') ||
+    message.includes('timeout') ||
+    message.includes('timed out') ||
+    message.includes('econnreset') ||
+    message.includes('etimedout') ||
+    message.includes('socket hang up');
+}
+
 // ==========================================
-// Goi AI - tu dong chon provider dang active
+// Goi AI - dung provider chinh, fallback khi loi tam thoi
 // ==========================================
 export async function callAi(prompt: string, overrides?: AiCallOptions): Promise<string> {
-  const provider = await getActiveProvider();
-  if (!provider) {
+  const routing = await getAiRoutingSettings();
+  const primaryProvider = await getProviderById(routing.primary_provider_id) || await getActiveProvider();
+  if (!primaryProvider) {
     throw new Error('No active AI provider configured. Go to Settings > AI Providers to set one up.');
   }
-  return callAiProvider(provider, prompt, overrides);
+
+  try {
+    return await callAiProvider(primaryProvider, prompt, overrides);
+  } catch (err: any) {
+    const fallbackProvider = await getProviderById(routing.fallback_provider_id);
+    if (!fallbackProvider || fallbackProvider.id === primaryProvider.id || !isRetryableAiError(err)) {
+      throw err;
+    }
+
+    console.warn(`AI primary provider failed, falling back from ${primaryProvider.name} to ${fallbackProvider.name}: ${err.message}`);
+    return callAiProvider(fallbackProvider, prompt, overrides);
+  }
 }
 
 // ==========================================
