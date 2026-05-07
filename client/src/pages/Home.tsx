@@ -685,62 +685,64 @@ export function Home() {
             </div>
           )}
 
-          <div className="feed-container">
-            {isShowingOfflineCache && (
-              <div className="offline-cache-banner">
-                Đang hiển thị dữ liệu đã lưu. Một số tin mới có thể chưa được cập nhật.
-              </div>
-            )}
-
-            {isRefreshing && (
-              <div className="feed-refresh-row">
-                Đang cập nhật tin mới...
-              </div>
-            )}
-
-            {loading ? (
-              <FeedListSkeleton />
-            ) : error ? (
-              <div className="empty-state">
-                <p style={{ color: 'var(--color-error)' }}>Lỗi: {error}</p>
-                <button className="btn btn-primary" onClick={reload} style={{ marginTop: 12 }}>Thử lại</button>
-              </div>
-            ) : articles.length === 0 ? (
-              <div className="empty-state">
-                <h2>Chưa có tin tức</h2>
-                <p style={{ marginTop: 8 }}>{emptyFeedMessage}</p>
-                <button className="btn btn-primary" onClick={() => void handleManualRefresh()} style={{ marginTop: 16 }}>Tải lại</button>
-              </div>
-            ) : (
-              <>
-                <div className="feed-day-group">
-                  {articles.map(article => (
-                    <FeedItem
-                      key={article.id}
-                      article={article}
-                      isActive={selected?.id === article.id}
-                      isRead={readArticleSet.has(article.id)}
-                      onClick={() => handleSelectArticle(article)}
-                    />
-                  ))}
+          {tab !== 'digest' && (
+            <div className="feed-container">
+              {isShowingOfflineCache && (
+                <div className="offline-cache-banner">
+                  Đang hiển thị dữ liệu đã lưu. Một số tin mới có thể chưa được cập nhật.
                 </div>
-                <div className="feed-load-more">
-                  {loadMoreError && <p className="feed-load-more-error">{loadMoreError}</p>}
-                  {hasMoreArticles ? (
-                    <button className="btn btn-ghost" onClick={() => void handleLoadMoreArticles()} disabled={isLoadingMore}>
-                      {isLoadingMore ? 'Đang tải thêm...' : `Tải thêm bài cũ (${loadedArticleCount}/${totalArticleCount})`}
-                    </button>
-                  ) : (
-                    <p>Đã hiển thị hết bài trong ngày này.</p>
-                  )}
-                </div>
-              </>
-            )}
+              )}
 
-            <div className="reader-footer">
-              <p>Nguồn mặc định cào mỗi 60 phút và tự backoff khi lỗi · Fetch bài mỗi 5 phút · Tóm tắt AI mỗi 10 phút</p>
+              {isRefreshing && (
+                <div className="feed-refresh-row">
+                  Đang cập nhật tin mới...
+                </div>
+              )}
+
+              {loading ? (
+                <FeedListSkeleton />
+              ) : error ? (
+                <div className="empty-state">
+                  <p style={{ color: 'var(--color-error)' }}>Lỗi: {error}</p>
+                  <button className="btn btn-primary" onClick={reload} style={{ marginTop: 12 }}>Thử lại</button>
+                </div>
+              ) : articles.length === 0 ? (
+                <div className="empty-state">
+                  <h2>Chưa có tin tức</h2>
+                  <p style={{ marginTop: 8 }}>{emptyFeedMessage}</p>
+                  <button className="btn btn-primary" onClick={() => void handleManualRefresh()} style={{ marginTop: 16 }}>Tải lại</button>
+                </div>
+              ) : (
+                <>
+                  <div className="feed-day-group">
+                    {articles.map(article => (
+                      <FeedItem
+                        key={article.id}
+                        article={article}
+                        isActive={selected?.id === article.id}
+                        isRead={readArticleSet.has(article.id)}
+                        onClick={() => handleSelectArticle(article)}
+                      />
+                    ))}
+                  </div>
+                  <div className="feed-load-more">
+                    {loadMoreError && <p className="feed-load-more-error">{loadMoreError}</p>}
+                    {hasMoreArticles ? (
+                      <button className="btn btn-ghost" onClick={() => void handleLoadMoreArticles()} disabled={isLoadingMore}>
+                        {isLoadingMore ? 'Đang tải thêm...' : `Tải thêm bài cũ (${loadedArticleCount}/${totalArticleCount})`}
+                      </button>
+                    ) : (
+                      <p>Đã hiển thị hết bài trong ngày này.</p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              <div className="reader-footer">
+                <p>Nguồn mặc định cào mỗi 60 phút và tự backoff khi lỗi · Fetch bài mỗi 5 phút · Tóm tắt AI mỗi 10 phút</p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       
         <div className={`split-right ${!rightPaneVisible ? 'hidden-on-mobile' : ''}`}>

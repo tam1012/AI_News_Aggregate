@@ -62,6 +62,7 @@ test('mobile digest keeps the main tab bar at the top instead of a bottom-only b
 
   assert.doesNotMatch(homeSource, /feed-tabs visible-on-mobile-only/);
   assert.doesNotMatch(css, /\.visible-on-mobile-only\.feed-tabs\s*\{/);
+  assert.match(homeSource, /tab !== 'digest' && \(\s*<div className="feed-container">/);
   assert.match(css, /\.split-feed-toolbar \.toolbar-tabs-row\s*\{[\s\S]*justify-content:\s*flex-start/);
   assert.match(css, /overflow-x:\s*clip/);
 });
