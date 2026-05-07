@@ -30,7 +30,21 @@ type SummaryQueueStatus = 'failed' | 'pending' | 'processing' | 'skipped' | 'don
 type QualityIssue = 'missing_tldr' | 'missing_summary_short' | 'missing_tags' | 'missing_hot_score' | 'short_summary';
 type FetchJobStatus = 'failed' | 'discovered' | 'fetching' | 'done';
 
-const AI_PROVIDER_TYPES = ['vertex_ai', 'openai', 'gemini', 'xai', 'mimo', 'anthropic', 'deepseek', 'groq', 'custom'];
+const AI_PROVIDER_TYPES = ['vertex_ai', 'vertex_ai_key', 'openai', 'openai_responses', 'gemini', 'xai', 'mimo', 'anthropic', 'deepseek', 'groq', 'custom'];
+const AI_PROVIDER_PRESETS = [
+  {
+    label: 'Vertex AI API key',
+    data: { provider_type: 'vertex_ai_key', model: 'gemini-3-flash-preview', api_endpoint: '', max_tokens: 4096, temperature: '0.3', extra_config: '' },
+  },
+  {
+    label: '9router OpenAI-compatible',
+    data: { provider_type: 'custom', model: 'vx/gemini-3-flash-preview', api_endpoint: 'http://host.docker.internal:20128/v1', max_tokens: 4096, temperature: '0.3', extra_config: '{\n  "format": "openai"\n}' },
+  },
+  {
+    label: 'OpenAI Responses',
+    data: { provider_type: 'openai_responses', model: 'gpt-5.4', api_endpoint: 'https://api.openai.com/v1/responses', max_tokens: 4096, temperature: '0.3', extra_config: '' },
+  },
+];
 const SUMMARY_QUEUE_STATUSES: { key: SummaryQueueStatus; label: string }[] = [
   { key: 'failed', label: 'Lỗi' },
   { key: 'pending', label: 'Chờ' },
@@ -726,6 +740,10 @@ function AiProvidersTab() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const applyPreset = (preset: typeof AI_PROVIDER_PRESETS[number]) => {
+    setFormData(prev => ({ ...prev, ...preset.data }));
+  };
+
   const handleSaveRouting = async () => {
     setSavingRouting(true);
     setRoutingMessage('');
@@ -931,6 +949,16 @@ function AiProvidersTab() {
             <div className="loading">Đang tải chi tiết nhà cung cấp...</div>
           ) : (
             <>
+              {!editingId && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                  {AI_PROVIDER_PRESETS.map(preset => (
+                    <button key={preset.label} type="button" className="btn btn-sm" onClick={() => applyPreset(preset)}>
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div className="form-group">
                   <label>Tên nhà cung cấp *</label>
@@ -938,7 +966,7 @@ function AiProvidersTab() {
                     type="text"
                     required
                     value={formData.name}
-                    placeholder="VD: OpenAI chính, Anthropic backup..."
+                    placeholder="VD: Vertex key chính, 9router backup..."
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
                 </div>
@@ -959,7 +987,7 @@ function AiProvidersTab() {
                     type="text"
                     required
                     value={formData.model}
-                    placeholder="VD: gpt-4.1-mini, claude-sonnet-4-6..."
+                    placeholder="VD: gemini-3-flash-preview, vx/gemini-3-flash-preview..."
                     onChange={(e) => setFormData({ ...formData, model: e.target.value })}
                   />
                 </div>

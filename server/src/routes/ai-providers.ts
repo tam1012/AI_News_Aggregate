@@ -112,7 +112,7 @@ aiProviders.post('/', async (c) => {
     }, 400);
   }
 
-  const validTypes = ['vertex_ai', 'openai', 'gemini', 'xai', 'mimo', 'anthropic', 'deepseek', 'groq', 'custom'];
+  const validTypes = ['vertex_ai', 'vertex_ai_key', 'openai', 'openai_responses', 'gemini', 'xai', 'mimo', 'anthropic', 'deepseek', 'groq', 'custom'];
   if (!validTypes.includes(provider_type)) {
     return c.json({
       success: false,

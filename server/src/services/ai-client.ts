@@ -27,6 +27,11 @@ interface AiRoutingSettings {
   fallback_provider_id?: string | null;
 }
 
+function appendApiKey(url: string, apiKey: string): string {
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}key=${encodeURIComponent(apiKey)}`;
+}
+
 function resolveOpenAiCompatibleEndpoint(rawEndpoint: string | null | undefined, fallback = ''): string {
   const endpoint = (rawEndpoint || fallback || '').trim();
   if (!endpoint) return '';
@@ -164,10 +169,14 @@ export async function callAiProvider(provider: AiProvider, prompt: string, overr
       case 'vertex_ai':
         result = await callVertexAi(finalProvider, prompt, timeoutMs);
         break;
+      case 'vertex_ai_key':
+        result = await callVertexAiKey(finalProvider, prompt, timeoutMs);
+        break;
       case 'gemini':
         result = await callGeminiStudio(finalProvider, prompt, timeoutMs);
         break;
       case 'openai':
+      case 'openai_responses':
       case 'xai':
       case 'deepseek':
       case 'groq':
@@ -250,6 +259,40 @@ async function callVertexAi(provider: AiProvider, prompt: string, timeoutMs: num
   return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
+async function callVertexAiKey(provider: AiProvider, prompt: string, timeoutMs: number): Promise<string> {
+  if (!provider.api_key) throw new Error('Vertex AI API key requires api_key');
+
+  const baseUrl = provider.api_endpoint ||
+    `https://aiplatform.googleapis.com/v1/publishers/google/models/${provider.model}:generateContent`;
+
+  const response = await fetch(appendApiKey(baseUrl, provider.api_key), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: provider.temperature,
+        maxOutputTokens: provider.max_tokens,
+      },
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+      ]
+    }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Vertex AI API key ${response.status}: ${errText.substring(0, 300)}`);
+  }
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
 // ==========================================
 // GEMINI AI STUDIO (Google)
 // ==========================================
@@ -259,7 +302,7 @@ async function callGeminiStudio(provider: AiProvider, prompt: string, timeoutMs:
   const url = provider.api_endpoint ||
     `https://generativelanguage.googleapis.com/v1/models/${provider.model}:generateContent`;
 
-  const response = await fetch(`${url}?key=${provider.api_key}`, {
+  const response = await fetch(appendApiKey(url, provider.api_key), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -292,6 +335,10 @@ async function callGeminiStudio(provider: AiProvider, prompt: string, timeoutMs:
 // ==========================================
 async function callOpenAiCompatible(provider: AiProvider, prompt: string, timeoutMs: number): Promise<string> {
   if (!provider.api_key) throw new Error(`${provider.name} requires api_key`);
+
+  if (provider.provider_type === 'openai_responses') {
+    return callOpenAiResponses(provider, prompt, timeoutMs);
+  }
 
   // Default endpoints theo provider_type
   const defaultEndpoints: Record<string, string> = {
@@ -327,6 +374,39 @@ async function callOpenAiCompatible(provider: AiProvider, prompt: string, timeou
   }
 
   return parseOpenAiResponse(response);
+}
+
+async function callOpenAiResponses(provider: AiProvider, prompt: string, timeoutMs: number): Promise<string> {
+  const endpoint = (provider.api_endpoint || 'https://api.openai.com/v1/responses').trim().replace(/\/+$/, '');
+  const url = endpoint.endsWith('/responses') ? endpoint : `${endpoint}/responses`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${provider.api_key}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: provider.model,
+      input: prompt,
+      max_output_tokens: provider.max_tokens,
+      temperature: provider.temperature,
+      stream: false,
+    }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`${provider.name} ${response.status}: ${errText.substring(0, 300)}`);
+  }
+
+  const data = await response.json();
+  if (typeof data.output_text === 'string') return data.output_text;
+  const text = data.output?.flatMap((item: any) => item.content || [])
+    .map((content: any) => content.text || '')
+    .filter(Boolean)
+    .join('');
+  return text || '';
 }
 
 // ==========================================
