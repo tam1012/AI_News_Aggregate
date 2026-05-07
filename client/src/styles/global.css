@@ -463,6 +463,12 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   font-weight: 700;
   cursor: pointer;
 }
+/* On mobile: raise scroll-top above the fixed bottom tab bar */
+@media (max-width: 899px) {
+  .scroll-top-button {
+    bottom: 72px;
+  }
+}
 
 .feed-load-more {
   display: flex;
@@ -1150,16 +1156,24 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   }
 
   .visible-on-mobile-only.feed-tabs {
-    justify-content: flex-start;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 100;
+    justify-content: center;
     gap: 6px;
-    width: auto;
+    width: 100%;
     max-width: 100%;
-    margin: 0 -16px;
-    padding: 10px 16px 8px;
+    margin: 0;
+    padding: 8px 16px;
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior-x: contain;
     scrollbar-width: none;
+    border-top: 1px solid var(--color-border);
+    border-bottom: none;
+    background: var(--color-bg);
+    box-shadow: 0 -2px 12px var(--color-shadow);
+    top: auto;
   }
 
   .visible-on-mobile-only.feed-tabs::-webkit-scrollbar {
@@ -1169,6 +1183,11 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   .visible-on-mobile-only.feed-tabs .feed-tab {
     flex: 0 0 auto;
     padding: 7px 14px;
+  }
+
+  /* Digest content needs bottom padding for the tab bar */
+  .split-right {
+    padding-bottom: 70px;
   }
 
   .feed-refresh-row {
