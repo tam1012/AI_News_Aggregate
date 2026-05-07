@@ -1097,7 +1097,7 @@ function DigestTab() {
   if (!digest) return <div className="empty-state"><p>Chưa có bản tin tổng hợp nào.</p></div>;
 
   return (
-    <div className="feed-container" style={{ padding: '0 20px' }}>
+    <div className="feed-container digest-container">
       <h2 className="feed-date-heading" style={{ paddingTop: 0 }}>{digest.title || `Bản tin ${digest.digest_date}`}</h2>
       <div className="digest-content">
         <Suspense fallback={<div className="loading">Đang tải bản tin...</div>}>

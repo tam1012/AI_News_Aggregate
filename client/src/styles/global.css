@@ -493,6 +493,16 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   letter-spacing: -0.4px;
 }
 
+/* ===== Digest Container ===== */
+.digest-container {
+  padding: 0 20px;
+}
+@media (max-width: 899px) {
+  .digest-container {
+    padding: 0;
+  }
+}
+
 /* ===== Date Navigator ===== */
 .date-navigator {
   display: flex; align-items: center; justify-content: center;
