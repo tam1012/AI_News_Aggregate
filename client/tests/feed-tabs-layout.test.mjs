@@ -37,19 +37,14 @@ test('mobile reader exposes refresh row and floating scroll-to-top affordance st
   assert.match(homeSource, /className="scroll-top-button"/);
 });
 
-test('mobile digest tab bar scrolls horizontally without page overflow', () => {
+test('mobile digest keeps the main tab bar at the top instead of a bottom-only bar', () => {
   const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
   const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
-  const mobileTabsRule = css.match(/\.visible-on-mobile-only\.feed-tabs\s*\{([^}]+)\}/)?.[1] || '';
-  const mobileTabRule = css.match(/\.visible-on-mobile-only\.feed-tabs \.feed-tab\s*\{([^}]+)\}/)?.[1] || '';
 
-  assert.match(homeSource, /className="feed-tabs visible-on-mobile-only"/);
+  assert.doesNotMatch(homeSource, /feed-tabs visible-on-mobile-only/);
+  assert.doesNotMatch(css, /\.visible-on-mobile-only\.feed-tabs\s*\{/);
+  assert.match(css, /\.split-feed-toolbar \.toolbar-tabs-row\s*\{[\s\S]*justify-content:\s*flex-start/);
   assert.match(css, /overflow-x:\s*clip/);
-  assert.match(mobileTabsRule, /max-width:\s*100%/);
-  assert.match(mobileTabsRule, /overflow-x:\s*auto/);
-  assert.match(mobileTabsRule, /overscroll-behavior-x:\s*contain/);
-  assert.match(mobileTabsRule, /justify-content:\s*center/);
-  assert.match(mobileTabRule, /flex:\s*0 0 auto/);
 });
 
 test('mobile feed and detail styles prioritize clean reading', () => {
@@ -57,9 +52,10 @@ test('mobile feed and detail styles prioritize clean reading', () => {
   const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
 
   assert.match(css, /\.feed-item-body\s*\{[\s\S]*display:\s*block/);
-  assert.match(css, /\.detail-actions\s*\{[\s\S]*position:\s*sticky/);
+  assert.match(css, /\.detail-source-link\s*\{/);
+  assert.match(css, /\.detail-nav-btn\s*\{/);
   assert.match(css, /--safe-bottom:\s*env\(safe-area-inset-bottom/);
-  assert.match(homeSource, />Tin mới<\/button>/);
+  assert.match(homeSource, /Tin mới/);
 });
 
 test('service worker cache version is bumped for updated app shell', () => {

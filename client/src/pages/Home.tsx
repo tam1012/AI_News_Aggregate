@@ -229,7 +229,6 @@ export function Home() {
     },
   }), []);
   const [readArticleIds, setReadArticleIds] = useState<string[]>(() => loadReadArticles());
-  const [copyToast, setCopyToast] = useState<string | null>(null);
   const [deepLinkLoading, setDeepLinkLoading] = useState(hasArticleDeepLink);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -457,12 +456,6 @@ export function Home() {
   }, [readArticleIds]);
 
   useEffect(() => {
-    if (!copyToast) return;
-    const timeoutId = window.setTimeout(() => setCopyToast(null), 1800);
-    return () => window.clearTimeout(timeoutId);
-  }, [copyToast]);
-
-  useEffect(() => {
     document.title = selected
       ? `${cleanTitle(selected.title)} | SynthNews`
       : 'SynthNews — Tin tức tổng hợp AI';
@@ -503,23 +496,29 @@ export function Home() {
     return () => { isActive = false; };
   }, [urlArticleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSelectArticle = useCallback((article: any) => {
+  const selectArticle = useCallback((article: any) => {
     setSelected(article);
     setReadArticleIds(prev => (prev.includes(article.id) ? prev : [article.id, ...prev]));
-    // Update URL to article deep link (no re-render)
     window.history.replaceState(null, '', `/article/${article.id}`);
+  }, []);
+
+  const handleSelectArticle = useCallback((article: any) => {
+    selectArticle(article);
     // Stay on current feed tab, just make sure we're not on digest
     if (tab === 'digest') setTab('news');
-  }, [tab]);
+  }, [selectArticle, tab]);
 
-  const handleCopyLink = useCallback(async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopyToast('Đã copy link bài gốc');
-    } catch {
-      setCopyToast('Không thể copy link');
-    }
-  }, []);
+  const selectedArticleIndex = selected ? articles.findIndex(article => article.id === selected.id) : -1;
+  const hasPrevArticle = selectedArticleIndex > 0;
+  const hasNextArticle = selectedArticleIndex >= 0 && selectedArticleIndex < articles.length - 1;
+  const handlePrevArticle = useCallback(() => {
+    if (!hasPrevArticle) return;
+    selectArticle(articles[selectedArticleIndex - 1]);
+  }, [articles, hasPrevArticle, selectArticle, selectedArticleIndex]);
+  const handleNextArticle = useCallback(() => {
+    if (!hasNextArticle) return;
+    selectArticle(articles[selectedArticleIndex + 1]);
+  }, [articles, hasNextArticle, selectArticle, selectedArticleIndex]);
 
   if (loading && readerLoadingState === 'feed-only') {
     return (
@@ -540,18 +539,8 @@ export function Home() {
 
   return (
     <>
-      {/* Mobile-only tab bar — visible when digest tab is active (split-left is hidden) */}
-      {tab === 'digest' && (
-        <div className="feed-tabs visible-on-mobile-only">
-          <button className="feed-tab" onClick={() => navigateTab('news')}>Tin mới</button>
-          <button className="feed-tab" onClick={() => navigateTab('voz')}>VOZ</button>
-          <button className="feed-tab" onClick={() => navigateTab('reddit')}>Reddit</button>
-          <button className={`feed-tab active`} onClick={() => navigateTab('digest')}>Bản tin</button>
-        </div>
-      )}
-
       <div className="home-split-layout">
-        <div className={`split-left ${tab === 'digest' ? 'hidden-on-mobile' : ''}`} ref={splitLeftRef}>
+        <div className="split-left" ref={splitLeftRef}>
           {/* Tab bar — Row 1 */}
           <div className="split-feed-toolbar">
             <div className="toolbar-tabs-row">
@@ -587,8 +576,8 @@ export function Home() {
                 ↻
               </button>
             </div>
-            {/* Row 2 — always visible: date + sort + source + topic chips */}
-            <div className="toolbar-compact-row">
+            {/* Row 2 — always visible on feed tabs: date + source + topic chips */}
+            {tab !== 'digest' && <div className="toolbar-compact-row">
               {availableDates.length > 0 && selectedDate && (
                 <div className="compact-date-nav">
                   <button
@@ -668,11 +657,11 @@ export function Home() {
                   )}
                 </div>
               )}
-            </div>
+            </div>}
           </div>
 
           {/* Active filter indicator */}
-          {filterSource !== 'all' && (
+          {tab !== 'digest' && filterSource !== 'all' && (
             <div className="filter-active">
               <span>Đang lọc: <strong>{sources.find((s: any) => s.id === filterSource)?.name.replace(/ - .*$/, '')}</strong></span>
               <button className="btn btn-sm" onClick={() => setFilterSource('all')}>✕ Bỏ lọc</button>
@@ -749,7 +738,10 @@ export function Home() {
                 const path = tab === 'news' ? '/' : `/${tab}`;
                 window.history.replaceState(null, '', path);
               }}
-              onCopyLink={handleCopyLink}
+              onPrevArticle={handlePrevArticle}
+              onNextArticle={handleNextArticle}
+              hasPrevArticle={hasPrevArticle}
+              hasNextArticle={hasNextArticle}
             />
           ) : hasArticleDeepLink && deepLinkLoading ? (
             <ArticleDetailSkeleton />
@@ -764,8 +756,6 @@ export function Home() {
           ↑
         </button>
       )}
-
-      {copyToast && <div className="copy-toast">{copyToast}</div>}
 
     </>
   );
@@ -855,11 +845,17 @@ function FeedItem({
 function ArticleDetail({
   article,
   onClose,
-  onCopyLink,
+  onPrevArticle,
+  onNextArticle,
+  hasPrevArticle,
+  hasNextArticle,
 }: {
   article: any;
   onClose: () => void;
-  onCopyLink: (url: string) => void | Promise<void>;
+  onPrevArticle: () => void;
+  onNextArticle: () => void;
+  hasPrevArticle: boolean;
+  hasNextArticle: boolean;
 }) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -957,9 +953,23 @@ function ArticleDetail({
         {/* Content */}
         <div className="detail-content">
           <div className="detail-meta-centered">
-            <span className={`feed-item-source source-${sourceLabel.toLowerCase().replace(/[^a-z0-9]/g, '')}`}>
-              {sourceLabel}
-            </span>
+            <div className="detail-meta-row">
+              <button className="detail-nav-btn" onClick={onPrevArticle} disabled={!hasPrevArticle} title="Bài trước">
+                ‹
+              </button>
+              <a
+                href={article.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`feed-item-source detail-source-link source-${sourceLabel.toLowerCase().replace(/[^a-z0-9]/g, '')}`}
+                title="Mở bài gốc"
+              >
+                {sourceLabel} ↗
+              </a>
+              <button className="detail-nav-btn" onClick={onNextArticle} disabled={!hasNextArticle} title="Bài sau">
+                ›
+              </button>
+            </div>
             {article.published_at && (
               <span className="feed-item-time">
                 {new Date(article.published_at).toLocaleString('vi-VN', {
@@ -1008,20 +1018,6 @@ function ArticleDetail({
             ) : (
               <p>{article.raw_excerpt || 'Chưa có tóm tắt.'}</p>
             )}
-          </div>
-
-          <div className="detail-actions">
-            <button className="btn btn-ghost" onClick={() => void onCopyLink(article.url)}>
-              Copy link
-            </button>
-            <a
-              href={article.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-primary"
-            >
-              Đọc bài gốc ↗
-            </a>
           </div>
         </div>
       </div>

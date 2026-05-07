@@ -455,7 +455,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 /* On mobile: raise scroll-top above the fixed bottom tab bar */
 @media (max-width: 899px) {
   .scroll-top-button {
-    bottom: 72px;
+    bottom: max(22px, env(safe-area-inset-bottom));
   }
 }
 
@@ -565,7 +565,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .feed-item-text { min-width: 0; }
 
 @media (max-width: 640px) {
-  .feed-container { padding: 10px 0 92px; /* extra bottom padding for floating tabs */ }
+  .feed-container { padding: 10px 0 28px; }
   .feed-item {
     padding: 20px 0;
   }
@@ -720,6 +720,45 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .detail-meta-centered {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 8px; margin-bottom: 24px; text-align: center;
+}
+.detail-meta-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.detail-source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.detail-source-link:hover {
+  color: var(--color-accent-hover);
+  text-decoration: none;
+}
+.detail-nav-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border-light);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-bg-card) 72%, transparent);
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.detail-nav-btn:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+.detail-nav-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
 }
 
 .detail-title {
@@ -1165,41 +1204,6 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
     top: calc(61px + var(--safe-top));
   }
 
-  .visible-on-mobile-only.feed-tabs {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    z-index: 100;
-    justify-content: center;
-    gap: 8px;
-    width: 100%;
-    max-width: 100%;
-    margin: 0;
-    padding: 10px 16px calc(10px + var(--safe-bottom));
-    overflow-x: auto;
-    overflow-y: hidden;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-    border-top: 1px solid var(--color-border-light);
-    border-bottom: none;
-    background: color-mix(in srgb, var(--color-bg) 92%, transparent);
-    box-shadow: 0 -10px 28px var(--color-shadow);
-    top: auto;
-  }
-
-  .visible-on-mobile-only.feed-tabs::-webkit-scrollbar {
-    display: none;
-  }
-
-  .visible-on-mobile-only.feed-tabs .feed-tab {
-    flex: 0 0 auto;
-    padding: 8px 16px;
-  }
-
-  /* Digest content needs bottom padding for the tab bar */
-  .split-right {
-    padding-bottom: 70px;
-  }
-
   .feed-refresh-row {
     justify-content: center;
     margin: 2px 0 8px;
@@ -1213,11 +1217,6 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 @media (max-width: 899px) {
   .hidden-on-mobile {
-    display: none !important;
-  }
-}
-@media (min-width: 900px) {
-  .visible-on-mobile-only {
     display: none !important;
   }
 }
@@ -1261,22 +1260,14 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 /* ===== Mobile Bottom Tab Bar (NewsDigest style) ===== */
 @media (max-width: 899px) {
   .split-feed-toolbar .toolbar-tabs-row {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    z-index: 100;
-    background: color-mix(in srgb, var(--color-bg) 92%, transparent);
-    border-top: 1px solid var(--color-border-light);
-    padding: 10px 16px calc(10px + var(--safe-bottom));
-    justify-content: center;
+    justify-content: flex-start;
     gap: 8px;
-    box-shadow: 0 -10px 28px var(--color-shadow);
-    backdrop-filter: blur(18px);
   }
   .split-feed-toolbar .toolbar-compact-row {
-    padding: 6px 0 4px;
+    padding: 8px 0 4px;
   }
   .split-feed-toolbar {
-    border-bottom: none;
-    padding-bottom: 0;
+    border-bottom: 1px solid var(--color-border-light);
+    padding-bottom: 8px;
   }
 }
