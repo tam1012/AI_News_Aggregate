@@ -217,12 +217,10 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 /* ===== Compact Toolbar Row 2 ===== */
 .toolbar-compact-row {
-  display: flex; align-items: center; gap: 6px;
-  padding: 4px 0 2px;
-  overflow-x: auto;
-  scrollbar-width: none;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 0 4px;
+  flex-wrap: wrap;
 }
-.toolbar-compact-row::-webkit-scrollbar { display: none; }
 .compact-date-nav {
   display: flex; align-items: center; gap: 2px;
   flex-shrink: 0;
@@ -245,10 +243,10 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 .compact-sort-control { position: relative; flex-shrink: 0; }
 .compact-sort-btn {
-  padding: 3px 10px; border-radius: 999px;
+  padding: 5px 12px; border-radius: 999px;
   border: 1px solid var(--color-border);
   background: transparent; color: var(--color-text-muted);
-  font-size: 0.72rem; font-weight: 600;
+  font-size: 0.8rem; font-weight: 600;
   cursor: pointer; transition: all 0.15s;
   white-space: nowrap;
 }
@@ -259,7 +257,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   background: rgba(184, 134, 11, 0.06);
 }
 .compact-sort-dropdown {
-  position: absolute; top: 30px; left: 0;
+  position: absolute; top: calc(100% + 4px); left: 0;
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -366,7 +364,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 
 /* ===== Filter Dropdown ===== */
 .filter-dropdown {
-  position: absolute; top: 40px; right: 0;
+  position: absolute; top: calc(100% + 4px); left: 0;
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -547,12 +545,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 
 .feed-item-preview {
-  font-size: 0.82rem; line-height: 1.45;
+  font-size: 0.84rem; line-height: 1.5;
   color: var(--color-text-secondary);
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 /* Desktop: hide thumbnail in feed for compact density */
@@ -1253,8 +1247,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-muted);
-  padding: 4px 14px;
-  font-size: 0.76rem;
+  padding: 5px 14px;
+  font-size: 0.82rem;
   font-weight: 600;
   transition: all 0.15s;
   white-space: nowrap;
