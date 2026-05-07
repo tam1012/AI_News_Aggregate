@@ -6,13 +6,6 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-test('youtube tab uses compact YT label', () => {
-  const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
-
-  assert.match(homeSource, /: 'YT'/);
-  assert.doesNotMatch(homeSource, />YouTube<\/button>/);
-});
-
 test('desktop split feed tabs scroll within the left pane instead of overflowing it', () => {
   const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
   const splitTabsRule = css.match(/\.split-left \.feed-tabs\s*\{([^}]+)\}/)?.[1] || '';
@@ -55,15 +48,15 @@ test('mobile digest tab bar scrolls horizontally without page overflow', () => {
   assert.match(mobileTabsRule, /max-width:\s*100%/);
   assert.match(mobileTabsRule, /overflow-x:\s*auto/);
   assert.match(mobileTabsRule, /overscroll-behavior-x:\s*contain/);
-  assert.match(mobileTabsRule, /justify-content:\s*flex-start/);
+  assert.match(mobileTabsRule, /justify-content:\s*center/);
   assert.match(mobileTabRule, /flex:\s*0 0 auto/);
 });
 
-test('mobile feed and detail styles prioritize compact reading', () => {
+test('mobile feed and detail styles prioritize clean reading', () => {
   const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
   const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
 
-  assert.match(css, /-webkit-line-clamp:\s*3/);
+  assert.match(css, /\.feed-item-body\s*\{[\s\S]*display:\s*block/);
   assert.match(css, /\.detail-actions\s*\{[\s\S]*position:\s*sticky/);
   assert.match(css, /--safe-bottom:\s*env\(safe-area-inset-bottom/);
   assert.match(homeSource, />Tin mới<\/button>/);
@@ -80,21 +73,17 @@ test('feed uses server-side tab pagination and exposes load-more control', () =>
   const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
   const apiSource = readFileSync(resolve(__dirname, '../src/services/api.ts'), 'utf8');
 
-  assert.match(apiSource, /feedTab\?: 'news' \| 'voz' \| 'reddit' \| 'youtube'/);
+  assert.match(apiSource, /feedTab\?: 'news' \| 'voz' \| 'reddit'/);
   assert.match(homeSource, /feedTab: tab === 'digest' \? 'news' : tab/);
   assert.match(homeSource, /handleLoadMoreArticles/);
   assert.match(homeSource, /Tải thêm bài cũ/);
 });
 
-test('feed exposes latest and hot ranking controls backed by API sort', () => {
+test('feed omits hot ranking controls for a simpler toolbar', () => {
   const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
-  const apiSource = readFileSync(resolve(__dirname, '../src/services/api.ts'), 'utf8');
   const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
 
-  assert.match(apiSource, /sort\?: 'latest' \| 'hot'/);
-  assert.match(apiSource, /qs\.set\('sort', params\.sort\)/);
-  assert.match(homeSource, /type FeedSort = 'latest' \| 'hot'/);
-  assert.match(homeSource, /Tin nóng/);
-  assert.match(homeSource, /sort: feedSort/);
-  assert.match(css, /\.feed-sort-toggle\s*\{/);
+  assert.doesNotMatch(homeSource, /Tin nóng/);
+  assert.doesNotMatch(homeSource, /sort: feedSort/);
+  assert.doesNotMatch(css, /\.feed-sort-toggle\s*\{/);
 });

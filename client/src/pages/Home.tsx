@@ -79,30 +79,6 @@ function buildFeedPreview(article: any): string {
   return '';
 }
 
-function shouldTryFeedThumbnail(article: any): boolean {
-  const imageUrl = String(article.image_url || '').trim();
-  if (!imageUrl) return false;
-
-  const title = String(article.title || '').toLowerCase();
-  const sourceName = String(article.source_name || '').toLowerCase();
-  const url = imageUrl.toLowerCase();
-  const articleUrl = String(article.url || '').toLowerCase();
-
-  if (sourceName.includes('reddit') || sourceName.includes('voz') || title.startsWith('[r/') || articleUrl.includes('reddit.com') || articleUrl.includes('voz.vn')) {
-    return false;
-  }
-
-  if (/avatar|profile|logo|icon|sprite|badge|emoji|placeholder|default|blank|transparent|favicon|redditstatic|snoo|voz\./.test(url)) {
-    return false;
-  }
-
-  if (/screenshot|screen-shot|screen_shot|capture|thumb\?/.test(url)) {
-    return false;
-  }
-
-  return true;
-}
-
 /* ── image proxy helper ── */
 type ImgPreset = 'thumb' | 'detail' | 'og';
 function proxyImgUrl(rawUrl: string | null | undefined, preset: ImgPreset = 'detail', baseUrl?: string | null): string {
@@ -119,18 +95,6 @@ function proxyImgUrl(rawUrl: string | null | undefined, preset: ImgPreset = 'det
   }
 
   return `/api/img?url=${encodeURIComponent(sourceUrl)}&p=${preset}`;
-}
-
-function isUsefulFeedThumbnail(img: HTMLImageElement): boolean {
-  const width = img.naturalWidth;
-  const height = img.naturalHeight;
-  if (!width || !height) return false;
-  if (width < 160 || height < 90) return false;
-
-  const ratio = width / height;
-  if (ratio < 0.55 || ratio > 3.2) return false;
-
-  return true;
 }
 
 function loadReadArticles(): string[] {
@@ -204,14 +168,11 @@ function ReadmeWelcome() {
 }
 
 type FeedTab = 'news' | 'voz' | 'reddit';
-type FeedSort = 'latest' | 'hot';
 
 function classifyArticle(article: any): FeedTab {
   const name = (article.source_name || '').toLowerCase();
   const url = (article.url || '').toLowerCase();
   const title = (article.title || '').toLowerCase();
-  const sourceType = (article.source_type || '').toLowerCase();
-  if (sourceType === 'youtube' || url.includes('youtube.com') || url.includes('youtu.be')) return 'news';
   if (name.includes('reddit') || url.includes('reddit.com') || title.startsWith('[r/')) return 'reddit';
   if (name.includes('voz') || url.includes('voz.vn')) return 'voz';
   return 'news';
@@ -234,7 +195,6 @@ export function Home() {
   const [selected, setSelected] = useState<any | null>(null);
   const [tab, setTab] = useState<'news' | 'voz' | 'reddit' | 'digest'>(initialTab);
   const [filterSource, setFilterSource] = useState<string>('all');
-  const [feedSort, setFeedSort] = useState<FeedSort>('latest');
   const [filterTag, setFilterTag] = useState<string>('');
   const [showFilter, setShowFilter] = useState(false);
   const [showTagMenu, setShowTagMenu] = useState(false);
@@ -303,9 +263,9 @@ export function Home() {
     () => {
       // Don't fetch until we have a date, unless there are no dates at all
       if (availableDates.length > 0 && !selectedDate) return Promise.resolve({ data: [], meta: { total: 0, page: 1, totalPages: 0 } });
-      return api.getArticles({ page: 1, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab, sort: feedSort, tag: filterTag || undefined });
+      return api.getArticles({ page: 1, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab, tag: filterTag || undefined });
     },
-    [selectedDate, filterSource, availableDates.length, tab, feedSort, filterTag]
+    [selectedDate, filterSource, availableDates.length, tab, filterTag]
   );
 
   useEffect(() => {
@@ -416,7 +376,7 @@ export function Home() {
     setIsLoadingMore(true);
     setLoadMoreError(null);
     try {
-      const response = await api.getArticles({ page: nextPage, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab, sort: feedSort, tag: filterTag || undefined });
+      const response = await api.getArticles({ page: nextPage, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab, tag: filterTag || undefined });
       setArticlePages(prev => [...prev, ...(response?.data || [])]);
       setArticlePage(nextPage);
     } catch (err: any) {
@@ -424,7 +384,7 @@ export function Home() {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [articlePage, feedSort, filterSource, filterTag, hasMoreArticles, isLoadingMore, selectedDate, tab]);
+  }, [articlePage, filterSource, filterTag, hasMoreArticles, isLoadingMore, selectedDate, tab]);
 
   // Date navigation handlers
   const handlePrevDate = () => {
@@ -869,12 +829,6 @@ function FeedItem({
   const title = cleanTitle(article.title);
   const time = article.published_at ? formatTime(article.published_at) : '';
 
-  const [showThumbnail, setShowThumbnail] = useState(() => shouldTryFeedThumbnail(article));
-
-  useEffect(() => {
-    setShowThumbnail(shouldTryFeedThumbnail(article));
-  }, [article.id, article.image_url]);
-
   const preview = useMemo(() => {
     return buildFeedPreview(article);
   }, [article]);
@@ -892,16 +846,6 @@ function FeedItem({
           <h3 className="feed-item-title">{title}</h3>
           <p className="feed-item-preview">{preview}</p>
         </div>
-        {showThumbnail && article.image_url && (
-          <img
-            src={proxyImgUrl(article.image_url, 'thumb', article.url)}
-            alt=""
-            className="feed-item-thumb"
-            loading="lazy"
-            onLoad={(e) => { if (!isUsefulFeedThumbnail(e.currentTarget)) setShowThumbnail(false); }}
-            onError={() => setShowThumbnail(false)}
-          />
-        )}
       </div>
     </article>
   );

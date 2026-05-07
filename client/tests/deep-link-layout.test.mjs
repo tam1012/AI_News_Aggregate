@@ -30,7 +30,6 @@ test('home feed routes use the fluid layout shell on hard refresh', () => {
   assert.equal(usesFluidShell('/'), true);
   assert.equal(usesFluidShell('/voz'), true);
   assert.equal(usesFluidShell('/reddit'), true);
-  assert.equal(usesFluidShell('/youtube'), true);
   assert.equal(usesFluidShell('/digest'), true);
 });
 

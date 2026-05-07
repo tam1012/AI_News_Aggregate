@@ -399,26 +399,6 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 
 /* ===== Feed Container ===== */
-.feed-sort-toggle {
-  display: flex;
-  gap: 6px;
-  padding: 8px 0 2px;
-  border-bottom: 1px solid var(--color-border-light);
-}
-.feed-sort-option {
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--color-text-muted);
-  padding: 5px 11px;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-.feed-sort-option.active {
-  border-color: var(--color-accent);
-  background: rgba(184, 134, 11, 0.1);
-  color: var(--color-accent);
-}
 .feed-container { padding: 8px 0 24px; }
 
 .offline-cache-banner {
@@ -559,12 +539,6 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   color: var(--color-text-secondary);
 }
 
-/* Hide thumbnails everywhere — clean feed like NewsDigest */
-.feed-item-thumb {
-  display: none !important;
-}
-
-/* Feed item with thumbnail (hidden but keep layout) */
 .feed-item-body {
   display: block;
 }
@@ -910,7 +884,6 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 .badge-rss { background: #dbeafe; color: #1d4ed8; }
 .badge-web { background: #f3e8ff; color: #7c3aed; }
-.badge-youtube { background: #fee2e2; color: #b91c1c; }
 .badge-success { background: rgba(22, 163, 74, 0.1); color: var(--color-success); }
 .badge-error { background: rgba(220, 38, 38, 0.1); color: var(--color-error); }
 .badge-pending { background: rgba(217, 119, 6, 0.1); color: var(--color-warning); }
