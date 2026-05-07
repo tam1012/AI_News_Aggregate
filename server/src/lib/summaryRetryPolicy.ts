@@ -3,6 +3,8 @@ export const STUCK_SUMMARY_MINUTES = 10;
 
 const TIMEOUT_ERROR_PATTERN = '%timeout%';
 const ABORTED_ERROR_PATTERN = '%aborted%';
+const CLOUDFLARE_524_PATTERN = '%524%';
+const HTML_ERROR_PATTERN = '%<!doctype html%';
 
 export interface SqlStatement {
   sql: string;
@@ -38,11 +40,13 @@ export function buildResetRetryableFailedSummariesSql(limit: number): SqlStateme
               AND (
                 lower(COALESCE(last_summary_error, '')) LIKE $3
                 OR lower(COALESCE(last_summary_error, '')) LIKE $4
+                OR lower(COALESCE(last_summary_error, '')) LIKE $5
+                OR lower(COALESCE(last_summary_error, '')) LIKE $6
               )
               AND updated_at < NOW() - INTERVAL '10 minutes'
             ORDER BY updated_at ASC
             LIMIT $2
           )`,
-    params: [MAX_SUMMARY_RETRIES, limit, TIMEOUT_ERROR_PATTERN, ABORTED_ERROR_PATTERN],
+    params: [MAX_SUMMARY_RETRIES, limit, TIMEOUT_ERROR_PATTERN, ABORTED_ERROR_PATTERN, CLOUDFLARE_524_PATTERN, HTML_ERROR_PATTERN],
   };
 }
