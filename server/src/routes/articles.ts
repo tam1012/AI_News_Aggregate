@@ -26,9 +26,7 @@ articles.get('/tags', async (c) => {
   }
 
   // feedTab filter (reuse same logic as article list)
-  if (feedTab === 'youtube') {
-    where += ` AND (s.type = 'youtube' OR a.url ILIKE '%youtube.com%' OR a.url ILIKE '%youtu.be%')`;
-  } else if (feedTab === 'reddit') {
+  if (feedTab === 'reddit') {
     where += ` AND (s.name ILIKE '%reddit%' OR a.url ILIKE '%reddit.com%' OR a.title ILIKE '[r/%')`;
   } else if (feedTab === 'voz') {
     where += ` AND (s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`;

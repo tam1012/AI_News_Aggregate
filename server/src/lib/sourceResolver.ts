@@ -1,4 +1,4 @@
-type SourceType = 'rss' | 'web' | 'youtube';
+type SourceType = 'rss' | 'web';
 
 export interface SourceDetectResult {
   url: string;
@@ -185,42 +185,6 @@ function isYoutubeUrl(url: string): boolean {
   }
 }
 
-function youtubeSourceResult(url: string): SourceDetectResult {
-  const result = resultBase(url);
-  let label = 'YouTube';
-  try {
-    const parsed = new URL(url);
-    const handle = parsed.pathname.match(/^\/@([a-zA-Z0-9._-]+)/)?.[1];
-    const channelId = parsed.pathname.match(/^\/channel\/(UC[a-zA-Z0-9_-]+)/)?.[1];
-    const videoId = parsed.hostname.toLowerCase() === 'youtu.be'
-      ? parsed.pathname.split('/').filter(Boolean)[0]
-      : parsed.searchParams.get('v') || parsed.pathname.match(/^\/(?:shorts|embed|live)\/([a-zA-Z0-9_-]{11})/)?.[1];
-
-    if (handle) label = `YouTube @${handle}`;
-    else if (channelId) label = `YouTube ${channelId}`;
-    else if (videoId) {
-      label = `YouTube video ${videoId}`;
-      result.supported = false;
-      result.warnings.push('YouTube video URLs are not supported as recurring sources yet. Add a channel URL such as https://www.youtube.com/@handle.');
-    }
-  } catch {
-    // Keep generic label.
-  }
-
-  result.type = 'youtube';
-  result.name = label;
-  result.detected = true;
-  result.detected_kind = 'youtube';
-  if (result.supported !== false) result.supported = true;
-  result.suggested_url = url;
-  result.preview = {
-    title: label,
-    description: 'YouTube channel source',
-    rss_count: 0,
-  };
-  return result;
-}
-
 function isGithubTrendingUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -286,7 +250,13 @@ export async function resolveSourceUrl(rawUrl: string, fetcher: ResolveFetch = d
   }
 
   if (isYoutubeUrl(normalized)) {
-    return youtubeSourceResult(normalized);
+    const result = resultBase(normalized);
+    result.name = 'YouTube';
+    result.detected = true;
+    result.detected_kind = 'youtube';
+    result.supported = false;
+    result.warnings.push('YouTube sources are disabled. Use the YouTube app for videos.');
+    return result;
   }
 
   if (isGithubTrendingUrl(normalized)) {

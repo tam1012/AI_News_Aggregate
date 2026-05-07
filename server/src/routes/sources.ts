@@ -72,10 +72,10 @@ sources.post('/', async (c) => {
     }, 400);
   }
 
-  if (!['rss', 'web', 'youtube'].includes(type)) {
+  if (!['rss', 'web'].includes(type)) {
     return c.json({
       success: false,
-      error: { code: 'VALIDATION', message: 'type must be rss, web, or youtube' },
+      error: { code: 'VALIDATION', message: 'type must be rss or web' },
     }, 400);
   }
 
@@ -86,7 +86,10 @@ sources.post('/', async (c) => {
     parser_config = null;
   }
   if (isYoutubeUrl(url)) {
-    type = 'youtube';
+    return c.json({
+      success: false,
+      error: { code: 'VALIDATION', message: 'YouTube sources are disabled. Use the YouTube app for videos.' },
+    }, 400);
   }
 
   const id = generateId('src');
@@ -139,13 +142,16 @@ sources.patch('/:id', async (c) => {
   }
 
   if (body.url !== undefined && isYoutubeUrl(body.url)) {
-    body.type = 'youtube';
-  }
-
-  if (body.type !== undefined && !['rss', 'web', 'youtube'].includes(body.type)) {
     return c.json({
       success: false,
-      error: { code: 'VALIDATION', message: 'type must be rss, web, or youtube' },
+      error: { code: 'VALIDATION', message: 'YouTube sources are disabled. Use the YouTube app for videos.' },
+    }, 400);
+  }
+
+  if (body.type !== undefined && !['rss', 'web'].includes(body.type)) {
+    return c.json({
+      success: false,
+      error: { code: 'VALIDATION', message: 'type must be rss or web' },
     }, 400);
   }
 

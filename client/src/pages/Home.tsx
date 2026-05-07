@@ -164,7 +164,7 @@ function ReadmeWelcome() {
         <h3 style={{ marginBottom: '12px' }}>Cách hoạt động:</h3>
         <ul style={{ paddingLeft: '20px', marginBottom: '20px', color: 'var(--color-text-secondary)' }}>
           <li><strong>Cào nguồn (mặc định mỗi 60 phút/source):</strong> Cứ 3 giờ hệ thống kiểm tra các nguồn đến hạn theo <code>next_run_at</code>; nguồn mới mặc định 60 phút/lần, nguồn lỗi sẽ tự backoff tối đa 24 giờ.</li>
-          <li><strong>Fetch bài chi tiết (mỗi 5 phút):</strong> URL mới từ RSS, Reddit, VOZ, YouTube hoặc GitHub Trending được đưa vào queue riêng rồi fetch nội dung chi tiết độc lập.</li>
+          <li><strong>Fetch bài chi tiết (mỗi 5 phút):</strong> URL mới từ RSS, Reddit, VOZ hoặc GitHub Trending được đưa vào queue riêng rồi fetch nội dung chi tiết độc lập.</li>
           <li><strong>Cào lại bình luận forum (mỗi 30 phút):</strong> Các bài Reddit và VOZ mới được cào lại tối đa 2 lần để cập nhật bình luận mới nhất.</li>
           <li><strong>Tóm tắt AI (mỗi 10 phút + khi cần):</strong> AI đọc nội dung gốc và viết lại thành bản tóm tắt tiếng Việt; job retry cũng chạy mỗi 10 phút để mở kẹt lỗi tạm thời.</li>
           <li><strong>Bản tin (mỗi 3 giờ, phút 30):</strong> Gom nhóm tin đã tóm tắt trong ngày thành một "Bản tin thời sự" duy nhất.</li>
@@ -202,7 +202,7 @@ function ReadmeWelcome() {
   );
 }
 
-type FeedTab = 'news' | 'voz' | 'reddit' | 'youtube';
+type FeedTab = 'news' | 'voz' | 'reddit';
 type FeedSort = 'latest' | 'hot';
 
 function classifyArticle(article: any): FeedTab {
@@ -210,7 +210,7 @@ function classifyArticle(article: any): FeedTab {
   const url = (article.url || '').toLowerCase();
   const title = (article.title || '').toLowerCase();
   const sourceType = (article.source_type || '').toLowerCase();
-  if (sourceType === 'youtube' || url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube';
+  if (sourceType === 'youtube' || url.includes('youtube.com') || url.includes('youtu.be')) return 'news';
   if (name.includes('reddit') || url.includes('reddit.com') || title.startsWith('[r/')) return 'reddit';
   if (name.includes('voz') || url.includes('voz.vn')) return 'voz';
   return 'news';
@@ -226,13 +226,12 @@ export function Home() {
     const path = location.pathname;
     if (path === '/voz') return 'voz' as const;
     if (path === '/reddit') return 'reddit' as const;
-    if (path === '/youtube') return 'youtube' as const;
     if (path === '/digest') return 'digest' as const;
     return 'news' as const;
   }, []); // only on mount
 
   const [selected, setSelected] = useState<any | null>(null);
-  const [tab, setTab] = useState<'news' | 'voz' | 'reddit' | 'youtube' | 'digest'>(initialTab);
+  const [tab, setTab] = useState<'news' | 'voz' | 'reddit' | 'digest'>(initialTab);
   const [filterSource, setFilterSource] = useState<string>('all');
   const [feedSort, setFeedSort] = useState<FeedSort>('latest');
   const [filterTag, setFilterTag] = useState<string>('');
@@ -501,7 +500,7 @@ export function Home() {
   }, [selected]);
 
   // Navigate helper: sync tab to URL (no React Router re-render)
-  const navigateTab = useCallback((t: 'news' | 'voz' | 'reddit' | 'youtube' | 'digest') => {
+  const navigateTab = useCallback((t: 'news' | 'voz' | 'reddit' | 'digest') => {
     setTab(t);
     const path = t === 'news' ? '/' : `/${t}`;
     window.history.replaceState(null, '', path);
@@ -578,7 +577,6 @@ export function Home() {
           <button className="feed-tab" onClick={() => navigateTab('news')}>Tin mới</button>
           <button className="feed-tab" onClick={() => navigateTab('voz')}>VOZ</button>
           <button className="feed-tab" onClick={() => navigateTab('reddit')}>Reddit</button>
-          <button className="feed-tab" onClick={() => navigateTab('youtube')}>YT</button>
           <button className={`feed-tab active`} onClick={() => navigateTab('digest')}>Bản tin</button>
         </div>
       )}
@@ -589,7 +587,7 @@ export function Home() {
           <div className="split-feed-toolbar">
             <div className="toolbar-tabs-row">
               <div className="feed-tabs">
-                {(['news', 'voz', 'reddit', 'youtube'] as const).map(t => (
+                {(['news', 'voz', 'reddit'] as const).map(t => (
                   <button
                     key={t}
                     className={`feed-tab ${tab === t ? 'active' : ''}`}
@@ -602,7 +600,7 @@ export function Home() {
                       setFilterTag('');
                     }}
                   >
-                    {t === 'news' ? 'Tin mới' : t === 'voz' ? 'VOZ' : t === 'reddit' ? 'Reddit' : 'YT'}
+                    {t === 'news' ? 'Tin mới' : t === 'voz' ? 'VOZ' : 'Reddit'}
                   </button>
                 ))}
                 <button

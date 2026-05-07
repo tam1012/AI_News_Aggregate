@@ -2,7 +2,7 @@ export const LOCAL_DATE_SQL = `DATE(COALESCE(a.published_at, a.created_at) AT TI
 export const LOCAL_DATE_TEXT_SQL = `TO_CHAR(${LOCAL_DATE_SQL}, 'YYYY-MM-DD')`;
 
 const VALID_SUMMARY_STATUSES = ['pending', 'processing', 'done', 'failed', 'skipped'];
-const VALID_FEED_TABS = ['news', 'voz', 'reddit', 'youtube'];
+const VALID_FEED_TABS = ['news', 'voz', 'reddit'];
 const VALID_ARTICLE_SORTS = ['latest', 'hot'];
 const VALID_QUALITY_ISSUES = ['missing_tldr', 'missing_summary_short', 'missing_tags', 'missing_hot_score', 'short_summary'];
 
@@ -83,9 +83,7 @@ export function buildArticleListFilters(input: ArticleListFilterInput): ArticleL
     clauses.push(`a.hot_score >= $${paramIndex++}`);
     params.push(minScore);
   }
-  if (input.feedTab === 'youtube') {
-    clauses.push(`(s.type = 'youtube' OR a.url ILIKE '%youtube.com%' OR a.url ILIKE '%youtu.be%')`);
-  } else if (input.feedTab === 'reddit') {
+  if (input.feedTab === 'reddit') {
     clauses.push(`(s.name ILIKE '%reddit%' OR a.url ILIKE '%reddit.com%' OR a.title ILIKE '[r/%')`);
   } else if (input.feedTab === 'voz') {
     clauses.push(`(s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`);

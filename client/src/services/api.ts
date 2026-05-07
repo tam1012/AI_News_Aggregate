@@ -88,7 +88,7 @@ export const api = {
   detectSource: (url: string) => request<any>('/sources/detect', { method: 'POST', body: JSON.stringify({ url }) }),
 
   // Articles
-  getArticles: (params?: { page?: number; limit?: number; sourceId?: string; status?: string; date?: string; tag?: string; minScore?: number; feedTab?: 'news' | 'voz' | 'reddit' | 'youtube'; sort?: 'latest' | 'hot'; qualityIssue?: string }) => {
+  getArticles: (params?: { page?: number; limit?: number; sourceId?: string; status?: string; date?: string; tag?: string; minScore?: number; feedTab?: 'news' | 'voz' | 'reddit'; sort?: 'latest' | 'hot'; qualityIssue?: string }) => {
     const qs = new URLSearchParams();
     if (params?.page) qs.set('page', String(params.page));
     if (params?.limit) qs.set('limit', String(params.limit));
