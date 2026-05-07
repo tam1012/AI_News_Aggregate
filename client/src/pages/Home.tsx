@@ -953,23 +953,15 @@ function ArticleDetail({
         {/* Content */}
         <div className="detail-content">
           <div className="detail-meta-centered">
-            <div className="detail-meta-row">
-              <button className="detail-nav-btn" onClick={onPrevArticle} disabled={!hasPrevArticle} title="Bài trước">
-                ‹
-              </button>
-              <a
-                href={article.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`feed-item-source detail-source-link source-${sourceLabel.toLowerCase().replace(/[^a-z0-9]/g, '')}`}
-                title="Mở bài gốc"
-              >
-                {sourceLabel} ↗
-              </a>
-              <button className="detail-nav-btn" onClick={onNextArticle} disabled={!hasNextArticle} title="Bài sau">
-                ›
-              </button>
-            </div>
+            <a
+              href={article.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`feed-item-source detail-source-link source-${sourceLabel.toLowerCase().replace(/[^a-z0-9]/g, '')}`}
+              title="Mở bài gốc"
+            >
+              {sourceLabel} ↗
+            </a>
             {article.published_at && (
               <span className="feed-item-time">
                 {new Date(article.published_at).toLocaleString('vi-VN', {
@@ -1019,6 +1011,16 @@ function ArticleDetail({
               <p>{article.raw_excerpt || 'Chưa có tóm tắt.'}</p>
             )}
           </div>
+        </div>
+
+        <div className="detail-reading-nav" aria-label="Chuyển bài">
+          <button className="detail-reading-nav-btn" onClick={onPrevArticle} disabled={!hasPrevArticle} title="Bài trước">
+            ‹
+          </button>
+          <span className="detail-reading-nav-status">Đọc tiếp</span>
+          <button className="detail-reading-nav-btn" onClick={onNextArticle} disabled={!hasNextArticle} title="Bài sau">
+            ›
+          </button>
         </div>
       </div>
     </div>
