@@ -57,7 +57,10 @@ test('mobile feed and detail styles prioritize clean reading', () => {
   assert.match(css, /\.detail-reading-nav-btn\s*\{/);
   assert.match(css, /height:\s*100dvh/);
   assert.match(css, /\.detail-mobile-header\s*\{[\s\S]*display:\s*none/);
+  assert.match(css, /padding:\s*26px 0 12px/);
   assert.match(css, /touch-action:\s*none/);
+  assert.match(css, /\.feed-item-title\s*\{[\s\S]*font-size:\s*1\.02rem/);
+  assert.match(css, /\.detail-title-editorial\s*\{[\s\S]*font-size:\s*clamp\(1\.75rem, 3\.4vw, 2\.1rem\)/);
   assert.match(homeSource, /startedOnPullBarRef/);
   assert.match(css, /--safe-bottom:\s*env\(safe-area-inset-bottom/);
   assert.match(homeSource, /Tin mới/);
