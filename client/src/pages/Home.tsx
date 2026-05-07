@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback, lazy, Suspense } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
 import { api } from '../services/api';
 import { useFetchRaw } from '../hooks/useApi';
 import { filterArticlesBySelectedDate, getEmptyFeedMessage, getReaderLoadingState, shouldShowDetailPane, shouldShowRightPane, shouldShowScrollTopButton } from './homeUx';
+
+const ReactMarkdown = lazy(() => import('react-markdown'));
 
 const READ_ARTICLES_STORAGE_KEY = 'read_articles';
 const FEED_PREVIEW_MAX_CHARS = 180;
@@ -236,7 +237,8 @@ export function Home() {
   const [feedSort, setFeedSort] = useState<FeedSort>('latest');
   const [filterTag, setFilterTag] = useState<string>('');
   const [showFilter, setShowFilter] = useState(false);
-  const [showFeedControls, setShowFeedControls] = useState(false);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
 
   // Drag-to-scroll for filters row on desktop
   const filterControlRef = useRef<HTMLDivElement>(null);
@@ -354,17 +356,20 @@ export function Home() {
   }, [filterTag, popularTags]);
 
   useEffect(() => {
-    if (!showFilter) return;
+    if (!showFilter && !showSortMenu) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (!filterControlRef.current?.contains(event.target as Node)) {
+      if (showFilter && !filterControlRef.current?.contains(event.target as Node)) {
         setShowFilter(false);
+      }
+      if (showSortMenu && !sortMenuRef.current?.contains(event.target as Node)) {
+        setShowSortMenu(false);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showFilter]);
+  }, [showFilter, showSortMenu]);
 
   const readArticleSet = useMemo(() => new Set(readArticleIds), [readArticleIds]);
 
@@ -583,7 +588,7 @@ export function Home() {
 
       <div className="home-split-layout">
         <div className={`split-left ${tab === 'digest' ? 'hidden-on-mobile' : ''}`} ref={splitLeftRef}>
-          {/* Tab bar inside left pane */}
+          {/* Tab bar — Row 1 */}
           <div className="split-feed-toolbar">
             <div className="toolbar-tabs-row">
               <div className="feed-tabs">
@@ -592,9 +597,7 @@ export function Home() {
                     key={t}
                     className={`feed-tab ${tab === t ? 'active' : ''}`}
                     onClick={() => {
-                      if (tab === t) {
-                        scrollFeedToTop();
-                      }
+                      if (tab === t) scrollFeedToTop();
                       navigateTab(t);
                       setSelected(null);
                       setFilterTag('');
@@ -611,14 +614,6 @@ export function Home() {
                 </button>
               </div>
               <button
-                className={`icon-btn ${showFeedControls || filterSource !== 'all' || filterTag ? 'active' : ''}`}
-                onClick={() => setShowFeedControls(prev => !prev)}
-                title="Bộ lọc"
-                style={{ width: 32, height: 32, fontSize: '0.85rem' }}
-              >
-                ⚙
-              </button>
-              <button
                 className="icon-btn"
                 onClick={() => void handleManualRefresh()}
                 disabled={isRefreshing || loading}
@@ -628,100 +623,105 @@ export function Home() {
                 ↻
               </button>
             </div>
-            {showFeedControls && (
-              <div className="toolbar-filters-panel">
-                <div className="toolbar-filters-row">
-                  <div className="sort-toggle">
+            {/* Row 2 — always visible: date + sort + source + topic chips */}
+            <div className="toolbar-compact-row">
+              {availableDates.length > 0 && selectedDate && (
+                <div className="compact-date-nav">
+                  <button
+                    className="compact-date-btn"
+                    onClick={handlePrevDate}
+                    disabled={availableDates.findIndex(d => d.date === selectedDate) === availableDates.length - 1}
+                  >
+                    ‹
+                  </button>
+                  <span className="compact-date-label">
+                    {(() => { const d = new Date(selectedDate); return `${d.getDate()}/${d.getMonth() + 1}`; })()}
+                  </span>
+                  <button
+                    className="compact-date-btn"
+                    onClick={handleNextDate}
+                    disabled={availableDates.findIndex(d => d.date === selectedDate) === 0}
+                  >
+                    ›
+                  </button>
+                </div>
+              )}
+              <div className="compact-sort-control" ref={sortMenuRef}>
+                <button
+                  className={`compact-sort-btn ${showSortMenu ? 'open' : ''}`}
+                  onClick={() => setShowSortMenu(prev => !prev)}
+                  type="button"
+                >
+                  {feedSort === 'latest' ? 'Mới nhất' : 'Tin nóng'} ▾
+                </button>
+                {showSortMenu && (
+                  <div className="compact-sort-dropdown">
                     <button
-                      className={`sort-btn ${feedSort === 'latest' ? 'active' : ''}`}
-                      onClick={() => setFeedSort('latest')}
-                      type="button"
+                      className={`filter-option ${feedSort === 'latest' ? 'active' : ''}`}
+                      onClick={() => { setFeedSort('latest'); setShowSortMenu(false); }}
                     >
                       Mới nhất
                     </button>
                     <button
-                      className={`sort-btn ${feedSort === 'hot' ? 'active' : ''}`}
-                      onClick={() => setFeedSort('hot')}
-                      type="button"
+                      className={`filter-option ${feedSort === 'hot' ? 'active' : ''}`}
+                      onClick={() => { setFeedSort('hot'); setShowSortMenu(false); }}
                     >
                       Tin nóng
                     </button>
                   </div>
-                  <div className="feed-filter-control" ref={filterControlRef}>
-                    <button
-                      className={`btn btn-sm ${filterSource !== 'all' ? 'btn-active' : ''}`}
-                      onClick={() => setShowFilter(!showFilter)}
-                      type="button"
-                    >
-                      {filterSource === 'all' ? 'Nguồn' : sources.find((s: any) => s.id === filterSource)?.name.replace(/ - .*$/, '').replace(/ RSS.*$/, '')}
-                    </button>
-                    {showFilter && (
-                      <div className="filter-dropdown">
-                        <button
-                          className={`filter-option ${filterSource === 'all' ? 'active' : ''}`}
-                          onClick={() => { setFilterSource('all'); setShowFilter(false); }}
-                        >
-                          Tất cả nguồn
-                        </button>
-                        {sources.map((s: any) => (
-                          <button
-                            key={s.id}
-                            className={`filter-option ${filterSource === s.id ? 'active' : ''}`}
-                            onClick={() => { setFilterSource(s.id); setShowFilter(false); }}
-                          >
-                            {s.name.replace(/ - .*$/, '').replace(/ RSS.*$/, '')}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {availableDates.length > 0 && selectedDate && (
-                  <div className="date-navigator compact">
-                    <button
-                      className="icon-btn"
-                      onClick={handlePrevDate}
-                      disabled={availableDates.findIndex(d => d.date === selectedDate) === availableDates.length - 1}
-                    >
-                      ‹
-                    </button>
-                    <span className="date-navigator-label">
-                      {formatDateHeading(selectedDate)}
-                    </span>
-                    <button
-                      className="icon-btn"
-                      onClick={handleNextDate}
-                      disabled={availableDates.findIndex(d => d.date === selectedDate) === 0}
-                    >
-                      ›
-                    </button>
-                  </div>
                 )}
-                {popularTags.length > 0 && (
-                  <div className="topic-scroll" ref={filtersRowRef} {...handleFiltersDrag}>
+              </div>
+              <div className="feed-filter-control" ref={filterControlRef}>
+                <button
+                  className={`compact-sort-btn ${filterSource !== 'all' ? 'active' : ''}`}
+                  onClick={() => setShowFilter(!showFilter)}
+                  type="button"
+                >
+                  {filterSource === 'all' ? 'Nguồn ▾' : (sources.find((s: any) => s.id === filterSource)?.name.replace(/ - .*$/, '').replace(/ RSS.*$/, '') + ' ✕')}
+                </button>
+                {showFilter && (
+                  <div className="filter-dropdown">
                     <button
-                      className={`topic-chip ${filterTag ? '' : 'active'}`}
-                      onClick={() => setFilterTag('')}
-                      type="button"
-                      title="Hiển thị tất cả chủ đề"
+                      className={`filter-option ${filterSource === 'all' ? 'active' : ''}`}
+                      onClick={() => { setFilterSource('all'); setShowFilter(false); }}
                     >
-                      Tất cả
+                      Tất cả nguồn
                     </button>
-                    {popularTags.slice(0, 8).map(t => (
+                    {sources.map((s: any) => (
                       <button
-                        key={t.tag}
-                        className={`topic-chip ${filterTag === t.tag ? 'active' : ''}`}
-                        onClick={() => setFilterTag(filterTag === t.tag ? '' : t.tag)}
-                        type="button"
-                        title={`${t.count} bài`}
+                        key={s.id}
+                        className={`filter-option ${filterSource === s.id ? 'active' : ''}`}
+                        onClick={() => { setFilterSource(s.id); setShowFilter(false); }}
                       >
-                        {t.tag}
+                        {s.name.replace(/ - .*$/, '').replace(/ RSS.*$/, '')}
                       </button>
                     ))}
                   </div>
                 )}
               </div>
-            )}
+              {popularTags.length > 0 && (
+                <div className="topic-scroll" ref={filtersRowRef} {...handleFiltersDrag}>
+                  <button
+                    className={`topic-chip ${filterTag ? '' : 'active'}`}
+                    onClick={() => setFilterTag('')}
+                    type="button"
+                  >
+                    Tất cả
+                  </button>
+                  {popularTags.slice(0, 8).map(t => (
+                    <button
+                      key={t.tag}
+                      className={`topic-chip ${filterTag === t.tag ? 'active' : ''}`}
+                      onClick={() => setFilterTag(filterTag === t.tag ? '' : t.tag)}
+                      type="button"
+                      title={`${t.count} bài`}
+                    >
+                      {t.tag}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Active filter indicator */}
@@ -1062,15 +1062,17 @@ function ArticleDetail({
           <div className="detail-body">
             {article.summary_text ? (
               <div className="article-main-content">
-                <ReactMarkdown
-                  components={{
-                    img: ({ node, ...props }) => (
-                      <img {...props} src={proxyImgUrl(props.src, 'detail')} loading="lazy" decoding="async" />
-                    )
-                  }}
-                >
-                  {summaryParts.rest}
-                </ReactMarkdown>
+                <Suspense fallback={<div className="loading">Đang tải...</div>}>
+                  <ReactMarkdown
+                    components={{
+                      img: ({ node, ...props }) => (
+                        <img {...props} src={proxyImgUrl(props.src, 'detail')} loading="lazy" decoding="async" />
+                      )
+                    }}
+                  >
+                    {summaryParts.rest}
+                  </ReactMarkdown>
+                </Suspense>
               </div>
             ) : (
               <p>{article.raw_excerpt || 'Chưa có tóm tắt.'}</p>
@@ -1111,15 +1113,17 @@ function DigestTab() {
     <div className="feed-container" style={{ padding: '0 20px' }}>
       <h2 className="feed-date-heading" style={{ paddingTop: 0 }}>{digest.title || `Bản tin ${digest.digest_date}`}</h2>
       <div className="digest-content">
-        <ReactMarkdown
-          components={{
-            img: ({ node, ...props }) => (
-              <img {...props} src={proxyImgUrl(props.src, 'detail')} loading="lazy" decoding="async" />
-            )
-          }}
-        >
-          {digest.body_markdown}
-        </ReactMarkdown>
+        <Suspense fallback={<div className="loading">Đang tải bản tin...</div>}>
+          <ReactMarkdown
+            components={{
+              img: ({ node, ...props }) => (
+                <img {...props} src={proxyImgUrl(props.src, 'detail')} loading="lazy" decoding="async" />
+              )
+            }}
+          >
+            {digest.body_markdown}
+          </ReactMarkdown>
+        </Suspense>
       </div>
     </div>
   );
