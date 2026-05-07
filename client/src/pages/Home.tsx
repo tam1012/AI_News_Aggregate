@@ -520,6 +520,23 @@ export function Home() {
     selectArticle(articles[selectedArticleIndex + 1]);
   }, [articles, hasNextArticle, selectArticle, selectedArticleIndex]);
 
+  useEffect(() => {
+    if (!selected) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        handlePrevArticle();
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        handleNextArticle();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleNextArticle, handlePrevArticle, selected]);
+
   if (loading && readerLoadingState === 'feed-only') {
     return (
       <div className="feed-container">

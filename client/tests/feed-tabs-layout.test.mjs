@@ -84,3 +84,13 @@ test('feed omits hot ranking controls for a simpler toolbar', () => {
   assert.doesNotMatch(homeSource, /sort: feedSort/);
   assert.doesNotMatch(css, /\.feed-sort-toggle\s*\{/);
 });
+
+test('article detail supports keyboard arrow navigation', () => {
+  const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
+
+  assert.match(homeSource, /event\.key === 'ArrowLeft'/);
+  assert.match(homeSource, /handlePrevArticle\(\)/);
+  assert.match(homeSource, /event\.key === 'ArrowRight'/);
+  assert.match(homeSource, /handleNextArticle\(\)/);
+  assert.match(homeSource, /input, textarea, select, \[contenteditable="true"\]/);
+});
