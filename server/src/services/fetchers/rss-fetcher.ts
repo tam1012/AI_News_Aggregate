@@ -1,5 +1,6 @@
 import RssParser from 'rss-parser';
 import * as cheerio from 'cheerio';
+import { decodeHTML } from 'entities';
 import { normalizePublicHttpUrl, truncate } from '../../lib/utils.js';
 import { BROWSER_UA } from './http-utils.js';
 import { insertArticleIfNew } from './article-writer.js';
@@ -18,13 +19,17 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function decodeText(value: string): string {
+  return decodeHTML(value).replace(/\s+/g, ' ').trim();
+}
+
 function stripHtml(html: string): string {
   const normalized = html.replace(/^<!\[CDATA\[/, '').replace(/\]\]>$/, '');
-  return cheerio.load(normalized).text().replace(/\s+/g, ' ').trim();
+  return decodeText(cheerio.load(normalized).text());
 }
 
 function getText($item: cheerio.Cheerio<any>, selector: string): string {
-  return $item.find(selector).first().text().trim();
+  return decodeText($item.find(selector).first().text());
 }
 
 function getXmlChildHtml($item: cheerio.Cheerio<any>, selector: string): string {
@@ -172,14 +177,14 @@ export const rssFetcher: SourceFetcher = {
       return [{
         sourceId: source.id,
         url,
-        title: item.title.trim(),
+        title: decodeText(item.title),
         externalId: item.guid || null,
         publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : null,
         payload: {
           author: item.creator || rawItem.author || null,
           rawExcerpt: stripHtml(rawExcerpt),
           rawContent: stripHtml(rawContent),
-          contentHashSeed: item.title + rawExcerpt,
+          contentHashSeed: decodeText(item.title) + rawExcerpt,
           imageUrl,
         },
       }];
