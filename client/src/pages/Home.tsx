@@ -880,6 +880,7 @@ function ArticleDetail({
   const [isDragging, setIsDragging] = useState(false);
   const startYRef = useRef(0);
   const startScrollRef = useRef(0);
+  const startedOnPullBarRef = useRef(false);
 
   const sourceLabel = extractSourceLabel(article);
   const title = cleanTitle(article.title);
@@ -900,13 +901,14 @@ function ArticleDetail({
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     startYRef.current = e.touches[0].clientY;
     startScrollRef.current = contentRef.current?.scrollTop || 0;
+    startedOnPullBarRef.current = Boolean((e.target as HTMLElement | null)?.closest('.detail-pull-bar'));
   }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     const currentY = e.touches[0].clientY;
     const diff = currentY - startYRef.current;
-    // Only allow drag-down when scrolled to top
-    if (startScrollRef.current <= 0 && diff > 0) {
+    if ((startedOnPullBarRef.current || startScrollRef.current <= 0) && diff > 0) {
+      e.preventDefault();
       setIsDragging(true);
       setDragY(Math.min(diff * 0.6, 300));
     }

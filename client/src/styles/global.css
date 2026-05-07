@@ -643,12 +643,14 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 /* Pull-to-close bar */
 .detail-pull-bar {
   display: flex; justify-content: center;
-  padding: 10px 0 2px;
-  position: sticky; top: 0; z-index: 2;
-  background: var(--color-bg-card);
+  padding: 13px 0 6px;
+  position: sticky; top: 0; z-index: 4;
+  background: color-mix(in srgb, var(--color-bg-card) 88%, transparent);
+  backdrop-filter: blur(12px);
+  touch-action: none;
 }
 .detail-pull-indicator {
-  width: 36px; height: 4px;
+  width: 42px; height: 4px;
   background: var(--color-border);
   border-radius: 2px;
 }
