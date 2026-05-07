@@ -85,8 +85,7 @@ aiProviders.get('/:id', async (c) => {
             project_id, region, max_tokens, temperature,
             total_calls, total_errors, last_used_at, last_error_message,
             extra_config, created_at, updated_at,
-            CASE WHEN api_key IS NOT NULL AND api_key != '' THEN true ELSE false END as has_api_key,
-            CASE WHEN service_account_json IS NOT NULL AND service_account_json != '' THEN true ELSE false END as has_service_account
+            CASE WHEN api_key IS NOT NULL AND api_key != '' THEN true ELSE false END as has_api_key
      FROM ai_providers WHERE id = $1`,
     [id]
   );
@@ -101,7 +100,6 @@ aiProviders.post('/', async (c) => {
   const body = await c.req.json();
   const {
     name, provider_type, model, api_endpoint, api_key,
-    project_id, region, service_account_json,
     max_tokens, temperature, extra_config,
   } = body;
 
@@ -112,7 +110,7 @@ aiProviders.post('/', async (c) => {
     }, 400);
   }
 
-  const validTypes = ['vertex_ai', 'vertex_ai_key', 'openai', 'openai_responses', 'gemini', 'xai', 'mimo', 'anthropic', 'deepseek', 'groq', 'custom'];
+  const validTypes = ['vertex_ai_key', 'openai', 'openai_responses', 'gemini', 'xai', 'mimo', 'anthropic', 'deepseek', 'groq', 'custom'];
   if (!validTypes.includes(provider_type)) {
     return c.json({
       success: false,
@@ -124,13 +122,11 @@ aiProviders.post('/', async (c) => {
 
   await query(
     `INSERT INTO ai_providers (id, name, provider_type, model, api_endpoint, api_key,
-                                project_id, region, service_account_json,
                                 max_tokens, temperature, extra_config)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [
       id, name, provider_type, model, api_endpoint || null, api_key || null,
-      project_id || null, region || null, service_account_json || null,
-      max_tokens || 1024, temperature ?? 0.3,
+      max_tokens || 4096, temperature ?? 0.3,
       extra_config ? JSON.stringify(extra_config) : null,
     ]
   );
@@ -156,7 +152,6 @@ aiProviders.patch('/:id', async (c) => {
 
   const allowedFields = [
     'name', 'provider_type', 'model', 'api_endpoint', 'api_key',
-    'project_id', 'region', 'service_account_json',
     'max_tokens', 'temperature', 'extra_config',
   ];
   const updates: string[] = [];
@@ -186,7 +181,6 @@ aiProviders.patch('/:id', async (c) => {
             project_id, region, max_tokens, temperature,
             total_calls, total_errors, last_used_at, extra_config,
             CASE WHEN api_key IS NOT NULL AND api_key != '' THEN true ELSE false END as has_api_key,
-            CASE WHEN service_account_json IS NOT NULL AND service_account_json != '' THEN true ELSE false END as has_service_account,
             created_at, updated_at
      FROM ai_providers WHERE id = $1`,
     [id]

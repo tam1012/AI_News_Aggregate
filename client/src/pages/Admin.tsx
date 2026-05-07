@@ -9,9 +9,6 @@ type AiProviderFormData = {
   model: string;
   api_endpoint: string;
   api_key: string;
-  project_id: string;
-  region: string;
-  service_account_json: string;
   max_tokens: number;
   temperature: string;
   extra_config: string;
@@ -30,19 +27,28 @@ type SummaryQueueStatus = 'failed' | 'pending' | 'processing' | 'skipped' | 'don
 type QualityIssue = 'missing_tldr' | 'missing_summary_short' | 'missing_tags' | 'missing_hot_score' | 'short_summary';
 type FetchJobStatus = 'failed' | 'discovered' | 'fetching' | 'done';
 
-const AI_PROVIDER_TYPES = ['vertex_ai', 'vertex_ai_key', 'openai', 'openai_responses', 'gemini', 'xai', 'mimo', 'anthropic', 'deepseek', 'groq', 'custom'];
+const AI_PROVIDER_TYPES = [
+  { value: 'custom', label: 'OpenAI-compatible / 9router' },
+  { value: 'anthropic', label: 'Anthropic-compatible' },
+  { value: 'vertex_ai_key', label: 'Vertex AI API key' },
+  { value: 'openai_responses', label: 'OpenAI Responses' },
+];
 const AI_PROVIDER_PRESETS = [
+  {
+    label: '9router VPS',
+    data: { provider_type: 'custom', model: '', api_endpoint: 'http://host.docker.internal:20128/v1', max_tokens: 4096, temperature: '0.3', extra_config: '{\n  "format": "openai"\n}' },
+  },
+  {
+    label: 'Add OpenAI Compatible',
+    data: { provider_type: 'custom', model: '', api_endpoint: '', max_tokens: 4096, temperature: '0.3', extra_config: '{\n  "format": "openai"\n}' },
+  },
+  {
+    label: 'Add Anthropic Compatible',
+    data: { provider_type: 'anthropic', model: '', api_endpoint: '', max_tokens: 4096, temperature: '0.3', extra_config: '' },
+  },
   {
     label: 'Vertex AI API key',
     data: { provider_type: 'vertex_ai_key', model: 'gemini-3-flash-preview', api_endpoint: '', max_tokens: 4096, temperature: '0.3', extra_config: '' },
-  },
-  {
-    label: '9router OpenAI-compatible',
-    data: { provider_type: 'custom', model: 'vx/gemini-3-flash-preview', api_endpoint: 'http://host.docker.internal:20128/v1', max_tokens: 4096, temperature: '0.3', extra_config: '{\n  "format": "openai"\n}' },
-  },
-  {
-    label: 'OpenAI Responses',
-    data: { provider_type: 'openai_responses', model: 'gpt-5.4', api_endpoint: 'https://api.openai.com/v1/responses', max_tokens: 4096, temperature: '0.3', extra_config: '' },
   },
 ];
 const SUMMARY_QUEUE_STATUSES: { key: SummaryQueueStatus; label: string }[] = [
@@ -69,17 +75,22 @@ const QUALITY_ISSUES: { key: QualityIssue; label: string }[] = [
 function createEmptyAiProviderForm(): AiProviderFormData {
   return {
     name: '',
-    provider_type: 'openai',
+    provider_type: 'custom',
     model: '',
     api_endpoint: '',
     api_key: '',
-    project_id: '',
-    region: '',
-    service_account_json: '',
-    max_tokens: 1024,
+    max_tokens: 4096,
     temperature: '0.3',
-    extra_config: '',
+    extra_config: '{\n  "format": "openai"\n}',
   };
+}
+
+function aiProviderHelp(type: string): string {
+  if (type === 'custom') return 'Dùng cho 9router/OpenAI-compatible. 9router VPS chỉ cần model; custom ngoài cần API key + endpoint.';
+  if (type === 'anthropic') return 'Dùng API Anthropic Messages-compatible: nhập API key, model, endpoint nếu không dùng endpoint mặc định Anthropic.';
+  if (type === 'vertex_ai_key') return 'Dùng Vertex AI API key: nhập API key và model Gemini, để trống endpoint để dùng mặc định.';
+  if (type === 'openai_responses') return 'Dùng OpenAI Responses API: nhập OpenAI API key và model.';
+  return '';
 }
 
 function formatExtraConfig(value: unknown): string {
@@ -703,9 +714,7 @@ function AiProvidersTab() {
   const [formError, setFormError] = useState('');
   const [formData, setFormData] = useState<AiProviderFormData>(() => createEmptyAiProviderForm());
   const [hasExistingApiKey, setHasExistingApiKey] = useState(false);
-  const [hasExistingServiceAccount, setHasExistingServiceAccount] = useState(false);
   const [clearApiKey, setClearApiKey] = useState(false);
-  const [clearServiceAccount, setClearServiceAccount] = useState(false);
   const [savingRouting, setSavingRouting] = useState(false);
   const [routingMessage, setRoutingMessage] = useState('');
   const [primaryProviderId, setPrimaryProviderId] = useState('');
@@ -723,9 +732,7 @@ function AiProvidersTab() {
     setFormError('');
     setLoadingDetails(false);
     setHasExistingApiKey(false);
-    setHasExistingServiceAccount(false);
     setClearApiKey(false);
-    setClearServiceAccount(false);
   };
 
   const openCreateForm = () => {
@@ -733,9 +740,7 @@ function AiProvidersTab() {
     setEditingId(null);
     setFormError('');
     setHasExistingApiKey(false);
-    setHasExistingServiceAccount(false);
     setClearApiKey(false);
-    setClearServiceAccount(false);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -806,21 +811,16 @@ function AiProvidersTab() {
       const provider = result.data;
       setFormData({
         name: provider.name || '',
-        provider_type: provider.provider_type || 'openai',
+        provider_type: provider.provider_type || 'custom',
         model: provider.model || '',
         api_endpoint: provider.api_endpoint || '',
         api_key: '',
-        project_id: provider.project_id || '',
-        region: provider.region || '',
-        service_account_json: '',
-        max_tokens: provider.max_tokens || 1024,
+        max_tokens: provider.max_tokens || 4096,
         temperature: provider.temperature !== undefined && provider.temperature !== null ? String(provider.temperature) : '0.3',
         extra_config: formatExtraConfig(provider.extra_config),
       });
       setHasExistingApiKey(Boolean(provider.has_api_key));
-      setHasExistingServiceAccount(Boolean(provider.has_service_account));
       setClearApiKey(false);
-      setClearServiceAccount(false);
     } catch (err: any) {
       setFormError(err.message);
     } finally {
@@ -845,9 +845,7 @@ function AiProvidersTab() {
         provider_type: formData.provider_type,
         model: formData.model.trim(),
         api_endpoint: formData.api_endpoint.trim() || null,
-        project_id: formData.project_id.trim() || null,
-        region: formData.region.trim() || null,
-        max_tokens: Number(formData.max_tokens) || 1024,
+        max_tokens: Number(formData.max_tokens) || 4096,
         temperature: formData.temperature.trim() === '' ? 0.3 : Number(formData.temperature),
         extra_config: parsedExtraConfig,
       };
@@ -863,16 +861,9 @@ function AiProvidersTab() {
           payload.api_key = '';
         }
 
-        if (formData.service_account_json.trim()) {
-          payload.service_account_json = formData.service_account_json.trim();
-        } else if (clearServiceAccount) {
-          payload.service_account_json = '';
-        }
-
         await api.updateAiProvider(editingId, payload);
       } else {
         payload.api_key = formData.api_key.trim() || null;
-        payload.service_account_json = formData.service_account_json.trim() || null;
         await api.createAiProvider(payload);
       }
 
@@ -974,9 +965,12 @@ function AiProvidersTab() {
                   <label>Loại nhà cung cấp *</label>
                   <select value={formData.provider_type} onChange={(e) => setFormData({ ...formData, provider_type: e.target.value })}>
                     {AI_PROVIDER_TYPES.map(type => (
-                      <option key={type} value={type}>{type}</option>
+                      <option key={type.value} value={type.value}>{type.label}</option>
                     ))}
                   </select>
+                  <div style={{ marginTop: 6, fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+                    {aiProviderHelp(formData.provider_type)}
+                  </div>
                 </div>
               </div>
 
@@ -998,27 +992,6 @@ function AiProvidersTab() {
                     value={formData.api_endpoint}
                     placeholder="Để trống nếu dùng endpoint mặc định"
                     onChange={(e) => setFormData({ ...formData, api_endpoint: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="form-group">
-                  <label>Project ID</label>
-                  <input
-                    type="text"
-                    value={formData.project_id}
-                    placeholder="Dùng cho Vertex hoặc dịch vụ tương tự"
-                    onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Region</label>
-                  <input
-                    type="text"
-                    value={formData.region}
-                    placeholder="VD: us-central1"
-                    onChange={(e) => setFormData({ ...formData, region: e.target.value })}
                   />
                 </div>
               </div>
@@ -1057,36 +1030,13 @@ function AiProvidersTab() {
                   )}
                 </div>
                 <div className="form-group">
-                  <label>{editingId ? 'Service account JSON mới' : 'Service account JSON'}</label>
-                  <textarea
-                    rows={5}
-                    value={formData.service_account_json}
-                    placeholder={editingId ? 'Để trống để giữ nguyên service account hiện tại' : 'Dán JSON nếu dịch vụ cần'}
-                    onChange={(e) => {
-                      setFormData({ ...formData, service_account_json: e.target.value });
-                      if (e.target.value) setClearServiceAccount(false);
-                    }}
-                  />
-                  {editingId && hasExistingServiceAccount && (
-                    <div style={{ marginTop: 6, fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
-                      Nhà cung cấp này đang có service account JSON lưu sẵn.
-                    </div>
-                  )}
-                  {editingId && hasExistingServiceAccount && (
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: '0.82rem' }}>
-                      <input
-                        type="checkbox"
-                        checked={clearServiceAccount}
-                        onChange={(e) => {
-                          setClearServiceAccount(e.target.checked);
-                          if (e.target.checked) {
-                            setFormData({ ...formData, service_account_json: '' });
-                          }
-                        }}
-                      />
-                      Xóa service account hiện tại
-                    </label>
-                  )}
+                  <label>Cần điền</label>
+                  <div style={{ padding: '10px 12px', border: '1px solid var(--color-border-light)', borderRadius: 6, fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
+                    {formData.provider_type === 'custom' && '9router VPS: model. Custom ngoài: API key, model, API endpoint.'}
+                    {formData.provider_type === 'anthropic' && 'API key, model, API endpoint nếu không dùng endpoint mặc định.'}
+                    {formData.provider_type === 'vertex_ai_key' && 'Vertex AI API key và model Gemini.'}
+                    {formData.provider_type === 'openai_responses' && 'OpenAI API key và model Responses.'}
+                  </div>
                 </div>
               </div>
 
@@ -1097,7 +1047,7 @@ function AiProvidersTab() {
                     type="number"
                     min="1"
                     value={formData.max_tokens}
-                    onChange={(e) => setFormData({ ...formData, max_tokens: parseInt(e.target.value, 10) || 1024 })}
+                    onChange={(e) => setFormData({ ...formData, max_tokens: parseInt(e.target.value, 10) || 4096 })}
                   />
                 </div>
                 <div className="form-group">

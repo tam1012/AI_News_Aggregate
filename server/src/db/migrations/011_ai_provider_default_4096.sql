@@ -1,0 +1,1 @@
+ALTER TABLE ai_providers ALTER COLUMN max_tokens SET DEFAULT 4096;

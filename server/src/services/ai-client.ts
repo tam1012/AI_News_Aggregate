@@ -1,5 +1,4 @@
 import { query, getOne } from '../db/index.js';
-import crypto from 'crypto';
 
 interface AiProvider {
   id: string;
@@ -166,9 +165,6 @@ export async function callAiProvider(provider: AiProvider, prompt: string, overr
     };
 
     switch (finalProvider.provider_type) {
-      case 'vertex_ai':
-        result = await callVertexAi(finalProvider, prompt, timeoutMs);
-        break;
       case 'vertex_ai_key':
         result = await callVertexAiKey(finalProvider, prompt, timeoutMs);
         break;
@@ -218,47 +214,6 @@ export async function callAiProvider(provider: AiProvider, prompt: string, overr
 // ==========================================
 // VERTEX AI (Google Cloud)
 // ==========================================
-async function callVertexAi(provider: AiProvider, prompt: string, timeoutMs: number): Promise<string> {
-  if (!provider.project_id) throw new Error('Vertex AI requires project_id');
-  if (!provider.service_account_json) throw new Error('Vertex AI requires service_account_json');
-
-  const accessToken = await getGoogleAccessToken(provider.service_account_json);
-  const region = provider.region || 'us-central1';
-
-  const url = provider.api_endpoint ||
-    `https://${region}-aiplatform.googleapis.com/v1/projects/${provider.project_id}/locations/${region}/publishers/google/models/${provider.model}:generateContent`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: provider.temperature,
-        maxOutputTokens: provider.max_tokens,
-      },
-      safetySettings: [
-        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-      ]
-    }),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Vertex AI ${response.status}: ${errText.substring(0, 300)}`);
-  }
-
-  const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-}
-
 async function callVertexAiKey(provider: AiProvider, prompt: string, timeoutMs: number): Promise<string> {
   if (!provider.api_key) throw new Error('Vertex AI API key requires api_key');
 
@@ -499,45 +454,4 @@ async function callCustom(provider: AiProvider, prompt: string, timeoutMs: numbe
     return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
   return parseOpenAiResponse(response);
-}
-
-// ==========================================
-// Google Access Token helper (cho Vertex AI)
-// ==========================================
-async function getGoogleAccessToken(serviceAccountJson: string): Promise<string> {
-  const sa = JSON.parse(serviceAccountJson);
-  const now = Math.floor(Date.now() / 1000);
-
-  const header = { alg: 'RS256', typ: 'JWT' };
-  const payload = {
-    iss: sa.client_email,
-    scope: 'https://www.googleapis.com/auth/cloud-platform',
-    aud: 'https://oauth2.googleapis.com/token',
-    iat: now,
-    exp: now + 3600,
-  };
-
-  const headerB64 = Buffer.from(JSON.stringify(header)).toString('base64url');
-  const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const signInput = `${headerB64}.${payloadB64}`;
-
-  const sign = crypto.createSign('RSA-SHA256');
-  sign.update(signInput);
-  const signature = sign.sign(sa.private_key, 'base64url');
-
-  const jwt = `${signInput}.${signature}`;
-
-  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
-  });
-
-  if (!tokenRes.ok) {
-    const errText = await tokenRes.text();
-    throw new Error(`Google token exchange failed: ${errText.substring(0, 300)}`);
-  }
-
-  const tokenData = await tokenRes.json();
-  return tokenData.access_token;
 }
