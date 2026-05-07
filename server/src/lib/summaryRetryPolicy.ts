@@ -34,9 +34,9 @@ export function buildResetRetryableFailedSummariesSql(limit: number): SqlStateme
           WHERE id IN (
             SELECT id FROM articles
             WHERE summary_status = 'failed'
+              AND retry_count < $1
               AND (
-                retry_count < $1
-                OR lower(COALESCE(last_summary_error, '')) LIKE $3
+                lower(COALESCE(last_summary_error, '')) LIKE $3
                 OR lower(COALESCE(last_summary_error, '')) LIKE $4
               )
               AND updated_at < NOW() - INTERVAL '10 minutes'

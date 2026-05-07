@@ -420,10 +420,10 @@ export async function summarizePendingArticles(): Promise<{ processed: number; s
       await query(
         `UPDATE articles
          SET summary_status = 'failed',
-             retry_count = CASE WHEN $3 THEN retry_count ELSE retry_count + 1 END,
+             retry_count = retry_count + 1,
              last_summary_error = $2
          WHERE id = $1`,
-        [article.id, truncateSummaryError(err), isAiTimeout(err)]
+        [article.id, truncateSummaryError(err)]
       );
       failed++;
     }
