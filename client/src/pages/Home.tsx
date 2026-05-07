@@ -237,8 +237,10 @@ export function Home() {
   const [feedSort, setFeedSort] = useState<FeedSort>('latest');
   const [filterTag, setFilterTag] = useState<string>('');
   const [showFilter, setShowFilter] = useState(false);
+  const [showFeedControls, setShowFeedControls] = useState(false);
 
   // Drag-to-scroll for filters row on desktop
+  const filterControlRef = useRef<HTMLDivElement>(null);
   const filtersRowRef = useRef<HTMLDivElement>(null);
   const dragState = useRef({ isDown: false, startX: 0, scrollLeft: 0 });
   const handleFiltersDrag = useMemo(() => ({
@@ -351,6 +353,21 @@ export function Home() {
     if (!filterTag || popularTags.some(t => t.tag === filterTag)) return;
     setFilterTag('');
   }, [filterTag, popularTags]);
+
+  useEffect(() => {
+    if (!showFilter) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!filterControlRef.current?.contains(event.target as Node)) {
+        setShowFilter(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFilter]);
+
+  const readArticleSet = useMemo(() => new Set(readArticleIds), [readArticleIds]);
 
   const readerLoadingState = getReaderLoadingState({ isFeedLoading: loading, hasArticleDeepLink });
   const detailPaneVisible = shouldShowDetailPane({
@@ -595,77 +612,118 @@ export function Home() {
                   Bản tin
                 </button>
               </div>
-              <div className="feed-filter-control">
-                <button
-                  className={`icon-btn ${filterSource !== 'all' ? 'active' : ''}`}
-                  onClick={() => setShowFilter(!showFilter)}
-                  title="Lọc theo nguồn"
-                  style={{ width: 32, height: 32, fontSize: '0.85rem' }}
-                >
-                  ▽
-                </button>
-                {showFilter && (
-                  <div className="filter-dropdown">
+              <button
+                className={`icon-btn ${showFeedControls || filterSource !== 'all' || filterTag ? 'active' : ''}`}
+                onClick={() => setShowFeedControls(prev => !prev)}
+                title="Bộ lọc"
+                style={{ width: 32, height: 32, fontSize: '0.85rem' }}
+              >
+                ⚙
+              </button>
+              <button
+                className="icon-btn"
+                onClick={() => void handleManualRefresh()}
+                disabled={isRefreshing || loading}
+                title="Làm mới"
+                style={{ width: 32, height: 32, fontSize: '0.85rem' }}
+              >
+                ↻
+              </button>
+            </div>
+            {showFeedControls && (
+              <div className="toolbar-filters-panel">
+                <div className="toolbar-filters-row">
+                  <div className="sort-toggle">
                     <button
-                      className={`filter-option ${filterSource === 'all' ? 'active' : ''}`}
-                      onClick={() => { setFilterSource('all'); setShowFilter(false); }}
+                      className={`sort-btn ${feedSort === 'latest' ? 'active' : ''}`}
+                      onClick={() => setFeedSort('latest')}
+                      type="button"
                     >
-                      Tất cả nguồn
+                      Mới nhất
                     </button>
-                    {sources.map((s: any) => (
+                    <button
+                      className={`sort-btn ${feedSort === 'hot' ? 'active' : ''}`}
+                      onClick={() => setFeedSort('hot')}
+                      type="button"
+                    >
+                      Tin nóng
+                    </button>
+                  </div>
+                  <div className="feed-filter-control" ref={filterControlRef}>
+                    <button
+                      className={`btn btn-sm ${filterSource !== 'all' ? 'btn-active' : ''}`}
+                      onClick={() => setShowFilter(!showFilter)}
+                      type="button"
+                    >
+                      {filterSource === 'all' ? 'Nguồn' : sources.find((s: any) => s.id === filterSource)?.name.replace(/ - .*$/, '').replace(/ RSS.*$/, '')}
+                    </button>
+                    {showFilter && (
+                      <div className="filter-dropdown">
+                        <button
+                          className={`filter-option ${filterSource === 'all' ? 'active' : ''}`}
+                          onClick={() => { setFilterSource('all'); setShowFilter(false); }}
+                        >
+                          Tất cả nguồn
+                        </button>
+                        {sources.map((s: any) => (
+                          <button
+                            key={s.id}
+                            className={`filter-option ${filterSource === s.id ? 'active' : ''}`}
+                            onClick={() => { setFilterSource(s.id); setShowFilter(false); }}
+                          >
+                            {s.name.replace(/ - .*$/, '').replace(/ RSS.*$/, '')}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {availableDates.length > 0 && selectedDate && (
+                  <div className="date-navigator compact">
+                    <button
+                      className="icon-btn"
+                      onClick={handlePrevDate}
+                      disabled={availableDates.findIndex(d => d.date === selectedDate) === availableDates.length - 1}
+                    >
+                      ‹
+                    </button>
+                    <span className="date-navigator-label">
+                      {formatDateHeading(selectedDate)}
+                    </span>
+                    <button
+                      className="icon-btn"
+                      onClick={handleNextDate}
+                      disabled={availableDates.findIndex(d => d.date === selectedDate) === 0}
+                    >
+                      ›
+                    </button>
+                  </div>
+                )}
+                {popularTags.length > 0 && (
+                  <div className="topic-scroll" ref={filtersRowRef} {...handleFiltersDrag}>
+                    <button
+                      className={`topic-chip ${filterTag ? '' : 'active'}`}
+                      onClick={() => setFilterTag('')}
+                      type="button"
+                      title="Hiển thị tất cả chủ đề"
+                    >
+                      Tất cả
+                    </button>
+                    {popularTags.slice(0, 8).map(t => (
                       <button
-                        key={s.id}
-                        className={`filter-option ${filterSource === s.id ? 'active' : ''}`}
-                        onClick={() => { setFilterSource(s.id); setShowFilter(false); }}
+                        key={t.tag}
+                        className={`topic-chip ${filterTag === t.tag ? 'active' : ''}`}
+                        onClick={() => setFilterTag(filterTag === t.tag ? '' : t.tag)}
+                        type="button"
+                        title={`${t.count} bài`}
                       >
-                        {s.name.replace(/ - .*$/, '').replace(/ RSS.*$/, '')}
+                        {t.tag}
                       </button>
                     ))}
                   </div>
                 )}
               </div>
-            </div>
-            <div className="toolbar-filters-row">
-              <div className="sort-toggle">
-                <button
-                  className={`sort-btn ${feedSort === 'latest' ? 'active' : ''}`}
-                  onClick={() => setFeedSort('latest')}
-                  type="button"
-                >
-                  Mới nhất
-                </button>
-                <button
-                  className={`sort-btn ${feedSort === 'hot' ? 'active' : ''}`}
-                  onClick={() => setFeedSort('hot')}
-                  type="button"
-                >
-                  Tin nóng
-                </button>
-              </div>
-              {popularTags.length > 0 && (
-                <div className="topic-scroll" ref={filtersRowRef} {...handleFiltersDrag}>
-                  <button
-                    className={`topic-chip ${filterTag ? '' : 'active'}`}
-                    onClick={() => setFilterTag('')}
-                    type="button"
-                    title="Hiển thị tất cả chủ đề"
-                  >
-                    Tất cả
-                  </button>
-                  {popularTags.slice(0, 10).map(t => (
-                    <button
-                      key={t.tag}
-                      className={`topic-chip ${filterTag === t.tag ? 'active' : ''}`}
-                      onClick={() => setFilterTag(filterTag === t.tag ? '' : t.tag)}
-                      type="button"
-                      title={`${t.count} bài`}
-                    >
-                      {t.tag}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
           {/* Active filter indicator */}
@@ -683,34 +741,9 @@ export function Home() {
               </div>
             )}
 
-            <div className="feed-refresh-row">
-              <span>{isRefreshing ? 'Đang cập nhật...' : 'Kéo xuống hoặc bấm để cập nhật tin mới'}</span>
-              <button className="btn btn-sm" onClick={() => void handleManualRefresh()} disabled={isRefreshing || loading}>
-                {isRefreshing ? 'Đang tải' : 'Làm mới'}
-              </button>
-            </div>
-
-            {availableDates.length > 0 && selectedDate && (
-              <div className="date-navigator">
-                <button 
-                  className="icon-btn" 
-                  onClick={handlePrevDate} 
-                  disabled={availableDates.findIndex(d => d.date === selectedDate) === availableDates.length - 1}
-                  style={{ width: 28, height: 28, fontSize: '0.8rem' }}
-                >
-                  ‹
-                </button>
-                <span className="date-navigator-label">
-                  {formatDateHeading(selectedDate)}
-                </span>
-                <button 
-                  className="icon-btn" 
-                  onClick={handleNextDate}
-                  disabled={availableDates.findIndex(d => d.date === selectedDate) === 0}
-                  style={{ width: 28, height: 28, fontSize: '0.8rem' }}
-                >
-                  ›
-                </button>
+            {isRefreshing && (
+              <div className="feed-refresh-row">
+                Đang cập nhật tin mới...
               </div>
             )}
 
@@ -718,8 +751,8 @@ export function Home() {
               <FeedListSkeleton />
             ) : error ? (
               <div className="empty-state">
-                <p style={{ color: 'var(--color-error)' }}>Loi: {error}</p>
-                <button className="btn btn-primary" onClick={reload} style={{ marginTop: 12 }}>Thu lai</button>
+                <p style={{ color: 'var(--color-error)' }}>Lỗi: {error}</p>
+                <button className="btn btn-primary" onClick={reload} style={{ marginTop: 12 }}>Thử lại</button>
               </div>
             ) : articles.length === 0 ? (
               <div className="empty-state">
@@ -735,7 +768,7 @@ export function Home() {
                       key={article.id}
                       article={article}
                       isActive={selected?.id === article.id}
-                      isRead={readArticleIds.includes(article.id)}
+                      isRead={readArticleSet.has(article.id)}
                       onClick={() => handleSelectArticle(article)}
                     />
                   ))}
@@ -1009,6 +1042,13 @@ function ArticleDetail({
           </div>
 
           <h1 className="detail-title-editorial">{title}</h1>
+
+          {summaryParts.tldr && (
+            <div className="ai-tldr-box">
+              <div className="ai-tldr-header">Tóm tắt nhanh</div>
+              <p>{summaryParts.tldr}</p>
+            </div>
+          )}
 
           {article.image_url && (
             <img
