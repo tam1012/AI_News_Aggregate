@@ -1262,9 +1262,11 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 
 .container-fluid { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
-body.split-view-active .container-fluid {
-  max-width: calc(100vw - 300px);
-  padding: 0;
+@media (min-width: 900px) {
+  body.split-view-active .container-fluid {
+    max-width: calc(100vw - 300px);
+    padding: 0;
+  }
 }
 @media (min-width: 1400px) {
   .container-fluid { padding: 0 48px; }
