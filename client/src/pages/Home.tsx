@@ -238,7 +238,9 @@ export function Home() {
   const [filterTag, setFilterTag] = useState<string>('');
   const [showFilter, setShowFilter] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [showTagMenu, setShowTagMenu] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement>(null);
+  const tagMenuRef = useRef<HTMLDivElement>(null);
 
   // Drag-to-scroll for filters row on desktop
   const filterControlRef = useRef<HTMLDivElement>(null);
@@ -356,7 +358,7 @@ export function Home() {
   }, [filterTag, popularTags]);
 
   useEffect(() => {
-    if (!showFilter && !showSortMenu) return;
+    if (!showFilter && !showSortMenu && !showTagMenu) return;
 
     const handleClickOutside = (event: MouseEvent) => {
       if (showFilter && !filterControlRef.current?.contains(event.target as Node)) {
@@ -365,11 +367,14 @@ export function Home() {
       if (showSortMenu && !sortMenuRef.current?.contains(event.target as Node)) {
         setShowSortMenu(false);
       }
+      if (showTagMenu && !tagMenuRef.current?.contains(event.target as Node)) {
+        setShowTagMenu(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showFilter, showSortMenu]);
+  }, [showFilter, showSortMenu, showTagMenu]);
 
   const readArticleSet = useMemo(() => new Set(readArticleIds), [readArticleIds]);
 
@@ -700,25 +705,33 @@ export function Home() {
                 )}
               </div>
               {popularTags.length > 0 && (
-                <div className="topic-scroll" ref={filtersRowRef} {...handleFiltersDrag}>
+                <div className="compact-sort-control" ref={tagMenuRef}>
                   <button
-                    className={`topic-chip ${filterTag ? '' : 'active'}`}
-                    onClick={() => setFilterTag('')}
+                    className={`compact-sort-btn ${filterTag ? 'active' : ''} ${showTagMenu ? 'open' : ''}`}
+                    onClick={() => setShowTagMenu(prev => !prev)}
                     type="button"
                   >
-                    Tất cả
+                    {filterTag || 'Chủ đề'} ▾
                   </button>
-                  {popularTags.slice(0, 8).map(t => (
-                    <button
-                      key={t.tag}
-                      className={`topic-chip ${filterTag === t.tag ? 'active' : ''}`}
-                      onClick={() => setFilterTag(filterTag === t.tag ? '' : t.tag)}
-                      type="button"
-                      title={`${t.count} bài`}
-                    >
-                      {t.tag}
-                    </button>
-                  ))}
+                  {showTagMenu && (
+                    <div className="compact-sort-dropdown">
+                      <button
+                        className={`filter-option ${!filterTag ? 'active' : ''}`}
+                        onClick={() => { setFilterTag(''); setShowTagMenu(false); }}
+                      >
+                        Tất cả chủ đề
+                      </button>
+                      {popularTags.slice(0, 12).map(t => (
+                        <button
+                          key={t.tag}
+                          className={`filter-option ${filterTag === t.tag ? 'active' : ''}`}
+                          onClick={() => { setFilterTag(filterTag === t.tag ? '' : t.tag); setShowTagMenu(false); }}
+                        >
+                          {t.tag} ({t.count})
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
