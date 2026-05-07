@@ -1120,7 +1120,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
     align-items: stretch;
     height: calc(100vh - 61px); /* Full height minus header */
     margin: 0 auto;
-    width: calc(100vw - 32px);
+    width: 100%;
     max-width: none;
     border: 1px solid var(--color-border-light);
     border-top: none;
@@ -1262,8 +1262,13 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 
 .container-fluid { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+body.split-view-active .container-fluid {
+  max-width: min(1680px, calc(100vw - 32px));
+  padding: 0;
+}
 @media (min-width: 1400px) {
   .container-fluid { padding: 0 48px; }
+  body.split-view-active .container-fluid { padding: 0; }
 }
 @media (max-width: 899px) {
   .hidden-on-mobile {
