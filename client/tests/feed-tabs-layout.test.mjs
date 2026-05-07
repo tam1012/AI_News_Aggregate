@@ -40,7 +40,7 @@ test('split feed toolbar keeps compact tabs separate from the filter button on n
 test('desktop split view widens reader without changing feed column width', () => {
   const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
 
-  assert.match(css, /body\.split-view-active \.container-fluid\s*\{[\s\S]*max-width:\s*min\(1480px, calc\(100vw - 96px\)\)/);
+  assert.match(css, /body\.split-view-active \.container-fluid\s*\{[\s\S]*max-width:\s*calc\(100vw - 300px\)/);
   assert.match(css, /\.home-split-layout\s*\{[\s\S]*width:\s*100%/);
   assert.match(css, /\.split-left\s*\{[\s\S]*flex:\s*0 0 360px/);
   assert.match(css, /@media \(min-width:\s*1200px\)\s*\{[\s\S]*\.split-left\s*\{[\s\S]*flex:\s*0 0 400px/);
