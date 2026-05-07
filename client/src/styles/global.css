@@ -666,14 +666,13 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .detail-close:hover { background: var(--color-bg-hover); color: var(--color-text); }
 
 .detail-reading-nav {
-  position: sticky;
-  top: 8px;
+  position: absolute;
+  top: 16px;
+  right: 18px;
   z-index: 3;
-  float: right;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin: 0 54px 0 0;
 }
 .detail-reading-nav-btn {
   width: 32px;
@@ -737,9 +736,10 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   }
   .detail-reading-nav {
     position: sticky;
+    top: auto;
+    right: auto;
     bottom: 0;
     z-index: 6;
-    float: none;
     display: grid;
     grid-template-columns: minmax(72px, 1fr) minmax(96px, 1.05fr) minmax(72px, 1fr);
     gap: 10px;
