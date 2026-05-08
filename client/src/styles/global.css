@@ -600,7 +600,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 @media (max-width: 640px) {
   .feed-container { padding: 10px 0 28px; }
   .feed-item {
-    padding: 20px 0;
+    padding: 24px 0;
   }
   .feed-item-meta {
     gap: 8px;
@@ -1363,5 +1363,21 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   .split-feed-toolbar {
     border-bottom: 1px solid var(--color-border-light);
     padding-bottom: 8px;
+  }
+  /* Date nav — hero style on mobile */
+  .compact-date-nav {
+    gap: 4px;
+  }
+  .compact-date-btn {
+    width: 30px;
+    height: 30px;
+    font-size: 1rem;
+  }
+  .compact-date-label {
+    font-size: 0.92rem;
+    font-weight: 800;
+    color: var(--color-text);
+    min-width: 38px;
+    letter-spacing: -0.3px;
   }
 }

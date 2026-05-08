@@ -761,6 +761,8 @@ export function Home() {
               onNextArticle={handleNextArticle}
               hasPrevArticle={hasPrevArticle}
               hasNextArticle={hasNextArticle}
+              navIndex={selectedArticleIndex + 1}
+              navTotal={articles.length}
             />
           ) : hasArticleDeepLink && deepLinkLoading ? (
             <ArticleDetailSkeleton />
@@ -868,6 +870,8 @@ function ArticleDetail({
   onNextArticle,
   hasPrevArticle,
   hasNextArticle,
+  navIndex,
+  navTotal,
 }: {
   article: any;
   onClose: () => void;
@@ -875,6 +879,8 @@ function ArticleDetail({
   onNextArticle: () => void;
   hasPrevArticle: boolean;
   hasNextArticle: boolean;
+  navIndex: number;
+  navTotal: number;
 }) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -1038,7 +1044,7 @@ function ArticleDetail({
           <button className="detail-reading-nav-btn" onClick={onPrevArticle} disabled={!hasPrevArticle} title="Bài trước">
             ‹
           </button>
-          <span className="detail-reading-nav-status">Đọc tiếp</span>
+          <span className="detail-reading-nav-status">{navIndex} / {navTotal}</span>
           <button className="detail-reading-nav-btn" onClick={onNextArticle} disabled={!hasNextArticle} title="Bài sau">
             ›
           </button>
