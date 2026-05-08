@@ -119,50 +119,29 @@ function saveReadArticles(ids: string[]) {
 
 function ReadmeWelcome() {
   return (
-    <div className="card" style={{ padding: '40px', textAlign: 'center', marginTop: '20px' }}>
-      <h2 style={{ fontSize: '1.8rem', marginBottom: '16px', fontFamily: 'var(--font-heading)' }}>Chào mừng đến với SynthNews</h2>
-      <p style={{ color: 'var(--color-text-secondary)', marginBottom: '24px', fontSize: '1.1rem', lineHeight: '1.6' }}>
-        Hệ thống đọc tin tự động bằng Trí Tuệ Nhân Tạo.
+    <div className="card" style={{ padding: 'clamp(24px, 5vw, 40px)', textAlign: 'center', marginTop: '20px' }}>
+      <h2 style={{ fontSize: 'clamp(1.4rem, 4vw, 1.8rem)', marginBottom: '12px', fontFamily: 'var(--font-heading)' }}>SynthNews</h2>
+      <p style={{ color: 'var(--color-text-secondary)', marginBottom: '24px', fontSize: '1rem', lineHeight: '1.6' }}>
+        Hệ thống đọc tin tự động bằng AI — thu thập, tóm tắt và tổng hợp tin tức từ nhiều nguồn.
       </p>
 
-      <div style={{ textAlign: 'left', background: 'var(--color-bg)', padding: '24px', borderRadius: 'var(--radius)', fontSize: '0.95rem', lineHeight: '1.7' }}>
-        <h3 style={{ marginBottom: '12px' }}>Cách hoạt động:</h3>
-        <ul style={{ paddingLeft: '20px', marginBottom: '20px', color: 'var(--color-text-secondary)' }}>
-          <li><strong>Cào nguồn (mặc định mỗi 60 phút/source):</strong> Cứ 5 phút hệ thống kiểm tra các nguồn đến hạn theo <code>next_run_at</code>; nguồn mới mặc định 60 phút/lần, nguồn lỗi sẽ tự backoff tối đa 24 giờ.</li>
-          <li><strong>Fetch bài chi tiết (mỗi 5 phút):</strong> URL mới từ RSS, Reddit, VOZ hoặc GitHub Trending được đưa vào queue riêng rồi fetch nội dung chi tiết độc lập.</li>
-          <li><strong>Cào lại bình luận forum (mỗi 30 phút):</strong> Các bài Reddit và VOZ mới được cào lại tối đa 2 lần để cập nhật bình luận mới nhất.</li>
-          <li><strong>Tóm tắt AI (mỗi 10 phút + khi cần):</strong> AI đọc nội dung gốc và viết lại thành bản tóm tắt tiếng Việt; job retry cũng chạy mỗi 10 phút để mở kẹt lỗi tạm thời.</li>
-          <li><strong>Bản tin (mỗi 3 giờ, phút 30):</strong> Gom nhóm tin đã tóm tắt trong ngày thành một "Bản tin thời sự" duy nhất.</li>
-        </ul>
-
-        <h3 style={{ marginBottom: '12px' }}>Tính năng chính:</h3>
-        <ul style={{ paddingLeft: '20px', marginBottom: '20px', color: 'var(--color-text-secondary)' }}>
-          <li>Hỗ trợ nguồn RSS, web scraping, Reddit và VOZ forum.</li>
-          <li>Reddit sử dụng Puppeteer (Headless Chrome) để lách Cloudflare.</li>
-          <li>Tóm tắt bằng AI với prompt thích ứng theo loại bài viết.</li>
-          <li>Nút "Cào lại" thủ công cho Admin để cập nhật bình luận bất kỳ lúc nào.</li>
-          <li>Giao diện split view trên desktop, overlay trên mobile.</li>
-          <li>Lọc theo nguồn, điều hướng theo ngày, đánh dấu bài đã đọc.</li>
-          <li>Dark mode / Light mode.</li>
-        </ul>
-
-        <h3 style={{ marginBottom: '12px' }}>Hướng dẫn:</h3>
-        <ul style={{ paddingLeft: '20px', color: 'var(--color-text-secondary)' }}>
-          <li>Bấm vào bài viết bên trái để đọc chi tiết tóm tắt.</li>
-          <li>Chuyển sang tab <strong>Bản tin</strong> để đọc tổng hợp toàn bộ sự kiện trong ngày.</li>
-          <li>Chuyển ngày ở khung bên trái để xem lại tin cũ.</li>
+      <div style={{ textAlign: 'left', background: 'var(--color-bg)', padding: 'clamp(16px, 4vw, 24px)', borderRadius: 'var(--radius)', fontSize: '0.93rem', lineHeight: '1.7' }}>
+        <ul style={{ paddingLeft: '18px', margin: 0, color: 'var(--color-text-secondary)' }}>
+          <li style={{ marginBottom: '8px' }}>📰 Thu thập từ RSS, web, Reddit, VOZ, YouTube, GitHub Trending</li>
+          <li style={{ marginBottom: '8px' }}>🤖 AI tóm tắt tiếng Việt với prompt thích ứng theo loại bài</li>
+          <li style={{ marginBottom: '8px' }}>🛡️ Lọc tự động bài quảng cáo / khuyến mãi</li>
+          <li style={{ marginBottom: '8px' }}>📋 Bản tin tổng hợp tự động mỗi vài giờ</li>
+          <li>🌙 Dark mode, mobile-friendly, điều hướng bàn phím</li>
         </ul>
       </div>
 
-      <a
-        href="https://github.com/tam1012/SynthNews"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="btn btn-ghost"
-        style={{ marginTop: '20px' }}
-      >
-        GitHub Repository
-      </a>
+      <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', marginTop: '20px', lineHeight: '1.5' }}>
+        Chọn bài ở danh sách bên trái để đọc · Tab <strong>Bản tin</strong> để xem tổng hợp ngày
+      </p>
+
+      <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--color-border)', fontSize: '0.83rem', color: 'var(--color-text-muted)' }}>
+        Liên hệ: <a href="https://t.me/ThongThaiTuaThanTien" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)' }}>@ThongThaiTuaThanTien</a> trên Telegram
+      </div>
     </div>
   );
 }

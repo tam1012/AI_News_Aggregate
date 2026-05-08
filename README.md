@@ -43,35 +43,40 @@ Project này được thiết kế cho nhu cầu tự host cá nhân: ít thao t
 
 ### Đọc tin
 
-- Tab `News`, `VOZ`, `Reddit`, `YouTube`, `Bản tin`.
+- Tab `News`, `VOZ`, `Reddit`, `Bản tin`.
 - Split view trên desktop: danh sách bên trái, nội dung bên phải.
-- Detail overlay trên mobile, có gesture kéo xuống để đóng.
+- Bottom tab bar trên mobile, auto-hide toolbar khi cuộn, detail overlay có gesture kéo xuống để đóng.
 - Deep link bài viết qua `/article/:id`.
-- Lọc theo nguồn tin.
-- Điều hướng theo ngày có bài.
+- Lọc theo nguồn tin và chủ đề.
+- Điều hướng theo ngày có bài, điều hướng bàn phím giữa các bài.
 - Đánh dấu bài đã đọc bằng `localStorage`.
-- Thumbnail trong feed khi ảnh đủ hữu ích.
+- Thumbnail trong feed khi ảnh đủ hữu ích, image proxy server-side.
 - Copy link bài gốc và mở bài gốc.
-- Dark mode/light mode.
-- Chỉnh cỡ chữ bằng nút `Aa`.
+- Dark mode (GitHub palette) / light mode.
+- Chỉnh cỡ chữ qua Settings sheet.
 - Skeleton riêng cho feed và article detail, giúp hard refresh deep link không bị nhảy layout.
+- Lazy-load routes cho Sources và Admin.
 
 ### Thu thập và xử lý tin
 
 - RSS parser cho nguồn RSS chuẩn.
-- Web scraper dùng selector cấu hình theo từng source.
+- Web scraper với AI-learned selector profiles: tự học CSS selector từ HTML lần đầu, cache lại cho lần sau.
+- GitHub Trending scraper riêng.
 - Reddit scraper theo hướng RSS + enrich comment theo nhiều fallback.
 - VOZ scraper riêng: lấy RSS thread, mở thread thật, đọc nhiều page, chọn comment nổi bật.
 - YouTube scraper riêng: lấy video mới từ channel RSS/API, lấy transcript qua RapidAPI, lưu bài dạng `video`.
+- **Promo filter hybrid**: keyword filter chặn bài quảng cáo/deal ở bước discover (zero-cost), AI classify catch-all ở bước summarize.
+- Article fetch queue 2 pha: discover URL trước, fetch nội dung sau.
 - Forum rescrape cho Reddit/VOZ trong vài giờ đầu để cập nhật comment mới.
-- AI tóm tắt theo prompt riêng cho tin báo và forum.
-- TLDR được trích từ tag `<tldr>` trong output AI.
+- AI tóm tắt theo prompt riêng cho tin báo và forum, prompt config quản lý qua admin.
+- TLDR được trích từ structured JSON output hoặc tag `<tldr>` legacy.
 - Digest định kỳ gom các bài đã tóm tắt trong 24 giờ gần nhất.
+- Source auto-detect: nhập URL, backend tự nhận diện loại source (RSS, Reddit, VOZ, YouTube, GitHub, web).
 
 ### Quản trị
 
-- Trang `/sources` quản lý nguồn tin.
-- Trang `/admin` xem health, log gần đây, trigger job thủ công, quản lý AI provider và bài viết.
+- Trang `/sources` quản lý nguồn tin, auto-detect loại source.
+- Trang `/admin` xem health, source quality, forum stats, trigger job thủ công, quản lý AI provider, prompt config và bài viết.
 - Token admin lưu ở `localStorage` key `admin_token` khi nhập qua prompt.
 
 ## Kiến Trúc
@@ -142,13 +147,13 @@ DevOps:
 │   ├── public/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── Layout.tsx          # Layout chính
+│   │   │   ├── Layout.tsx          # Layout chính + bottom tabs mobile
 │   │   │   └── layoutShell.ts      # Helper xác định layout mode
 │   │   ├── hooks/useApi.ts         # Hook gọi API + cache
 │   │   ├── pages/
-│   │   │   ├── Home.tsx            # Trang đọc tin chính
-│   │   │   ├── Admin.tsx           # Trang quản trị
-│   │   │   ├── Sources.tsx         # Quản lý nguồn tin
+│   │   │   ├── Home.tsx            # Trang đọc tin chính (tất cả tabs)
+│   │   │   ├── Admin.tsx           # Trang quản trị (lazy-loaded)
+│   │   │   ├── Sources.tsx         # Quản lý nguồn tin (lazy-loaded)
 │   │   │   └── homeUx.ts           # UX helper cho Home
 │   │   ├── services/
 │   │   │   ├── api.ts              # API client
@@ -162,31 +167,58 @@ DevOps:
 │   │   ├── db/
 │   │   │   ├── index.ts            # PostgreSQL connection
 │   │   │   ├── migrate.ts          # Migration runner
-│   │   │   └── migrations/         # SQL migration files
-│   │   ├── jobs/scheduler.ts       # Cron scheduler
+│   │   │   └── migrations/         # 12 SQL migration files
+│   │   ├── jobs/scheduler.ts       # Cron scheduler + job lock
 │   │   ├── lib/
-│   │   │   ├── auth.ts             # Auth middleware
+│   │   │   ├── auth.ts             # Auth middleware + rate limit
+│   │   │   ├── promoFilter.ts      # Keyword + AI promo detection
+│   │   │   ├── promptConfig.ts     # Prompt config types
+│   │   │   ├── summaryOutput.ts    # AI output parser (JSON + legacy)
+│   │   │   ├── summaryRetryPolicy.ts # Retry/backoff logic
+│   │   │   ├── articleFilters.ts   # Article display filters
+│   │   │   ├── sourceResolver.ts   # Source auto-detect
+│   │   │   ├── imageProxy.ts       # Server-side image proxy
 │   │   │   ├── openGraph.ts        # OG meta injection
+│   │   │   ├── jobLock.ts          # Mutex cho cron jobs
+│   │   │   ├── rateLimit.ts        # Rate limiter
 │   │   │   ├── tldr.ts             # TL;DR extraction
 │   │   │   └── utils.ts
 │   │   ├── routes/
 │   │   │   ├── health.ts           # Health + manual trigger
 │   │   │   ├── articles.ts
-│   │   │   ├── sources.ts
+│   │   │   ├── sources.ts          # CRUD + scrape + detect
 │   │   │   ├── digests.ts
+│   │   │   ├── settings.ts         # Prompt config admin
+│   │   │   ├── image-proxy.ts      # /api/img/* proxy
 │   │   │   └── ai-providers.ts
 │   │   ├── services/
-│   │   │   ├── scraper.ts          # Scraping logic
-│   │   │   ├── summarizer.ts       # AI summarization
+│   │   │   ├── scraper.ts          # Scraping orchestrator
+│   │   │   ├── summarizer.ts       # AI summarization + promo classify
+│   │   │   ├── ai-client.ts        # Multi-provider AI client
+│   │   │   ├── article-fetch-queue.ts # 2-phase fetch queue
+│   │   │   ├── prompt-settings.ts  # Prompt config DB access
 │   │   │   ├── rescrape.ts         # Forum rescrape
-│   │   │   └── ai-client.ts        # Multi-provider AI client
+│   │   │   └── fetchers/
+│   │   │       ├── rss-fetcher.ts      # RSS + promo keyword filter
+│   │   │       ├── html-fetcher.ts     # Web scraper + promo filter
+│   │   │       ├── forum-fetchers.ts   # Reddit + VOZ logic
+│   │   │       ├── youtube-fetcher.ts  # YouTube channel + transcript
+│   │   │       ├── github-trending-fetcher.ts # GitHub Trending
+│   │   │       ├── selector-learning.ts  # AI selector learning
+│   │   │       ├── selector-profile.ts   # Selector cache/profile
+│   │   │       ├── article-writer.ts     # DB insert logic
+│   │   │       ├── registry.ts           # Fetcher routing
+│   │   │       └── types.ts
 │   │   └── index.ts                # Server entry point
 │   └── tests/
+├── scripts/                        # Local dev helpers
 ├── Dockerfile
 ├── docker-compose.yml
 ├── nginx-synthnews.conf            # Nginx config mẫu
 ├── reddit-proxy-worker.js          # Cloudflare Worker cho Reddit proxy
 ├── .env.example
+├── .env.local.example              # Local dev env template
+├── Caddyfile.local                 # Local HTTPS proxy
 ├── package.json
 └── README.md
 ```
@@ -255,11 +287,10 @@ Routes chính trong `client/src/router.tsx`:
 | `/` | Tab News |
 | `/voz` | Tab VOZ |
 | `/reddit` | Tab Reddit |
-| `/youtube` | Tab YouTube |
 | `/digest` | Tab Bản tin |
 | `/article/:articleId` | Deep link bài viết |
-| `/sources` | Quản lý nguồn |
-| `/admin` | Quản trị hệ thống |
+| `/sources` | Quản lý nguồn (lazy-loaded) |
+| `/admin` | Quản trị hệ thống (lazy-loaded) |
 
 Layout chính nằm ở `client/src/components/Layout.tsx`, dùng `container-fluid` cho các route đọc tin, admin và sources để tránh lỗi co layout khi hard refresh. `client/src/components/layoutShell.ts` là helper xác định route nào dùng layout nào.
 
@@ -301,6 +332,7 @@ Endpoint chính:
 | Health | `GET /api/health/live` | Public |
 | Health | `GET /api/health` | Admin |
 | Health | `POST /api/health/trigger/scrape` | Admin |
+| Health | `POST /api/health/trigger/fetch-articles` | Admin |
 | Health | `POST /api/health/trigger/summarize` | Admin |
 | Health | `POST /api/health/trigger/digest` | Admin |
 | Health | `POST /api/health/trigger/cleanup` | Admin |
@@ -310,8 +342,10 @@ Endpoint chính:
 | Sources | `PATCH /api/sources/:id` | Admin |
 | Sources | `DELETE /api/sources/:id` | Admin |
 | Sources | `POST /api/sources/:id/toggle` | Admin |
+| Sources | `POST /api/sources/:id/scrape` | Admin |
 | Sources | `POST /api/sources/detect` | Admin |
 | Articles | `GET /api/articles/dates` | Public |
+| Articles | `GET /api/articles/tags` | Public |
 | Articles | `GET /api/articles` | Public |
 | Articles | `GET /api/articles/:id` | Public |
 | Articles | `POST /api/articles/:id/reset-summary` | Admin |
@@ -321,6 +355,9 @@ Endpoint chính:
 | Digests | `GET /api/digests` | Public |
 | Digests | `GET /api/digests/:id` | Public |
 | Digests | `DELETE /api/digests/:id` | Admin |
+| Settings | `GET /api/settings/prompt-config` | Admin |
+| Settings | `PUT /api/settings/prompt-config` | Admin |
+| Image Proxy | `GET /api/img/*` | Public |
 | AI Providers | `/api/ai-providers/*` | Admin |
 
 Query đáng dùng:
@@ -334,21 +371,31 @@ curl "https://synthnews.site/api/digests/latest?lang=vi"
 
 ## Database
 
-Migrations hiện có:
+Migrations hiện có (12 file):
 
-- `server/src/db/migrations/001_initial.sql`
-- `server/src/db/migrations/002_ai_providers.sql`
-- `server/src/db/migrations/003_add_tldr.sql`
-- `server/src/db/migrations/004_add_rescraped_count.sql`
+- `001_initial.sql` — sources, articles, scrape_logs, digests, digest_items
+- `002_ai_providers.sql` — ai_providers, app_settings
+- `003_add_tldr.sql` — cột tldr cho articles
+- `004_add_rescraped_count.sql` — rescraped_count
+- `005_article_ai_metadata.sql` — ai metadata
+- `006_article_retry_state.sql` — retry state
+- `007_article_fetch_jobs.sql` — article_fetch_jobs queue
+- `008_allow_youtube_sources.sql` — YouTube source type
+- `009_default_source_interval_60.sql` — default interval 60 phút
+- `010_scrape_log_metadata.sql` — metadata JSONB cho scrape_logs
+- `011_ai_provider_default_4096.sql` — default max_tokens
+- `012_source_profiles.sql` — source_profiles cho AI-learned selectors
 
 Bảng chính:
 
 - `sources`
 - `articles`
+- `article_fetch_jobs`
 - `scrape_logs`
 - `digests`
 - `digest_items`
 - `ai_providers`
+- `source_profiles`
 - `app_settings`
 - `_migrations`
 
@@ -406,7 +453,7 @@ Biến quan trọng:
 | `ADMIN_TOKEN` | Token admin cho endpoint mutate/protected |
 | `PUBLIC_SITE_URL` | Base URL public để sinh Open Graph link |
 | `CORS_ORIGIN` | Origin được phép gọi API |
-| `SCRAPE_INTERVAL_HOURS` | Chu kỳ tạo digest và tránh trùng forum rescrape, mặc định `3` giờ; source discovery luôn check mỗi 5 phút |
+| `SCRAPE_INTERVAL_HOURS` | Chu kỳ tạo digest và tránh trùng forum rescrape, mặc định `1` giờ; source discovery luôn check mỗi 5 phút |
 | `MAX_ARTICLES_PER_SOURCE` | Số bài tối đa lấy từ mỗi source mỗi lượt |
 | `MAX_AI_CALLS_PER_RUN` | Số bài tối đa tóm tắt mỗi lượt |
 | `DIGEST_ARTICLE_LIMIT` | Số bài tối đa đưa vào mỗi bản tin, mặc định 100, trần 200 |
@@ -554,6 +601,9 @@ Root scripts hiện tại:
 | `npm run build` | Build client rồi server |
 | `npm run start` | Start server dist |
 | `npm run db:migrate` | Chạy migrations server |
+| `npm run local:build` | Build + copy client vào server/public |
+| `npm run local:prod` | Build + start bản production local |
+| `npm run local:start` | Start server từ `.env.local` |
 
 ## Deploy Production
 
