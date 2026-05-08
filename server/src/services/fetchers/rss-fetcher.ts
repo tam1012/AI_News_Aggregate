@@ -198,11 +198,19 @@ async function parseFeedItems(xml: string): Promise<RssParser.Item[]> {
   }
 }
 
+function normalizeFeedUrl(url: string): string {
+  if (url === 'https://www.theguardian.com/international/rss') {
+    return 'https://www.theguardian.com/world/rss';
+  }
+  return url;
+}
+
 export const rssFetcher: SourceFetcher = {
   key: 'rss',
   canHandle: (source) => source.type === 'rss',
   async discover(source) {
-    const sourceUrl = normalizePublicHttpUrl(source.url);
+    const normalizedUrl = normalizePublicHttpUrl(source.url);
+    const sourceUrl = normalizedUrl ? normalizeFeedUrl(normalizedUrl) : null;
     if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
 
     const response = await fetch(sourceUrl, {
