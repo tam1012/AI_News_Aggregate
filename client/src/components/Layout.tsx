@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSettings } from '../hooks/useApi';
 import { usesFluidShell } from './layoutShell';
 
@@ -13,6 +13,8 @@ export function Layout() {
   const shellClassName = usesFluidShell(location.pathname) ? 'container-fluid' : 'container';
   const [hasAdminToken, setHasAdminToken] = useState(false);
   const [showTextMenu, setShowTextMenu] = useState(false);
+  const [showSettingsSheet, setShowSettingsSheet] = useState(false);
+  const sheetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -21,6 +23,38 @@ export function Layout() {
     window.addEventListener('focus', syncToken);
     return () => window.removeEventListener('focus', syncToken);
   }, []);
+
+  // Close bottom sheet on click outside
+  useEffect(() => {
+    if (!showSettingsSheet) return;
+    const handleClick = (e: MouseEvent) => {
+      if (sheetRef.current && !sheetRef.current.contains(e.target as Node)) {
+        setShowSettingsSheet(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showSettingsSheet]);
+
+  // Lock body scroll when settings sheet is open (mobile-safe)
+  useEffect(() => {
+    if (showSettingsSheet) {
+      const scrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.left = '0';
+      document.body.style.right = '0';
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.left = '';
+        document.body.style.right = '';
+        document.body.style.overflow = '';
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [showSettingsSheet]);
 
   const showAdminLinks = hasAdminToken || isAdmin || isSources;
 
@@ -56,7 +90,9 @@ export function Layout() {
                 ⚙️
               </NavLink>
             ))}
-            <div className="text-settings-control">
+
+            {/* Desktop: inline controls */}
+            <div className="text-settings-control desktop-only">
               <button
                 className="font-size-btn"
                 onClick={() => setShowTextMenu((value) => !value)}
@@ -92,15 +128,83 @@ export function Layout() {
               )}
             </div>
             <button
-              className="icon-btn"
+              className="icon-btn desktop-only"
               onClick={toggleTheme}
               title={theme === 'light' ? 'Chế độ tối' : 'Chế độ sáng'}
             >
               {theme === 'light' ? '🌙' : '☀️'}
             </button>
+
+            {/* Mobile: single settings icon → bottom sheet */}
+            <button
+              className="icon-btn mobile-only"
+              onClick={() => setShowSettingsSheet(true)}
+              title="Cài đặt"
+            >
+              ⚙️
+            </button>
           </div>
         </div>
       </header>
+
+      {/* Settings Bottom Sheet (mobile) */}
+      {showSettingsSheet && (
+        <div className="settings-sheet-overlay" onClick={() => setShowSettingsSheet(false)}>
+          <div
+            className="settings-sheet"
+            ref={sheetRef}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="settings-sheet-handle" />
+            <h3 className="settings-sheet-title">Cài đặt</h3>
+
+            <div className="settings-sheet-row">
+              <span>Giao diện</span>
+              <div className="settings-sheet-toggle">
+                <button
+                  className={`settings-toggle-btn ${theme === 'light' ? 'active' : ''}`}
+                  onClick={() => { if (theme !== 'light') toggleTheme(); }}
+                >☀️</button>
+                <button
+                  className={`settings-toggle-btn ${theme === 'dark' ? 'active' : ''}`}
+                  onClick={() => { if (theme !== 'dark') toggleTheme(); }}
+                >🌙</button>
+              </div>
+            </div>
+
+            <div className="settings-sheet-row">
+              <span>Cỡ chữ</span>
+              <button className="settings-sheet-cycle" onClick={cycleFontSize}>
+                {fontSize}px
+              </button>
+            </div>
+
+            <div className="settings-sheet-section">
+              <div className="settings-sheet-label">Font chữ</div>
+              <div className="settings-sheet-fonts">
+                {fontOptions.map((option) => (
+                  <button
+                    key={option.key}
+                    className={`settings-sheet-font ${fontFamily === option.key ? 'active' : ''}`}
+                    onClick={() => {
+                      setFontFamily(option.key);
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              className="settings-sheet-close"
+              onClick={() => setShowSettingsSheet(false)}
+            >
+              Xong
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className={shellClassName}>
         <Outlet />

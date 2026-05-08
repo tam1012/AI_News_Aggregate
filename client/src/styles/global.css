@@ -83,6 +83,20 @@ body {
   transition: background 0.3s, color 0.3s;
 }
 
+/* Edge glow effect for depth */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+[data-theme="dark"] body::before {
+  background:
+    radial-gradient(ellipse at top left, rgba(30, 58, 110, 0.12) 0%, transparent 45%),
+    radial-gradient(ellipse at bottom right, rgba(30, 58, 110, 0.08) 0%, transparent 45%);
+}
+
 a { color: var(--color-accent); text-decoration: none; }
 a:hover { color: var(--color-accent-hover); }
 button { cursor: pointer; font-family: inherit; font-size: inherit; }
@@ -218,6 +232,18 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   background: color-mix(in srgb, var(--color-bg) 92%, transparent);
   padding-bottom: 6px;
   backdrop-filter: blur(14px);
+  transition: transform 0.3s ease, opacity 0.25s ease;
+}
+.split-feed-toolbar.toolbar-hidden .toolbar-compact-row {
+  max-height: 0;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.2s ease;
+}
+.toolbar-compact-row {
+  max-height: 60px;
+  transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.2s ease;
 }
 .toolbar-tabs-row {
   display: flex; align-items: center; gap: 6px;
@@ -1285,6 +1311,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
     top: calc(61px + var(--safe-top));
     margin: 0 -16px;
     padding: 10px 14px 8px;
+    backdrop-filter: none; /* MUST remove — creates containing block that breaks position:fixed on children */
+    background: var(--color-bg); /* solid bg since no blur */
   }
 
   .feed-tabs {
@@ -1354,11 +1382,25 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 /* ===== Mobile Bottom Tab Bar (NewsDigest style) ===== */
 @media (max-width: 899px) {
   .split-feed-toolbar .toolbar-tabs-row {
-    justify-content: flex-start;
-    gap: 8px;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    background: color-mix(in srgb, var(--color-bg) 92%, transparent);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid var(--color-border);
+    padding: 10px 20px calc(10px + env(safe-area-inset-bottom, 0px));
+    justify-content: center;
+    gap: 4px;
+  }
+  .split-feed-toolbar .toolbar-tabs-row .icon-btn {
+    display: none; /* Hide refresh button in bottom bar */
   }
   .split-feed-toolbar .toolbar-compact-row {
     padding: 8px 0 4px;
+    backdrop-filter: blur(14px);
+    background: color-mix(in srgb, var(--color-bg) 92%, transparent);
   }
   .split-feed-toolbar {
     border-bottom: 1px solid var(--color-border-light);
@@ -1380,4 +1422,135 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
     min-width: 38px;
     letter-spacing: -0.3px;
   }
+  /* Feed bottom padding for tab bar clearance */
+  .feed-container {
+    padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* ===== Responsive visibility helpers ===== */
+.desktop-only { display: inherit; }
+.mobile-only { display: none !important; }
+@media (max-width: 899px) {
+  .desktop-only { display: none !important; }
+  .mobile-only { display: inline-flex !important; }
+}
+
+/* ===== Settings Bottom Sheet ===== */
+.settings-sheet-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--color-bg-overlay);
+  z-index: 9999;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+.settings-sheet {
+  background: var(--color-bg-card);
+  border-radius: 20px 20px 0 0;
+  padding: 12px 24px calc(28px + env(safe-area-inset-bottom, 0px));
+  width: 100%;
+  max-width: 480px;
+  animation: slideUp 0.3s ease;
+}
+.settings-sheet-handle {
+  width: 40px; height: 4px;
+  background: var(--color-text-muted);
+  border-radius: 4px;
+  margin: 0 auto 16px;
+  opacity: 0.4;
+}
+.settings-sheet-title {
+  font-size: 1.1rem; font-weight: 700;
+  text-align: center;
+  margin-bottom: 24px;
+  color: var(--color-text);
+}
+.settings-sheet-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--color-border-light);
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+.settings-sheet-toggle {
+  display: flex; gap: 4px;
+  background: var(--color-bg-hover);
+  border-radius: 999px;
+  padding: 3px;
+}
+.settings-toggle-btn {
+  width: 40px; height: 34px;
+  border: none; border-radius: 999px;
+  background: transparent;
+  font-size: 1rem; cursor: pointer;
+  transition: all 0.15s;
+}
+.settings-toggle-btn.active {
+  background: var(--color-bg-card);
+  box-shadow: 0 1px 4px var(--color-shadow);
+}
+.settings-sheet-cycle {
+  padding: 6px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+  font-size: 0.9rem; font-weight: 700;
+  cursor: pointer; transition: all 0.15s;
+}
+.settings-sheet-cycle:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.settings-sheet-section { padding: 14px 0; }
+.settings-sheet-label {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  margin-bottom: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.settings-sheet-fonts {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.settings-sheet-font {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.88rem; cursor: pointer;
+  transition: all 0.15s;
+}
+.settings-sheet-font.active {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+.settings-sheet-close {
+  display: block; width: 100%;
+  margin-top: 20px; padding: 14px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+  font-size: 1rem; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+.settings-sheet-close:hover {
+  background: var(--color-accent); color: #fff;
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

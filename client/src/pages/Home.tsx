@@ -232,6 +232,8 @@ export function Home() {
   const [deepLinkLoading, setDeepLinkLoading] = useState(hasArticleDeepLink);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [toolbarHidden, setToolbarHidden] = useState(false);
+  const lastScrollY = useRef(0);
   const [articlePages, setArticlePages] = useState<any[]>([]);
   const [articlePage, setArticlePage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -436,9 +438,25 @@ export function Home() {
   }, []);
 
   useEffect(() => {
+    const isMobile = () => window.matchMedia('(max-width: 899px)').matches;
+
     const updateScrollTopState = () => {
       const paneScrollY = splitLeftRef.current?.scrollTop || 0;
-      setShowScrollTop(shouldShowScrollTopButton(Math.max(window.scrollY, paneScrollY), detailPaneVisible));
+      const currentY = Math.max(window.scrollY, paneScrollY);
+      setShowScrollTop(shouldShowScrollTopButton(currentY, detailPaneVisible));
+
+      // Auto-hide toolbar compact row on mobile (skip digest — no compact row)
+      if (isMobile() && tab !== 'digest') {
+        const delta = currentY - lastScrollY.current;
+        if (delta > 8 && currentY > 80) {
+          setToolbarHidden(true);
+        } else if (delta < -8) {
+          setToolbarHidden(false);
+        }
+        lastScrollY.current = currentY;
+      } else {
+        setToolbarHidden(false);
+      }
     };
 
     updateScrollTopState();
@@ -449,7 +467,7 @@ export function Home() {
       window.removeEventListener('scroll', updateScrollTopState);
       splitLeft?.removeEventListener('scroll', updateScrollTopState);
     };
-  }, [detailPaneVisible]);
+  }, [detailPaneVisible, tab]);
 
   useEffect(() => {
     saveReadArticles(readArticleIds);
@@ -559,7 +577,7 @@ export function Home() {
       <div className="home-split-layout">
         <div className="split-left" ref={splitLeftRef}>
           {/* Tab bar — Row 1 */}
-          <div className="split-feed-toolbar">
+          <div className={`split-feed-toolbar ${toolbarHidden ? 'toolbar-hidden' : ''}`}>
             <div className="toolbar-tabs-row">
               <div className="feed-tabs">
                 {(['news', 'voz', 'reddit'] as const).map(t => (
