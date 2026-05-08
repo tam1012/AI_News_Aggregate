@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 import { normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
+import { matchPromoKeyword } from '../../lib/promoFilter.js';
 import { BROWSER_UA } from './http-utils.js';
 import { insertArticleIfNew } from './article-writer.js';
 import { SourceFetcher } from './types.js';
@@ -175,7 +176,7 @@ export const htmlFetcher: SourceFetcher = {
     };
   },
   async fetch(source) {
-    const result = { itemsFound: 0, itemsInserted: 0, errors: [] as string[] };
+    const result = { itemsFound: 0, itemsInserted: 0, errors: [] as string[], metadata: {} as Record<string, unknown> };
     const config = source.parser_config;
 
     if (!config || !config.articleLinkSelector) {
@@ -186,7 +187,24 @@ export const htmlFetcher: SourceFetcher = {
     try {
       const discovered = await htmlFetcher.discover!(source);
       result.itemsFound = discovered.length;
+
+      // Layer 1: keyword promo filter
+      const filtered: typeof discovered = [];
+      let promoSkipped = 0;
       for (const item of discovered) {
+        const matchedKeyword = matchPromoKeyword(item.title);
+        if (matchedKeyword) {
+          promoSkipped++;
+          console.log(`[promo-filter] Skipped "${item.title}" (matched: "${matchedKeyword}")`);
+          continue;
+        }
+        filtered.push(item);
+      }
+      if (promoSkipped > 0) {
+        result.metadata.promoSkipped = promoSkipped;
+      }
+
+      for (const item of filtered) {
         try {
           const articleInput = await htmlFetcher.fetchArticle!({
             id: '',

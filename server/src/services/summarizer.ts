@@ -4,6 +4,7 @@ import { normalizeTldr } from '../lib/tldr.js';
 import { PromptConfig } from '../lib/promptConfig.js';
 import { truncateSummaryError } from '../lib/summaryRetryPolicy.js';
 import { ParsedSummaryOutput, parseAiSummaryOutput } from '../lib/summaryOutput.js';
+import { isPromoTitle, buildPromoClassifyPrompt, isPromoClassification } from '../lib/promoFilter.js';
 import { callAi } from './ai-client.js';
 import { getPromptConfig } from './prompt-settings.js';
 
@@ -159,6 +160,30 @@ export async function summarizeArticle(article: ArticleForSummary, promptConfig?
 
   if (!isForum && content.length < 500) {
     throw new SummarySkippedError(`Skipped: source content too short (${content.length} characters)`);
+  }
+
+  // Layer 2: AI promo classify — catch deal articles that slipped past keyword filter
+  if (!isForum) {
+    // Quick keyword re-check (in case article entered DB from a non-RSS source)
+    if (isPromoTitle(article.title)) {
+      console.log(`[promo-filter] AI-layer keyword skip: "${article.title}"`);
+      throw new SummarySkippedError('Skipped: promotional/deal article (keyword match at summarize)');
+    }
+
+    // Short AI classify — very cheap prompt, max 5 output tokens
+    try {
+      const classifyPrompt = buildPromoClassifyPrompt(article.title, content);
+      const classification = await callAi(classifyPrompt, { max_tokens: 5, timeoutMs: 15000 });
+      if (isPromoClassification(classification)) {
+        console.log(`[promo-filter] AI classified as promo: "${article.title}"`);
+        throw new SummarySkippedError('Skipped: promotional/deal article (AI classification)');
+      }
+    } catch (err: any) {
+      // If classify itself throws SummarySkippedError, re-throw it
+      if (err instanceof SummarySkippedError) throw err;
+      // Otherwise (AI timeout, API error) — let the article through, don't block
+      console.warn(`[promo-filter] AI classify failed for "${article.title}", proceeding: ${err.message}`);
+    }
   }
 
   const prompt = isForum

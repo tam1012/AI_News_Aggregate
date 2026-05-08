@@ -2,6 +2,7 @@ import RssParser from 'rss-parser';
 import * as cheerio from 'cheerio';
 import { decodeHTML } from 'entities';
 import { normalizePublicHttpUrl, truncate } from '../../lib/utils.js';
+import { matchPromoKeyword } from '../../lib/promoFilter.js';
 import { BROWSER_UA } from './http-utils.js';
 import { insertArticleIfNew } from './article-writer.js';
 import { SourceFetcher } from './types.js';
@@ -289,12 +290,29 @@ export const rssFetcher: SourceFetcher = {
     };
   },
   async fetch(source) {
-    const result = { itemsFound: 0, itemsInserted: 0, errors: [] as string[] };
+    const result = { itemsFound: 0, itemsInserted: 0, errors: [] as string[], metadata: {} as Record<string, unknown> };
 
     try {
       const discovered = await rssFetcher.discover!(source);
       result.itemsFound = discovered.length;
+
+      // Layer 1: keyword promo filter — drop deal/sale articles before DB insert
+      const filtered: typeof discovered = [];
+      let promoSkipped = 0;
       for (const item of discovered) {
+        const matchedKeyword = matchPromoKeyword(item.title);
+        if (matchedKeyword) {
+          promoSkipped++;
+          console.log(`[promo-filter] Skipped "${item.title}" (matched: "${matchedKeyword}")`);
+          continue;
+        }
+        filtered.push(item);
+      }
+      if (promoSkipped > 0) {
+        result.metadata.promoSkipped = promoSkipped;
+      }
+
+      for (const item of filtered) {
         const articleInput = await rssFetcher.fetchArticle!({
           id: '',
           source_id: source.id,
