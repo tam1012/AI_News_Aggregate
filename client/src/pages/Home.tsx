@@ -1050,18 +1050,69 @@ function ArticleDetail({
 
 /* ── Digest Tab ── */
 function DigestTab() {
-  const { data: raw, loading, error } = useFetchRaw(
-    () => api.getLatestDigest('vi'), []
+  const [selectedDigestId, setSelectedDigestId] = useState<string | null>(null);
+  const { data: digestListRaw, loading: listLoading, error: listError } = useFetchRaw(
+    () => api.getDigests(1), []
   );
-  const digest = (raw as any)?.data;
+  const digestList = (digestListRaw as any)?.data || [];
+  const activeDigestId = selectedDigestId || digestList[0]?.id || null;
+  const activeDigestIndex = digestList.findIndex((item: any) => item.id === activeDigestId);
+  const { data: digestRaw, loading: digestLoading, error: digestError } = useFetchRaw(
+    () => activeDigestId ? api.getDigest(activeDigestId) : Promise.resolve({ data: null }),
+    [activeDigestId]
+  );
+  const digest = (digestRaw as any)?.data;
+  const loading = listLoading || digestLoading;
+  const error = listError || digestError;
 
-  if (loading) return <div className="loading" style={{ padding: 40 }}>Đang tải bản tin...</div>;
+  const selectPrevDigest = () => {
+    if (activeDigestIndex < digestList.length - 1) setSelectedDigestId(digestList[activeDigestIndex + 1].id);
+  };
+
+  const selectNextDigest = () => {
+    if (activeDigestIndex > 0) setSelectedDigestId(digestList[activeDigestIndex - 1].id);
+  };
+
+  if (loading && !digest) return <div className="loading" style={{ padding: 40 }}>Đang tải bản tin...</div>;
   if (error) return <div className="empty-state"><p>Chưa có bản tin tổng hợp.</p></div>;
   if (!digest) return <div className="empty-state"><p>Chưa có bản tin tổng hợp nào.</p></div>;
 
   return (
     <div className="feed-container digest-container">
+      <div className="digest-history-nav">
+        <button
+          className="compact-date-btn digest-history-btn"
+          onClick={selectPrevDigest}
+          disabled={activeDigestIndex < 0 || activeDigestIndex === digestList.length - 1}
+          title="Bản tin cũ hơn"
+        >
+          ‹
+        </button>
+        <select
+          className="digest-history-select"
+          value={activeDigestId || ''}
+          onChange={(event) => setSelectedDigestId(event.target.value)}
+          aria-label="Chọn bản tin"
+        >
+          {digestList.map((item: any) => (
+            <option key={item.id} value={item.id}>
+              {formatDateHeading(item.digest_date)} · {formatTime(item.created_at)} · {item.article_count} tin
+            </option>
+          ))}
+        </select>
+        <button
+          className="compact-date-btn digest-history-btn"
+          onClick={selectNextDigest}
+          disabled={activeDigestIndex <= 0}
+          title="Bản tin mới hơn"
+        >
+          ›
+        </button>
+      </div>
       <h2 className="feed-date-heading" style={{ paddingTop: 0 }}>{digest.title || `Bản tin ${digest.digest_date}`}</h2>
+      <div className="digest-meta">
+        {formatDateHeading(digest.digest_date)} · {formatTime(digest.created_at)} · {digest.article_count} tin
+      </div>
       <div className="digest-content">
         <Suspense fallback={<div className="loading">Đang tải bản tin...</div>}>
           <ReactMarkdown
