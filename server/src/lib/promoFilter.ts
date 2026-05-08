@@ -22,7 +22,8 @@ const PROMO_TITLE_PATTERNS: RegExp[] = [
   /\bsave up to \d+/i,
 
   // Deal / coupon language — allow words between "best/top/..." and "deals"
-  /\b(best|top|daily|today'?s|this week'?s)\s+(\w+\s+)?deal[s]?\b/i,
+  /\b(best|top|daily|today'?s|this week'?s)\s+[a-z0-9][a-z0-9 -]{0,40}\s+deal[s]?\b/i,
+  /\bdeal[s]?\s+(of the day|under \$\d+|for less|on sale)\b/i,
   /\b(coupon|promo code|discount code|voucher)\b/i,
   /\b(clearance|doorbuster)\b/i,
 
@@ -56,6 +57,17 @@ export function matchPromoKeyword(title: string): string | null {
  */
 export function isPromoTitle(title: string): boolean {
   return matchPromoKeyword(title) !== null;
+}
+
+const PROMO_CLASSIFY_HINTS: RegExp[] = [
+  /\b(deal[s]?|sale|discount|coupon|voucher|promo code|price drop|price cut|lowest price|all[- ]time low)\b/i,
+  /\b(save|off)\b.*(?:\$|\d+%|\d+ percent)/i,
+  /(?:^|\s)(giảm\s*giá|khuyến\s*m[ãạ]i|mua ngay|giá rẻ|ưu đãi)(?:\s|$)/i,
+];
+
+export function shouldRunPromoClassification(title: string, excerpt: string): boolean {
+  const text = `${title} ${excerpt.substring(0, 400)}`;
+  return PROMO_CLASSIFY_HINTS.some((pattern) => pattern.test(text));
 }
 
 // ─── AI classify prompt ──────────────────────────────────────────────────────
