@@ -33,7 +33,7 @@ Project này được thiết kế cho nhu cầu tự host cá nhân: ít thao t
 - Production chạy bằng `docker compose up -d --build`.
 - Docker expose app nội bộ tại `127.0.0.1:3001`, Nginx reverse proxy ra HTTPS.
 - Backend serve luôn frontend build từ `server/public`, đồng thời expose API dưới `/api/*`.
-- Deep link đang có route thật trong SPA: `/article/:articleId`, `/voz`, `/reddit`, `/youtube`, `/digest`.
+- Deep link đang có route thật trong SPA: `/article/:articleId`, `/voz`, `/reddit`, `/digest`. YouTube hiện là source/content type, chưa có tab route riêng.
 - `/article/:id` có Open Graph meta server-side khi chạy production build, dùng `PUBLIC_SITE_URL` để sinh URL chia sẻ.
 - Static assets trong `/assets/*` có `Cache-Control: public, max-age=31536000, immutable`.
 - API/static text được nén bởi Hono `compress()`, phía Nginx cũng bật gzip.
@@ -157,7 +157,8 @@ DevOps:
 │   │   │   └── homeUx.ts           # UX helper cho Home
 │   │   ├── services/
 │   │   │   ├── api.ts              # API client
-│   │   │   └── apiCache.ts         # Cache policy
+│   │   │   ├── apiCache.ts         # In-memory cache policy
+│   │   │   └── persistentCache.ts  # localStorage fallback cache
 │   │   ├── styles/global.css       # Toàn bộ CSS
 │   │   ├── main.tsx
 │   │   └── router.tsx
@@ -604,6 +605,7 @@ Root scripts hiện tại:
 | `npm run local:build` | Build + copy client vào server/public |
 | `npm run local:prod` | Build + start bản production local |
 | `npm run local:start` | Start server từ `.env.local` |
+| `npm run local:check-hosts` | Kiểm tra hosts local cho `synthnews.local` |
 
 ## Deploy Production
 
@@ -611,7 +613,7 @@ Trên VPS:
 
 ```bash
 cd /home/ubuntu/newstamhv
-git pull origin main
+git pull --ff-only origin main
 docker compose up -d --build
 docker compose ps
 docker compose logs -f app
@@ -696,11 +698,12 @@ Các bước chính:
 
 - SSH vào VPS bằng `appleboy/ssh-action`.
 - `cd /home/ubuntu/newstamhv`
-- `git pull origin main`
+- `git pull --ff-only origin main`
+- export optional secrets `RAPIDAPI_KEY`, `YOUTUBE_TRANSCRIPT_RAPIDAPI_KEY`, `YOUTUBE_API_KEY` nếu có
 - `docker compose up -d --build`
 - smoke test local API `127.0.0.1:3001`
 - smoke test frontend bằng Puppeteer trong app container
-- smoke test public qua domain HTTPS
+- smoke test public health và articles qua `https://synthnews.site`
 - `docker compose ps`
 
 Workflow cần 3 secrets trong repo GitHub (Settings → Secrets → Actions):

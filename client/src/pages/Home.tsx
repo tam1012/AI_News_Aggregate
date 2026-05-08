@@ -119,29 +119,23 @@ function saveReadArticles(ids: string[]) {
 
 function ReadmeWelcome() {
   return (
-    <div className="card" style={{ padding: 'clamp(24px, 5vw, 40px)', textAlign: 'center', marginTop: '20px' }}>
-      <h2 style={{ fontSize: 'clamp(1.4rem, 4vw, 1.8rem)', marginBottom: '12px', fontFamily: 'var(--font-heading)' }}>SynthNews</h2>
-      <p style={{ color: 'var(--color-text-secondary)', marginBottom: '24px', fontSize: '1rem', lineHeight: '1.6' }}>
-        Hệ thống đọc tin tự động bằng AI — thu thập, tóm tắt và tổng hợp tin tức từ nhiều nguồn.
+    <div className="card" style={{ padding: 'clamp(20px, 4vw, 32px)', textAlign: 'center', marginTop: '16px' }}>
+      <h2 style={{ fontSize: 'clamp(1.4rem, 4vw, 1.8rem)', marginBottom: '10px', fontFamily: 'var(--font-heading)' }}>SynthNews</h2>
+      <p style={{ color: 'var(--color-text-secondary)', margin: '0 auto 18px', fontSize: '0.98rem', lineHeight: '1.55', maxWidth: '560px' }}>
+        SynthNews là trang đọc tin cá nhân dùng AI để gom bài từ RSS, web, Reddit, VOZ, YouTube và GitHub Trending, rồi tóm tắt tiếng Việt để đọc nhanh.
       </p>
 
-      <div style={{ textAlign: 'left', background: 'var(--color-bg)', padding: 'clamp(16px, 4vw, 24px)', borderRadius: 'var(--radius)', fontSize: '0.93rem', lineHeight: '1.7' }}>
+      <div style={{ textAlign: 'left', background: 'var(--color-bg)', padding: 'clamp(14px, 3vw, 18px)', borderRadius: 'var(--radius)', fontSize: '0.9rem', lineHeight: '1.55' }}>
         <ul style={{ paddingLeft: '18px', margin: 0, color: 'var(--color-text-secondary)' }}>
-          <li style={{ marginBottom: '8px' }}>📰 Thu thập từ RSS, web, Reddit, VOZ, YouTube, GitHub Trending</li>
-          <li style={{ marginBottom: '8px' }}>🤖 AI tóm tắt tiếng Việt với prompt thích ứng theo loại bài</li>
-          <li style={{ marginBottom: '8px' }}>🛡️ Lọc tự động bài quảng cáo / khuyến mãi</li>
-          <li style={{ marginBottom: '8px' }}>📋 Bản tin tổng hợp tự động mỗi vài giờ</li>
-          <li>🌙 Dark mode, mobile-friendly, điều hướng bàn phím</li>
+          <li style={{ marginBottom: '6px' }}>News, VOZ, Reddit và Bản tin tự động trong một giao diện.</li>
+          <li style={{ marginBottom: '6px' }}>AI tạo TL;DR, tóm tắt bài dài và lọc bài quảng cáo/khuyến mãi.</li>
+          <li>Hỗ trợ desktop, mobile, dark mode, lưu bài đã đọc và điều hướng bàn phím.</li>
         </ul>
       </div>
 
-      <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', marginTop: '20px', lineHeight: '1.5' }}>
-        Chọn bài ở danh sách bên trái để đọc · Tab <strong>Bản tin</strong> để xem tổng hợp ngày
+      <p style={{ color: 'var(--color-text-muted)', fontSize: '0.84rem', margin: '16px 0 0', lineHeight: '1.45' }}>
+        Chọn một bài để đọc. Mở tab <strong>Bản tin</strong> để xem tổng hợp gần nhất.
       </p>
-
-      <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--color-border)', fontSize: '0.83rem', color: 'var(--color-text-muted)' }}>
-        Liên hệ: <a href="https://t.me/ThongThaiTuaThanTien" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)' }}>@ThongThaiTuaThanTien</a> trên Telegram
-      </div>
     </div>
   );
 }
