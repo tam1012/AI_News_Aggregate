@@ -839,8 +839,10 @@ Nếu dùng domain riêng (không phải domain mẫu trong repo), cập nhật 
 
 ## Ghi Chú Vận Hành
 
-- Nếu sửa frontend layout đọc tin, kiểm tra hard refresh các route `/`, `/voz`, `/reddit`, `/youtube`, `/digest`, `/article/:id`.
+- Nếu sửa frontend layout đọc tin, kiểm tra hard refresh các route `/`, `/voz`, `/reddit`, `/digest`, `/article/:id`.
 - Nếu sửa Open Graph hoặc deep link, kiểm tra production build vì server chỉ inject meta khi có `server/public/index.html`.
+- Nếu sửa ảnh bài viết, kiểm tra ảnh lỗi/placeholder để không còn khung ảnh trống lớn trong article detail.
+- Nếu sửa prompt tóm tắt, kiểm tra giữ tên riêng như `Vietnam Game Awards`, `VNGGames`, `Funtap Games` và dịch cụm mô tả phổ biến như `Strait of Hormuz` → `Eo biển Hormuz`.
 - Nếu dùng cache assets 1 năm, file build phải có hash như Vite mặc định. Không cache immutable cho HTML.
 - Nếu AI provider trả summary không có `<tldr>`, bài vẫn có summary nhưng list preview sẽ fallback sang excerpt/summary.
 - Nếu source Reddit/VOZ thiếu comment lúc mới scrape, forum rescrape và retry job sẽ có cơ hội cập nhật lại trong vài giờ đầu.
