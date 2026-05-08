@@ -782,26 +782,27 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
     bottom: 0;
     z-index: 6;
     display: grid;
-    grid-template-columns: minmax(72px, 1fr) minmax(96px, 1.05fr) minmax(72px, 1fr);
-    gap: 10px;
-    width: min(420px, calc(100% - 48px));
-    margin: 0 auto;
-    padding: 10px 0 calc(12px + var(--safe-bottom));
+    grid-template-columns: minmax(0, 1fr) 88px minmax(0, 1fr);
+    gap: 9px;
+    width: min(420px, calc(100% - 36px));
+    margin: 8px auto -4px;
+    transform: translateX(-6px);
+    padding: 8px 0 calc(8px + var(--safe-bottom));
     background: linear-gradient(to top, var(--color-bg-card) 72%, color-mix(in srgb, var(--color-bg-card) 0%, transparent));
   }
   .detail-reading-nav-btn,
   .detail-reading-nav-status {
-    min-height: 46px;
+    min-height: 40px;
     border: 1px solid var(--color-border-light);
-    border-radius: 24px;
+    border-radius: 22px;
     background: color-mix(in srgb, var(--color-bg-card) 88%, var(--color-bg-hover));
     color: var(--color-text);
-    box-shadow: 0 8px 22px var(--color-shadow);
+    box-shadow: 0 6px 18px var(--color-shadow);
   }
   .detail-reading-nav-btn {
     width: auto;
     height: auto;
-    font-size: 1.55rem;
+    font-size: 1.28rem;
   }
   .detail-reading-nav-status {
     display: inline-flex;
