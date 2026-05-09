@@ -913,12 +913,37 @@ function ArticleDetail({
   const startScrollRef = useRef(0);
   const startedOnPullBarRef = useRef(false);
 
+  // Reading progress bar
+  const [readingProgress, setReadingProgress] = useState(0);
+
+  // Swipe-to-navigate refs
+  const swipeStartXRef = useRef(0);
+  const swipeStartYRef = useRef(0);
+  const swipeLockedRef = useRef<'none' | 'horizontal' | 'vertical'>('none');
+  const [swipeDeltaX, setSwipeDeltaX] = useState(0);
+  const isSwipingRef = useRef(false);
+
   const sourceLabel = extractSourceLabel(article);
   const title = cleanTitle(article.title);
 
   // Auto-scroll detail panel to top when article changes
   useEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
+    setReadingProgress(0);
+    setSwipeDeltaX(0);
+  }, [article.id]);
+
+  // Track reading progress on scroll
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      const max = scrollHeight - clientHeight;
+      setReadingProgress(max > 0 ? Math.min(1, scrollTop / max) : 0);
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
   }, [article.id]);
 
   // Split summary into TL;DR and Body
@@ -928,24 +953,57 @@ function ArticleDetail({
     return { tldr, rest };
   }, [article.tldr, article.summary_text]);
 
-  // Pull-to-close gesture
+  // Pull-to-close + swipe-to-navigate gestures
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     startYRef.current = e.touches[0].clientY;
     startScrollRef.current = contentRef.current?.scrollTop || 0;
     startedOnPullBarRef.current = Boolean((e.target as HTMLElement | null)?.closest('.detail-pull-bar'));
+    swipeStartXRef.current = e.touches[0].clientX;
+    swipeStartYRef.current = e.touches[0].clientY;
+    swipeLockedRef.current = 'none';
+    isSwipingRef.current = false;
   }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    const currentX = e.touches[0].clientX;
     const currentY = e.touches[0].clientY;
-    const diff = currentY - startYRef.current;
-    if ((startedOnPullBarRef.current || startScrollRef.current <= 0) && diff > 0) {
+    const diffX = currentX - swipeStartXRef.current;
+    const diffY = currentY - startYRef.current;
+
+    // Lock axis after 10px movement
+    if (swipeLockedRef.current === 'none' && (Math.abs(diffX) > 10 || Math.abs(diffY) > 10)) {
+      swipeLockedRef.current = Math.abs(diffX) > Math.abs(diffY) ? 'horizontal' : 'vertical';
+    }
+
+    // Horizontal swipe to navigate
+    if (swipeLockedRef.current === 'horizontal') {
+      isSwipingRef.current = true;
+      setSwipeDeltaX(diffX * 0.4);
+      return;
+    }
+
+    // Vertical pull-to-close (existing logic)
+    if ((startedOnPullBarRef.current || startScrollRef.current <= 0) && diffY > 0) {
       e.preventDefault();
       setIsDragging(true);
-      setDragY(Math.min(diff * 0.6, 300));
+      setDragY(Math.min(diffY * 0.6, 300));
     }
   }, []);
 
   const handleTouchEnd = useCallback(() => {
+    // Handle horizontal swipe
+    if (isSwipingRef.current) {
+      const threshold = 70;
+      if (swipeDeltaX > threshold / 0.4 && hasPrevArticle) {
+        onPrevArticle();
+      } else if (swipeDeltaX < -threshold / 0.4 && hasNextArticle) {
+        onNextArticle();
+      }
+      setSwipeDeltaX(0);
+      isSwipingRef.current = false;
+      return;
+    }
+    // Handle vertical pull-to-close
     if (isDragging) {
       if (dragY > 120) {
         onClose();
@@ -954,7 +1012,23 @@ function ArticleDetail({
       }
       setIsDragging(false);
     }
-  }, [isDragging, dragY, onClose]);
+  }, [isDragging, dragY, onClose, swipeDeltaX, hasPrevArticle, hasNextArticle, onPrevArticle, onNextArticle]);
+
+  // Share handler
+  const handleShare = useCallback(async () => {
+    const shareUrl = `${window.location.origin}/article/${article.id}`;
+    const shareData = { title: title, url: shareUrl };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        // The parent component handles copy toast
+      }
+    } catch {
+      // User cancelled share or clipboard failed — ignore
+    }
+  }, [article.id, title]);
 
   // Backdrop click
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -962,6 +1036,12 @@ function ArticleDetail({
   };
 
   const opacity = isDragging ? Math.max(0.2, 1 - dragY / 300) : 1;
+  const panelTransform = swipeDeltaX !== 0
+    ? `translateX(${swipeDeltaX}px)`
+    : dragY > 0 ? `translateY(${dragY}px)` : undefined;
+  const panelTransition = isDragging || isSwipingRef.current
+    ? 'none'
+    : 'transform 0.3s cubic-bezier(0.16,1,0.3,1)';
 
   return (
     <div
@@ -974,14 +1054,19 @@ function ArticleDetail({
         className="detail-panel"
         ref={contentRef}
         style={{
-          transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
-          transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.16,1,0.3,1)',
+          transform: panelTransform,
+          transition: panelTransition,
           opacity,
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
+        {/* Reading progress bar */}
+        <div className="reading-progress-track">
+          <div className="reading-progress-bar" style={{ width: `${readingProgress * 100}%` }} />
+        </div>
+
         {/* Pull indicator */}
         <div className="detail-pull-bar">
           <div className="detail-pull-indicator" />
@@ -1067,6 +1152,9 @@ function ArticleDetail({
         <div className="detail-reading-nav" aria-label="Chuyển bài">
           <button className="detail-reading-nav-btn" onClick={onPrevArticle} disabled={!hasPrevArticle} title="Bài trước">
             ‹
+          </button>
+          <button className="detail-reading-nav-btn detail-share-btn" onClick={handleShare} title="Chia sẻ">
+            ↗
           </button>
           <span className="detail-reading-nav-status">{navIndex} / {navTotal}</span>
           <button className="detail-reading-nav-btn" onClick={onNextArticle} disabled={!hasNextArticle} title="Bài sau">
