@@ -8,7 +8,11 @@
     "dev:client": "npm run dev --workspace=client",
     "build": "npm run build --workspace=client && npm run build --workspace=server",
     "start": "npm run start --workspace=server",
-    "db:migrate": "npm run db:migrate --workspace=server"
+    "db:migrate": "npm run db:migrate --workspace=server",
+    "local:build": "npm run build && node scripts/local-build.mjs",
+    "local:prod": "npm run local:build && npm run local:start",
+    "local:start": "node --env-file=.env.local server/dist/index.js",
+    "local:check-hosts": "node scripts/check-local-hosts.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

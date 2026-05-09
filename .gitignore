@@ -3,7 +3,9 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.local.example
 !server/.env.example
+server/public/
 *.log
 .DS_Store
 output/

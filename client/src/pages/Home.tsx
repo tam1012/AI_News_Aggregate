@@ -1,10 +1,18 @@
-import { useEffect, useMemo, useState, useRef, useCallback, lazy, Suspense } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback, lazy, Suspense, startTransition } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { useFetchRaw } from '../hooks/useApi';
 import { filterArticlesBySelectedDate, getEmptyFeedMessage, getReaderLoadingState, shouldShowDetailPane, shouldShowRightPane, shouldShowScrollTopButton } from './homeUx';
 
 const ReactMarkdown = lazy(() => import('react-markdown'));
+
+/* Preload react-markdown on first user interaction to avoid flash on article open */
+let markdownPreloaded = false;
+function preloadMarkdown() {
+  if (markdownPreloaded) return;
+  markdownPreloaded = true;
+  import('react-markdown').catch(() => { markdownPreloaded = false; });
+}
 
 const READ_ARTICLES_STORAGE_KEY = 'read_articles';
 const FEED_PREVIEW_MAX_CHARS = 180;
@@ -224,10 +232,11 @@ export function Home() {
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const splitLeftRef = useRef<HTMLDivElement>(null);
 
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  // User's explicit date pick (null = auto-select latest)
+  const [userSelectedDate, setUserSelectedDate] = useState<string | null>(null);
 
   // Fetch available dates
-  const { data: datesRaw } = useFetchRaw(
+  const { data: datesRaw, loading: datesLoading } = useFetchRaw(
     () => api.getArticleDates(filterSource === 'all' ? undefined : filterSource),
     [filterSource]
   );
@@ -237,20 +246,27 @@ export function Home() {
     return (datesRaw?.data || []).filter((d: { date: string }) => new Date(d.date) <= today);
   }, [datesRaw]);
 
-  // Set default selected date
-  useEffect(() => {
-    if (availableDates.length > 0 && (!selectedDate || !availableDates.find(d => d.date === selectedDate))) {
-      setSelectedDate(availableDates[0].date);
+  // Derive effective date synchronously — no useEffect race condition
+  const selectedDate = useMemo(() => {
+    if (availableDates.length === 0) return null;
+    if (userSelectedDate && availableDates.find(d => d.date === userSelectedDate)) {
+      return userSelectedDate;
     }
-  }, [availableDates, selectedDate]);
+    return availableDates[0].date;
+  }, [availableDates, userSelectedDate]);
+
+  // Wrapper to keep setSelectedDate API for the rest of the component
+  const setSelectedDate = useCallback((date: string | null) => {
+    setUserSelectedDate(date);
+  }, []);
 
   const { data: raw, loading, error, reload } = useFetchRaw(
     () => {
-      // Don't fetch until we have a date, unless there are no dates at all
-      if (availableDates.length > 0 && !selectedDate) return Promise.resolve({ data: [], meta: { total: 0, page: 1, totalPages: 0 } });
+      // Wait for dates to load before fetching articles (prevents empty flash)
+      if (datesLoading && !datesRaw) return Promise.resolve({ data: [], meta: { total: 0, page: 1, totalPages: 0 } });
       return api.getArticles({ page: 1, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab, tag: filterTag || undefined });
     },
-    [selectedDate, filterSource, availableDates.length, tab, filterTag]
+    [selectedDate, filterSource, datesLoading, tab, filterTag]
   );
 
   useEffect(() => {
@@ -393,24 +409,21 @@ export function Home() {
     return () => window.removeEventListener('keydown', handler);
   }, [selected]);
 
-  // Lock body scroll when detail open (handled via CSS class for mobile only)
+  // Lock body scroll when detail open — use overflow approach to avoid layout jump
   useEffect(() => {
     if (!detailPaneVisible) {
       document.body.classList.remove('detail-open');
-      document.body.style.removeProperty('top');
-      document.body.style.removeProperty('width');
+      document.documentElement.style.removeProperty('--scroll-lock-y');
       return;
     }
 
     const scrollY = window.scrollY;
+    document.documentElement.style.setProperty('--scroll-lock-y', `-${scrollY}px`);
     document.body.classList.add('detail-open');
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
 
     return () => {
       document.body.classList.remove('detail-open');
-      document.body.style.removeProperty('top');
-      document.body.style.removeProperty('width');
+      document.documentElement.style.removeProperty('--scroll-lock-y');
       window.scrollTo({ top: scrollY, behavior: 'instant' });
     };
   }, [detailPaneVisible]);
@@ -499,8 +512,11 @@ export function Home() {
   }, [urlArticleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectArticle = useCallback((article: any) => {
-    setSelected(article);
-    setReadArticleIds(prev => (prev.includes(article.id) ? prev : [article.id, ...prev]));
+    // Use startTransition so React doesn't block the current render for the detail panel
+    startTransition(() => {
+      setSelected(article);
+      setReadArticleIds(prev => (prev.includes(article.id) ? prev : [article.id, ...prev]));
+    });
     window.history.replaceState(null, '', `/article/${article.id}`);
   }, []);
 
@@ -847,7 +863,12 @@ function FeedItem({
   }, [article]);
 
   return (
-    <article className={`feed-item ${isActive ? 'active' : ''} ${isRead ? 'is-read' : ''}`} onClick={onClick}>
+    <article
+      className={`feed-item ${isActive ? 'active' : ''} ${isRead ? 'is-read' : ''}`}
+      onClick={onClick}
+      onMouseEnter={preloadMarkdown}
+      onTouchStart={preloadMarkdown}
+    >
       <div className="feed-item-meta">
         <span className={`feed-item-source source-${sourceLabel.toLowerCase().replace(/[^a-z0-9]/g, '')}`}>
           {sourceLabel}
@@ -1015,7 +1036,7 @@ function ArticleDetail({
               src={proxyImgUrl(article.image_url, 'detail', article.url)}
               alt=""
               className="detail-image"
-              loading="lazy"
+              loading="eager"
               decoding="async"
               onLoad={(e) => hideTinyImage(e.currentTarget)}
               onError={(e) => hideBrokenImage(e.currentTarget)}

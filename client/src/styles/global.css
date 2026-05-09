@@ -1304,7 +1304,12 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 
   body.detail-open {
     position: fixed;
+    top: var(--scroll-lock-y, 0);
+    left: 0;
+    right: 0;
     overflow: hidden;
+    /* Prevent layout shift from scrollbar disappearing */
+    width: 100%;
   }
 
   .split-feed-toolbar {
