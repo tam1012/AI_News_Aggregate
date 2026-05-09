@@ -55,10 +55,18 @@ async function getBrowser(): Promise<any> {
   return browserInstance;
 }
 
-export async function browserFetch(url: string, timeoutMs: number = 30000, rawText: boolean = false): Promise<string> {
+export interface BrowserFetchOptions {
+  rawText?: boolean;
+  waitUntil?: 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2';
+  blockHeavyResources?: boolean;
+  settleMs?: number;
+}
+
+export async function browserFetch(url: string, timeoutMs: number = 30000, rawTextOrOptions: boolean | BrowserFetchOptions = false): Promise<string> {
   const safeUrl = normalizePublicHttpUrl(url);
   if (!safeUrl) throw new Error('URL must be a public http(s) URL');
 
+  const options: BrowserFetchOptions = typeof rawTextOrOptions === 'boolean' ? { rawText: rawTextOrOptions } : rawTextOrOptions;
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
@@ -68,18 +76,29 @@ export async function browserFetch(url: string, timeoutMs: number = 30000, rawTe
       Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
       (window as any).chrome = { runtime: {} };
     });
+    if (options.blockHeavyResources) {
+      await page.setRequestInterception(true);
+      page.on('request', (request: any) => {
+        const resourceType = request.resourceType();
+        if (['image', 'font', 'media', 'stylesheet'].includes(resourceType)) {
+          request.abort();
+          return;
+        }
+        request.continue();
+      });
+    }
     await page.setUserAgent(BROWSER_UA);
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
     await page.setViewport({ width: 1920, height: 1080 });
-    await page.goto(safeUrl, { waitUntil: 'networkidle2', timeout: timeoutMs });
+    await page.goto(safeUrl, { waitUntil: options.waitUntil || 'networkidle2', timeout: timeoutMs });
 
     try {
       const acceptBtn = await page.$('button[aria-label="Accept all cookies"], button:has-text("Accept")');
       if (acceptBtn) await acceptBtn.click();
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, options.settleMs ?? 500));
     } catch {}
 
-    if (rawText) {
+    if (options.rawText) {
       return await page.evaluate(() => document.body?.innerText || document.documentElement?.textContent || '');
     }
     return await page.content();

@@ -5,7 +5,7 @@ import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import { normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
 import { matchPromoKeyword } from '../../lib/promoFilter.js';
-import { BROWSER_UA, browserFetch } from './http-utils.js';
+import { BROWSER_UA, BrowserFetchOptions, browserFetch } from './http-utils.js';
 import { insertArticleIfNew, MIN_ARTICLE_TEXT_LENGTH } from './article-writer.js';
 import { SourceFetcher } from './types.js';
 import { learnSelectorProfileFromHtml } from './selector-learning.js';
@@ -28,7 +28,67 @@ const rssParser = new RssParser({
   },
 });
 
+interface RssDomainPolicy {
+  allowSnippetFallback: boolean;
+  snippetFallbackMinLength: number;
+  skipBrowserFallback?: boolean;
+  browserOptions?: BrowserFetchOptions;
+}
+
+const DEFAULT_RSS_SNIPPET_FALLBACK_MIN_LENGTH = parsePositiveInt(process.env.RSS_SNIPPET_FALLBACK_MIN_LENGTH, 800);
+
 let googleDecoderPromise: Promise<any | null> | null = null;
+
+function getHostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function domainMatches(hostname: string, domain: string): boolean {
+  return hostname === domain || hostname.endsWith(`.${domain}`);
+}
+
+function getRssDomainPolicy(url: string): RssDomainPolicy {
+  const hostname = getHostname(url);
+  const policy: RssDomainPolicy = {
+    allowSnippetFallback: true,
+    snippetFallbackMinLength: DEFAULT_RSS_SNIPPET_FALLBACK_MIN_LENGTH,
+  };
+
+  if (domainMatches(hostname, 'nytimes.com')) {
+    return { ...policy, skipBrowserFallback: true };
+  }
+
+  if (hostname.includes('kotaku.com') || hostname.includes('eweek.com')) {
+    return {
+      ...policy,
+      browserOptions: {
+        waitUntil: 'domcontentloaded',
+        blockHeavyResources: true,
+        settleMs: 1000,
+      },
+    };
+  }
+
+  return policy;
+}
+
+function getNormalizedTextLength(value: string): number {
+  return value.replace(/\s+/g, ' ').trim().length;
+}
+
+function buildSnippetFallbackContent(rssContent: string, rssExcerpt: string, minLength: number): string | null {
+  const contentLength = getNormalizedTextLength(rssContent);
+  if (contentLength >= minLength) return rssContent;
+
+  const excerptLength = getNormalizedTextLength(rssExcerpt);
+  if (excerptLength >= minLength) return rssExcerpt;
+
+  return null;
+}
 
 function isGoogleNewsArticleUrl(url: string): boolean {
   return url.includes('news.google.com/rss/articles/');
@@ -221,7 +281,7 @@ async function extractWithAiSelector(html: string, pageUrl: string) {
   }
 }
 
-async function fetchFullArticle(jobUrl: string): Promise<{ title: string; content: string; imageUrl: string | null; publishedAt: string | null; metadata?: any }> {
+async function fetchFullArticle(jobUrl: string, policy = getRssDomainPolicy(jobUrl)): Promise<{ title: string; content: string; imageUrl: string | null; publishedAt: string | null; metadata?: any }> {
   let fetchError: Error | null = null;
 
   try {
@@ -242,10 +302,14 @@ async function fetchFullArticle(jobUrl: string): Promise<{ title: string; conten
     fetchError = err instanceof Error ? err : new Error(String(err));
   }
 
+  if (policy.skipBrowserFallback) {
+    throw new Error(`Full article fetch failed: ${fetchError?.message || 'unknown fetch error'}; browser fallback skipped by domain policy`);
+  }
+
   try {
     console.warn(`Retrying RSS article with browser fetch ${jobUrl}: ${fetchError?.message || 'short content'}`);
     await sleep(2000);
-    const html = await browserFetch(jobUrl, parseInt(process.env.ARTICLE_BROWSER_FETCH_TIMEOUT_MS || '30000', 10));
+    const html = await browserFetch(jobUrl, parseInt(process.env.ARTICLE_BROWSER_FETCH_TIMEOUT_MS || '30000', 10), policy.browserOptions || false);
     const article = await extractArticleFromHtml(html, jobUrl, 'browser');
     if (article.content.length >= MIN_ARTICLE_TEXT_LENGTH) return article;
     throw new Error(`browser extraction too short (${article.content.length} characters)`);
@@ -375,14 +439,18 @@ export const rssFetcher: SourceFetcher = {
       }
     }
 
+    const policy = getRssDomainPolicy(articleUrl);
+    let fullArticleError: string | null = null;
     try {
-      fullArticle = await fetchFullArticle(articleUrl);
+      fullArticle = await fetchFullArticle(articleUrl, policy);
     } catch (err: any) {
+      fullArticleError = err.message;
       console.warn(`Failed to fetch full RSS article ${articleUrl}: ${err.message}`);
     }
 
     const fullContent = fullArticle?.content || '';
-    const rawContent = fullContent.length > rssContent.length ? fullContent : rssContent;
+    const snippetFallbackContent = fullArticle ? null : buildSnippetFallbackContent(rssContent, rssExcerpt, policy.snippetFallbackMinLength);
+    const rawContent = fullContent.length > rssContent.length ? fullContent : (snippetFallbackContent || rssContent);
     const rawExcerpt = rawContent ? truncate(rawContent, 500) : rssExcerpt;
 
     return {
@@ -396,7 +464,13 @@ export const rssFetcher: SourceFetcher = {
       rawContent,
       contentHashSeed: `${fullArticle?.title || job.title}${rawContent || rssExcerpt}`,
       imageUrl: fullArticle?.imageUrl || payload.imageUrl || null,
-      metadata: fullArticle?.metadata || null,
+      metadata: fullArticle?.metadata || (snippetFallbackContent ? {
+        extractor: 'rss:snippet-fallback',
+        fullArticleError,
+        snippetFallbackMinLength: policy.snippetFallbackMinLength,
+        sourceUrl: articleUrl,
+        googleNewsUrl: payload.googleNewsUrl || null,
+      } : null),
     };
   },
   async fetch(source) {

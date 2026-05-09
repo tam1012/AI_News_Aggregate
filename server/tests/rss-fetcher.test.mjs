@@ -25,6 +25,7 @@ function loadTsModule(relativePath, stubs = {}, globals = {}) {
     exports: moduleContext.exports,
     module: moduleContext,
     process: { env: {} },
+    URL,
     require: (name) => {
       if (stubs[name]) return stubs[name];
       throw new Error(`Unexpected require ${name}`);
@@ -35,6 +36,7 @@ function loadTsModule(relativePath, stubs = {}, globals = {}) {
 }
 
 const baseStubs = {
+  'rss-parser': { default: class Parser { async parseString() { return { items: [] }; } } },
   cheerio,
   entities: { decodeHTML: (value) => value },
   '@mozilla/readability': { Readability: class { parse() { return null; } } },
@@ -159,6 +161,81 @@ test('RSS discover decodes Google News URLs before enqueueing', async () => {
   assert.equal(items.length, 1);
   assert.equal(items[0].url, 'https://www.reuters.com/world/example');
   assert.equal(items[0].payload.googleNewsUrl, 'https://news.google.com/rss/articles/CBMi-test?oc=5');
+});
+
+test('RSS fetchArticle uses RSS snippet fallback when full article fetch fails', async () => {
+  const longSnippet = 'Detailed RSS content '.repeat(60);
+  const { rssFetcher } = loadTsModule('../src/services/fetchers/rss-fetcher.ts', baseStubs, {
+    fetch: async () => { throw new Error('origin blocked'); },
+    console: { warn: () => {}, log: () => {} },
+  });
+
+  const article = await rssFetcher.fetchArticle({
+    id: 'job_1',
+    source_id: 'src_google',
+    url: 'https://www.nytimes.com/2026/05/09/business/example.html',
+    title: 'Paywalled story',
+    external_id: 'google/paywall',
+    published_at: null,
+    payload_json: {
+      rawExcerpt: longSnippet,
+      rawContent: '',
+      googleNewsUrl: 'https://news.google.com/rss/articles/CBMi-test?oc=5',
+    },
+  }, {
+    id: 'src_google',
+    type: 'rss',
+    name: 'Google News',
+    url: 'https://news.google.com/rss/search?q=test',
+    language: 'en',
+    category: null,
+    fetch_interval_minutes: 60,
+    parser_config: null,
+  });
+
+  assert.equal(article.rawContent, longSnippet);
+  assert.equal(article.metadata.extractor, 'rss:snippet-fallback');
+  assert.equal(article.metadata.googleNewsUrl, 'https://news.google.com/rss/articles/CBMi-test?oc=5');
+});
+
+test('RSS fetchArticle passes lightweight browser options for anti-bot-light domains', async () => {
+  let browserOptions;
+  const { rssFetcher } = loadTsModule('../src/services/fetchers/rss-fetcher.ts', {
+    ...baseStubs,
+    './http-utils.js': {
+      BROWSER_UA: 'test-agent',
+      browserFetch: async (_url, _timeout, options) => {
+        browserOptions = options;
+        return '<html><body><article>' + 'Full browser article '.repeat(40) + '</article></body></html>';
+      },
+    },
+  }, {
+    fetch: async () => ({ ok: true, text: async () => '<html><body>short</body></html>' }),
+    console: { warn: () => {}, log: () => {} },
+  });
+
+  const article = await rssFetcher.fetchArticle({
+    id: 'job_2',
+    source_id: 'src_google',
+    url: 'https://kotaku.com/example-story',
+    title: 'Kotaku story',
+    external_id: 'google/kotaku',
+    published_at: null,
+    payload_json: { rawExcerpt: '', rawContent: '' },
+  }, {
+    id: 'src_google',
+    type: 'rss',
+    name: 'Google News',
+    url: 'https://news.google.com/rss/search?q=test',
+    language: 'en',
+    category: null,
+    fetch_interval_minutes: 60,
+    parser_config: null,
+  });
+
+  assert.equal(browserOptions.waitUntil, 'domcontentloaded');
+  assert.equal(browserOptions.blockHeavyResources, true);
+  assert.equal(article.metadata.extractor, 'browser:selectors');
 });
 
 test('RSS discover skips Google News items when decode fails', async () => {
