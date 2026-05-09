@@ -83,3 +83,51 @@ test('reset retryable article fetch jobs respects retry cap', () => {
   assert.match(statement.sql, /status = 'discovered'/);
   assert.deepEqual(Array.from(statement.params), [3, 15]);
 });
+
+test('short-content rescue query targets skipped RSS and HTML articles only', () => {
+  const { buildFindShortContentArticlesSql } = loadTsModule('../src/services/article-fetch-queue.ts', {
+    '../lib/utils.js': {},
+    '../db/index.js': {},
+  });
+  const statement = buildFindShortContentArticlesSql(15, 500);
+
+  assert.match(statement.sql, /summary_status = 'skipped'/);
+  assert.match(statement.sql, /source content too short/);
+  assert.match(statement.sql, /GREATEST\(length\(coalesce\(a\.raw_content/);
+  assert.match(statement.sql, /s\.type IN \('rss', 'html'\)/);
+  assert.deepEqual(Array.from(statement.params), [500, 15]);
+});
+
+test('requeue short-content articles stores rescue article id in fetch job payload', async () => {
+  const insertedPayloads = [];
+  const { requeueShortContentArticles } = loadTsModule('../src/services/article-fetch-queue.ts', {
+    '../db/index.js': {
+      getMany: async () => [{
+        id: 'art_1',
+        source_id: 'src_1',
+        url: 'https://example.com/post',
+        title: 'Example title',
+        external_id: 'guid-1',
+        published_at: '2026-05-09T00:00:00.000Z',
+        author: 'Author',
+        raw_excerpt: '',
+        raw_content: '',
+        image_url: null,
+      }],
+      query: async (_sql, params) => {
+        insertedPayloads.push(params[6]);
+        return { rowCount: 1 };
+      },
+    },
+    '../lib/utils.js': {
+      generateId: (prefix) => `${prefix}_test`,
+      normalizePublicHttpUrl: (url) => url,
+    },
+  });
+
+  const result = await requeueShortContentArticles(15, 500);
+
+  assert.equal(result.checked, 1);
+  assert.equal(result.enqueued, 1);
+  assert.equal(insertedPayloads[0].rescueArticleId, 'art_1');
+});

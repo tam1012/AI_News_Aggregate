@@ -3,7 +3,7 @@ import * as cheerio from 'cheerio';
 import { decodeHTML } from 'entities';
 import { normalizePublicHttpUrl, truncate } from '../../lib/utils.js';
 import { matchPromoKeyword } from '../../lib/promoFilter.js';
-import { BROWSER_UA } from './http-utils.js';
+import { BROWSER_UA, browserFetch } from './http-utils.js';
 import { insertArticleIfNew } from './article-writer.js';
 import { SourceFetcher } from './types.js';
 import { learnSelectorProfileFromHtml } from './selector-learning.js';
@@ -65,7 +65,12 @@ function extractArticleText($: cheerio.CheerioAPI): string {
   const selectors = [
     'article [itemprop="articleBody"]',
     '[itemprop="articleBody"]',
+    '[data-testid="article-body"]',
+    '#article-container .caas-body',
+    '#article-container [class*="body"]',
+    '#article-container .caas-content-wrapper',
     'article',
+    '.caas-body',
     '.maincontent',
     '.article-detail',
     '.article-content',
@@ -86,6 +91,45 @@ function extractArticleText($: cheerio.CheerioAPI): string {
   }
 
   return best;
+}
+
+function normalizeDate(value: string | null): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+async function extractArticleFromHtml(html: string, jobUrl: string, extractor: string): Promise<{ title: string; content: string; imageUrl: string | null; publishedAt: string | null; metadata?: any }> {
+  const aiExtraction = await extractWithAiSelector(html, jobUrl);
+  if (aiExtraction) {
+    const { extraction, sourceProfileId } = aiExtraction;
+    return {
+      title: extraction.title,
+      content: extraction.content,
+      imageUrl: extraction.imageUrl,
+      publishedAt: extraction.publishedAt,
+      metadata: { extractor: `${extractor}:ai-selector`, matchedSelector: extraction.matchedSelector, sourceProfileId },
+    };
+  }
+
+  const $ = cheerio.load(html);
+  const title = $('h1').first().text().replace(/\s+/g, ' ').trim() ||
+    getMetaContent($, 'meta[property="og:title"]') ||
+    $('title').first().text().replace(/\s+/g, ' ').trim();
+  const content = extractArticleText($);
+  const imageUrl = getMetaContent($, 'meta[property="og:image"]') || getMetaContent($, 'meta[name="twitter:image"]') || null;
+  const publishedAt = $('time[datetime]').first().attr('datetime') ||
+    getMetaContent($, 'meta[property="article:published_time"]') ||
+    getMetaContent($, 'meta[name="pubdate"]') ||
+    null;
+
+  return {
+    title,
+    content,
+    imageUrl: imageUrl ? normalizePublicHttpUrl(new URL(imageUrl, jobUrl).toString()) : null,
+    publishedAt: normalizeDate(publishedAt),
+    metadata: { extractor: `${extractor}:selectors` },
+  };
 }
 
 async function extractWithAiSelector(html: string, pageUrl: string) {
@@ -120,51 +164,35 @@ async function extractWithAiSelector(html: string, pageUrl: string) {
 }
 
 async function fetchFullArticle(jobUrl: string): Promise<{ title: string; content: string; imageUrl: string | null; publishedAt: string | null; metadata?: any }> {
-  const response = await fetch(jobUrl, {
-    headers: {
-      'User-Agent': BROWSER_UA,
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!response.ok) throw new Error(`Status code ${response.status}`);
+  let fetchError: Error | null = null;
 
-  const html = await response.text();
-  const aiExtraction = await extractWithAiSelector(html, jobUrl);
-  if (aiExtraction) {
-    const { extraction, sourceProfileId } = aiExtraction;
-    return {
-      title: extraction.title,
-      content: extraction.content,
-      imageUrl: extraction.imageUrl,
-      publishedAt: extraction.publishedAt,
-      metadata: { extractor: 'ai-selector', matchedSelector: extraction.matchedSelector, sourceProfileId },
-    };
+  try {
+    const response = await fetch(jobUrl, {
+      headers: {
+        'User-Agent': BROWSER_UA,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new Error(`Status code ${response.status}`);
+
+    const html = await response.text();
+    const article = await extractArticleFromHtml(html, jobUrl, 'fetch');
+    if (article.content.length >= 500) return article;
+    fetchError = new Error(`fetch extraction too short (${article.content.length} characters)`);
+  } catch (err: any) {
+    fetchError = err instanceof Error ? err : new Error(String(err));
   }
 
-  const $ = cheerio.load(html);
-  const title = $('h1').first().text().replace(/\s+/g, ' ').trim() ||
-    getMetaContent($, 'meta[property="og:title"]') ||
-    $('title').first().text().replace(/\s+/g, ' ').trim();
-  const content = extractArticleText($);
-  const imageUrl = getMetaContent($, 'meta[property="og:image"]') || getMetaContent($, 'meta[name="twitter:image"]') || null;
-  const publishedAt = $('time[datetime]').first().attr('datetime') ||
-    getMetaContent($, 'meta[property="article:published_time"]') ||
-    getMetaContent($, 'meta[name="pubdate"]') ||
-    null;
-
-  let normalizedPublishedAt: string | null = null;
-  if (publishedAt) {
-    const date = new Date(publishedAt);
-    if (!Number.isNaN(date.getTime())) normalizedPublishedAt = date.toISOString();
+  try {
+    console.warn(`Retrying RSS article with browser fetch ${jobUrl}: ${fetchError?.message || 'short content'}`);
+    const html = await browserFetch(jobUrl, parseInt(process.env.ARTICLE_BROWSER_FETCH_TIMEOUT_MS || '30000', 10));
+    const article = await extractArticleFromHtml(html, jobUrl, 'browser');
+    if (article.content.length >= 500) return article;
+    throw new Error(`browser extraction too short (${article.content.length} characters)`);
+  } catch (browserErr: any) {
+    throw new Error(`Full article fetch failed: ${fetchError?.message || 'unknown fetch error'}; browser fallback failed: ${browserErr.message}`);
   }
-
-  return {
-    title,
-    content,
-    imageUrl: imageUrl ? normalizePublicHttpUrl(new URL(imageUrl, jobUrl).toString()) : null,
-    publishedAt: normalizedPublishedAt,
-  };
 }
 
 export function parseRssItems(xml: string): RssParser.Item[] {

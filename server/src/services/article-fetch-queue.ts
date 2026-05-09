@@ -42,6 +42,11 @@ export interface ArticleFetchJobClaim {
   source_parser_config: any;
 }
 
+export interface RescueShortContentResult {
+  checked: number;
+  enqueued: number;
+}
+
 export interface SqlStatement {
   sql: string;
   params: any[];
@@ -126,6 +131,29 @@ export function buildResetRetryableArticleFetchJobsSql(limit: number): SqlStatem
   };
 }
 
+export function buildFindShortContentArticlesSql(limit: number, minLength = 500): SqlStatement {
+  return {
+    sql: `SELECT a.id, a.source_id, a.url, a.title, a.external_id, a.published_at, a.author,
+                 a.raw_excerpt, a.raw_content, a.image_url
+          FROM articles a
+          JOIN sources s ON s.id = a.source_id
+          WHERE a.summary_status = 'skipped'
+            AND a.last_summary_error ILIKE '%source content too short%'
+            AND GREATEST(length(coalesce(a.raw_content, '')), length(coalesce(a.raw_excerpt, ''))) < $1
+            AND NOT EXISTS (
+              SELECT 1 FROM article_fetch_jobs j
+              WHERE j.source_id = a.source_id
+                AND j.url = a.url
+                AND j.status IN ('discovered', 'fetching', 'failed')
+                AND coalesce(j.payload_json->>'rescueArticleId', '') = a.id
+            )
+            AND s.type IN ('rss', 'html')
+          ORDER BY a.created_at DESC
+          LIMIT $2`,
+    params: [minLength, limit],
+  };
+}
+
 export function truncateFetchJobError(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err || 'Unknown article fetch error');
   return message.substring(0, 500);
@@ -147,6 +175,45 @@ export async function enqueueDiscoveredArticles(items: DiscoveredArticle[]): Pro
   }
 
   return inserted;
+}
+
+export async function requeueShortContentArticles(limit: number, minLength = 500): Promise<RescueShortContentResult> {
+  const statement = buildFindShortContentArticlesSql(limit, minLength);
+  const articles = await getMany<any>(statement.sql, statement.params);
+  let enqueued = 0;
+
+  for (const article of articles) {
+    const row = buildArticleFetchJobRow({
+      sourceId: article.source_id,
+      url: article.url,
+      title: article.title,
+      externalId: article.external_id,
+      publishedAt: article.published_at,
+      payload: {
+        rescueArticleId: article.id,
+        author: article.author || null,
+        rawExcerpt: article.raw_excerpt || '',
+        rawContent: article.raw_content || '',
+        imageUrl: article.image_url || null,
+      },
+    });
+
+    const result = await query(
+      `INSERT INTO article_fetch_jobs (id, source_id, url, title, external_id, published_at, payload_json, status, retry_count, last_error)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'discovered', 0, NULL)
+       ON CONFLICT (source_id, url) DO UPDATE SET
+         status = CASE WHEN article_fetch_jobs.status = 'done' THEN 'discovered' ELSE article_fetch_jobs.status END,
+         payload_json = EXCLUDED.payload_json,
+         last_error = NULL,
+         updated_at = NOW()
+       WHERE article_fetch_jobs.status = 'done'
+       RETURNING id`,
+      [row.id, row.source_id, row.url, row.title, row.external_id, row.published_at, row.payload_json]
+    );
+    if (result.rowCount && result.rowCount > 0) enqueued++;
+  }
+
+  return { checked: articles.length, enqueued };
 }
 
 export async function claimArticleFetchJobs(limit: number): Promise<ArticleFetchJobClaim[]> {

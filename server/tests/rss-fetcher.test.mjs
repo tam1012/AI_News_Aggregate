@@ -62,8 +62,9 @@ test('RSS fetcher falls back to tolerant item parsing when strict parser rejects
     cheerio,
     entities: { decodeHTML: (value) => value },
     '../../lib/utils.js': { normalizePublicHttpUrl: (value) => new URL(value).toString(), truncate: (value) => value },
-    './http-utils.js': { BROWSER_UA: 'test-agent' },
+    './http-utils.js': { BROWSER_UA: 'test-agent', browserFetch: async () => '' },
     './article-writer.js': { insertArticleIfNew: async () => true },
+    '../../lib/promoFilter.js': { matchPromoKeyword: () => null },
     './selector-learning.js': { learnSelectorProfileFromHtml: async () => null },
     './selector-profile.js': {
       extractWithSelectorProfile: () => ({ title: '', content: '', imageUrl: null, publishedAt: null, matchedSelector: null }),

@@ -7,6 +7,29 @@ interface ArticleWriterSource {
   language: string;
 }
 
+const MIN_ARTICLE_TEXT_LENGTH = parseInt(typeof process !== 'undefined' ? process.env.MIN_ARTICLE_TEXT_LENGTH || '500' : '500', 10);
+
+export class ArticleContentTooShortError extends Error {
+  constructor(length: number, minLength: number) {
+    super(`Article content too short after fetch (${length} characters, minimum ${minLength})`);
+    this.name = 'ArticleContentTooShortError';
+  }
+}
+
+function normalizeTextLength(value: string): number {
+  return value.replace(/\s+/g, ' ').trim().length;
+}
+
+export function validateArticleContent(input: ArticleInsertInput): void {
+  const contentType = input.contentType || 'article';
+  const minLength = Math.max(1, MIN_ARTICLE_TEXT_LENGTH || 500);
+  const length = Math.max(normalizeTextLength(input.rawContent || ''), normalizeTextLength(input.rawExcerpt || ''));
+
+  if (contentType === 'article' && length < minLength) {
+    throw new ArticleContentTooShortError(length, minLength);
+  }
+}
+
 export interface ArticleInsertInput {
   source: ArticleWriterSource;
   url: string;
@@ -76,6 +99,8 @@ export function buildArticleInsertRow(input: ArticleInsertInput): ArticleInsertR
 export async function insertArticleIfNew(input: ArticleInsertInput): Promise<boolean> {
   const existing = await getOne('SELECT id FROM articles WHERE url = $1', [input.url]);
   if (existing) return false;
+
+  validateArticleContent(input);
 
   const row = buildArticleInsertRow(input);
   const hashExists = await getOne('SELECT id FROM articles WHERE content_hash = $1', [row.content_hash]);

@@ -156,3 +156,62 @@ test('insert article skips duplicate URL before hashing', async () => {
   assert.equal(inserted, false);
   assert.equal(queries.length, 1);
 });
+
+test('insert article rejects short article content before insert', async () => {
+  const { insertArticleIfNew } = loadTsModule('../src/services/fetchers/article-writer.ts', {
+    '../../db/index.js': {
+      getOne: async () => null,
+      query: async () => {
+        throw new Error('insert should not be called');
+      },
+    },
+    '../../lib/utils.js': {
+      createContentHash: () => 'hash',
+      generateId: () => 'art_test',
+      truncate: (value) => value,
+    },
+    '../../lib/htmlEntities.js': { decodeHtmlEntities: decodeHTML },
+  });
+
+  await assert.rejects(
+    insertArticleIfNew({
+      source: { id: 'src_1', language: 'vi' },
+      url: 'https://example.com/post',
+      title: 'Example title',
+      rawExcerpt: 'too short',
+      rawContent: '',
+    }),
+    /Article content too short after fetch/
+  );
+});
+
+test('insert article allows short video content', async () => {
+  let inserted = false;
+  const { insertArticleIfNew } = loadTsModule('../src/services/fetchers/article-writer.ts', {
+    '../../db/index.js': {
+      getOne: async () => null,
+      query: async () => {
+        inserted = true;
+        return { rowCount: 1 };
+      },
+    },
+    '../../lib/utils.js': {
+      createContentHash: () => 'hash',
+      generateId: () => 'art_test',
+      truncate: (value) => value,
+    },
+    '../../lib/htmlEntities.js': { decodeHtmlEntities: decodeHTML },
+  });
+
+  const result = await insertArticleIfNew({
+    source: { id: 'src_youtube', language: 'vi' },
+    url: 'https://www.youtube.com/watch?v=short',
+    title: 'Video title',
+    rawExcerpt: '',
+    rawContent: 'short transcript',
+    contentType: 'video',
+  });
+
+  assert.equal(result, true);
+  assert.equal(inserted, true);
+});

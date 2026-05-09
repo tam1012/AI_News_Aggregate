@@ -6,7 +6,7 @@ import { generateId } from '../lib/utils.js';
 import { rescrapeArticle, runForumRescrapeJob } from '../services/rescrape.js';
 import { getFetcherForSource } from '../services/fetchers/registry.js';
 import { sourceFetchers, SourceRow } from '../services/fetchers/index.js';
-import { insertArticleIfNew } from '../services/fetchers/article-writer.js';
+import { ArticleInsertInput, insertArticleIfNew, validateArticleContent } from '../services/fetchers/article-writer.js';
 import {
   buildResetRetryableArticleFetchJobsSql,
   buildResetStuckArticleFetchJobsSql,
@@ -14,6 +14,7 @@ import {
   enqueueDiscoveredArticles,
   markArticleFetchJobDone,
   markArticleFetchJobFailed,
+  requeueShortContentArticles,
 } from '../services/article-fetch-queue.js';
 import {
   buildResetRetryableFailedSummariesSql,
@@ -46,6 +47,40 @@ function addScrapeJitter(minutes: number): number {
   const jitterWindow = Math.min(10, Math.max(2, Math.floor(minutes * 0.1)));
   const jitter = Math.floor(Math.random() * (jitterWindow * 2 + 1)) - jitterWindow;
   return Math.max(5, minutes + jitter);
+}
+
+async function updateRescuedArticle(articleId: string, articleInput: ArticleInsertInput): Promise<void> {
+  validateArticleContent(articleInput);
+  await query(
+    `UPDATE articles
+     SET title = $2,
+         author = $3,
+         published_at = COALESCE($4, published_at),
+         raw_excerpt = $5,
+         raw_content = $6,
+         image_url = COALESCE($7, image_url),
+         metadata = $8,
+         summary_status = 'pending',
+         retry_count = 0,
+         last_summary_error = NULL,
+         summary_text = NULL,
+         tldr = NULL,
+         summary_short = NULL,
+         hot_score = NULL,
+         tags = '{}'::TEXT[],
+         updated_at = NOW()
+     WHERE id = $1`,
+    [
+      articleId,
+      articleInput.title,
+      articleInput.author || null,
+      articleInput.publishedAt || null,
+      articleInput.rawExcerpt,
+      articleInput.rawContent,
+      articleInput.imageUrl || null,
+      articleInput.metadata ? JSON.stringify(articleInput.metadata) : null,
+    ]
+  );
 }
 
 // Scrape enabled sources that are due by next_run_at.
@@ -160,7 +195,12 @@ async function runArticleFetchJob() {
 
       const articleInput = await fetcher.fetchArticle(job, source);
       if (articleInput) {
-        await insertArticleIfNew(articleInput);
+        const rescueArticleId = typeof job.payload_json?.rescueArticleId === 'string' ? job.payload_json.rescueArticleId : null;
+        if (rescueArticleId) {
+          await updateRescuedArticle(rescueArticleId, articleInput);
+        } else {
+          await insertArticleIfNew(articleInput);
+        }
       }
       await markArticleFetchJobDone(job.id);
       succeeded++;
@@ -247,7 +287,12 @@ async function runRetryJob() {
     const fetchFailedStatement = buildResetRetryableArticleFetchJobsSql(15);
     const fetchFailedResult = await query(fetchFailedStatement.sql, fetchFailedStatement.params);
     console.log(`  Reset ${fetchFailedResult.rowCount} failed article fetch jobs for retry`);
-    
+
+    const shortContentRetry = await requeueShortContentArticles(15, parseInt(process.env.MIN_ARTICLE_TEXT_LENGTH || '500', 10));
+    if (shortContentRetry.checked > 0) {
+      console.log(`  Short-content rescue: checked=${shortContentRetry.checked}, enqueued=${shortContentRetry.enqueued}`);
+    }
+
     // Retry lấy comment Reddit cho bài chưa có comment (Pullpush chậm index)
     let redditEnriched = 0;
     try {

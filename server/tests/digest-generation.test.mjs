@@ -55,6 +55,12 @@ function loadSummarizer(env = {}) {
     './ai-client.js': {},
     './prompt-settings.js': {},
     '../lib/promptConfig.js': {},
+    '../lib/promoFilter.js': {
+      isPromoTitle: () => false,
+      buildPromoClassifyPrompt: () => '',
+      isPromoClassification: () => false,
+      shouldRunPromoClassification: () => false,
+    },
   }, env);
 }
 
@@ -141,6 +147,12 @@ test('generate digest does not insert an empty AI response', async () => {
       }),
     },
     '../lib/promptConfig.js': {},
+    '../lib/promoFilter.js': {
+      isPromoTitle: () => false,
+      buildPromoClassifyPrompt: () => '',
+      isPromoClassification: () => false,
+      shouldRunPromoClassification: () => false,
+    },
   });
 
   const result = await generateDigest();
@@ -174,6 +186,12 @@ test('forum summary prompt requires translating foreign-language comments into V
     },
     './prompt-settings.js': {},
     '../lib/promptConfig.js': {},
+    '../lib/promoFilter.js': {
+      isPromoTitle: () => false,
+      buildPromoClassifyPrompt: () => '',
+      isPromoClassification: () => false,
+      shouldRunPromoClassification: () => false,
+    },
   });
 
   await summarizeArticle({
