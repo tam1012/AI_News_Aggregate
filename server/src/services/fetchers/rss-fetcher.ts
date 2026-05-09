@@ -36,7 +36,7 @@ interface RssDomainPolicy {
 }
 
 const DEFAULT_RSS_SNIPPET_FALLBACK_MIN_LENGTH = parsePositiveInt(process.env.RSS_SNIPPET_FALLBACK_MIN_LENGTH, 800);
-const DEFAULT_BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS = ['nytimes.com', 'eweek.com', 'kotaku.com', 'theinformation.com'];
+const DEFAULT_BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS = ['nytimes.com', 'eweek.com', 'kotaku.com', 'theinformation.com', 'politico.eu'];
 
 let googleDecoderPromise: Promise<any | null> | null = null;
 
