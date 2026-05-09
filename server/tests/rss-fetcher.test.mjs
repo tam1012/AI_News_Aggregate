@@ -34,6 +34,28 @@ function loadTsModule(relativePath, stubs = {}, globals = {}) {
   return moduleContext.exports;
 }
 
+const baseStubs = {
+  cheerio,
+  entities: { decodeHTML: (value) => value },
+  '@mozilla/readability': { Readability: class { parse() { return null; } } },
+  jsdom: { JSDOM: class { constructor() { this.window = { document: {}, close() {} }; } } },
+  '../../lib/utils.js': { normalizePublicHttpUrl: (value) => new URL(value).toString(), truncate: (value) => value, sleep: async () => {} },
+  './http-utils.js': { BROWSER_UA: 'test-agent', browserFetch: async () => '' },
+  './article-writer.js': { insertArticleIfNew: async () => true, MIN_ARTICLE_TEXT_LENGTH: 500 },
+  '../../lib/promoFilter.js': { matchPromoKeyword: () => null },
+  './selector-learning.js': { learnSelectorProfileFromHtml: async () => null },
+  './selector-profile.js': {
+    extractWithSelectorProfile: () => ({ title: '', content: '', imageUrl: null, publishedAt: null, matchedSelector: null }),
+    getDomainFromUrl: () => null,
+    getSourceProfile: async () => null,
+    isExtractionUsable: () => false,
+    recordProfileFailure: async () => {},
+    recordProfileSuccess: async () => {},
+    rowToSelectorProfile: () => null,
+    saveSourceProfile: async () => null,
+  },
+};
+
 const guardianStyleRss = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
   <channel>
@@ -50,33 +72,27 @@ const guardianStyleRss = `<?xml version="1.0" encoding="UTF-8"?>
   </channel>
 </rss>`;
 
+const googleNewsRss = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <item>
+      <title>Decoded Google News story</title>
+      <link>https://news.google.com/rss/articles/CBMi-test?oc=5</link>
+      <guid isPermaLink="false">google/example</guid>
+      <description>Google News excerpt</description>
+    </item>
+  </channel>
+</rss>`;
+
 test('RSS fetcher falls back to tolerant item parsing when strict parser rejects feed XML', async () => {
   const { rssFetcher } = loadTsModule('../src/services/fetchers/rss-fetcher.ts', {
+    ...baseStubs,
     'rss-parser': {
       default: class StrictParser {
         async parseString() {
           throw new Error('Attribute without value Line: 13 Column: 5 Char: /');
         }
       },
-    },
-    cheerio,
-    entities: { decodeHTML: (value) => value },
-    '@mozilla/readability': { Readability: class { parse() { return null; } } },
-    jsdom: { JSDOM: class { constructor() { this.window = { document: {}, close() {} }; } } },
-    '../../lib/utils.js': { normalizePublicHttpUrl: (value) => new URL(value).toString(), truncate: (value) => value, sleep: async () => {} },
-    './http-utils.js': { BROWSER_UA: 'test-agent', browserFetch: async () => '' },
-    './article-writer.js': { insertArticleIfNew: async () => true, MIN_ARTICLE_TEXT_LENGTH: 500 },
-    '../../lib/promoFilter.js': { matchPromoKeyword: () => null },
-    './selector-learning.js': { learnSelectorProfileFromHtml: async () => null },
-    './selector-profile.js': {
-      extractWithSelectorProfile: () => ({ title: '', content: '', imageUrl: null, publishedAt: null, matchedSelector: null }),
-      getDomainFromUrl: () => null,
-      getSourceProfile: async () => null,
-      isExtractionUsable: () => false,
-      recordProfileFailure: async () => {},
-      recordProfileSuccess: async () => {},
-      rowToSelectorProfile: () => null,
-      saveSourceProfile: async () => null,
     },
   }, {
     fetch: async () => ({ ok: true, text: async () => guardianStyleRss }),
@@ -99,4 +115,91 @@ test('RSS fetcher falls back to tolerant item parsing when strict parser rejects
   assert.equal(items[0].externalId, 'guardian/example');
   assert.equal(items[0].payload.rawExcerpt, 'Live coverage with updates.');
   assert.equal(items[0].payload.imageUrl, 'https://media.guim.co.uk/image.jpg');
+});
+
+test('RSS discover decodes Google News URLs before enqueueing', async () => {
+  const { rssFetcher } = loadTsModule('../src/services/fetchers/rss-fetcher.ts', {
+    ...baseStubs,
+    'rss-parser': {
+      default: class Parser {
+        async parseString() {
+          return {
+            items: [{
+              title: 'Decoded Google News story',
+              link: 'https://news.google.com/rss/articles/CBMi-test?oc=5',
+              guid: 'google/example',
+              contentSnippet: 'Google News excerpt',
+            }],
+          };
+        }
+      },
+    },
+    'google-news-url-decoder': {
+      GoogleDecoder: class {
+        async decode() {
+          return { status: true, decoded_url: 'https://www.reuters.com/world/example' };
+        }
+      },
+    },
+  }, {
+    fetch: async () => ({ ok: true, text: async () => googleNewsRss }),
+  });
+
+  const items = await rssFetcher.discover({
+    id: 'src_google',
+    type: 'rss',
+    name: 'Google News',
+    url: 'https://news.google.com/rss/search?q=test',
+    language: 'en',
+    category: null,
+    fetch_interval_minutes: 60,
+    parser_config: null,
+  });
+
+  assert.equal(items.length, 1);
+  assert.equal(items[0].url, 'https://www.reuters.com/world/example');
+  assert.equal(items[0].payload.googleNewsUrl, 'https://news.google.com/rss/articles/CBMi-test?oc=5');
+});
+
+test('RSS discover skips Google News items when decode fails', async () => {
+  const { rssFetcher } = loadTsModule('../src/services/fetchers/rss-fetcher.ts', {
+    ...baseStubs,
+    'rss-parser': {
+      default: class Parser {
+        async parseString() {
+          return {
+            items: [{
+              title: 'Undecoded Google News story',
+              link: 'https://news.google.com/rss/articles/CBMi-fail?oc=5',
+              guid: 'google/fail',
+              contentSnippet: 'Google News excerpt',
+            }],
+          };
+        }
+      },
+    },
+    'google-news-url-decoder': {
+      GoogleDecoder: class {
+        async decode() {
+          return { status: false, message: 'decode failed' };
+        }
+      },
+    },
+  }, {
+    fetch: async () => ({ ok: true, text: async () => googleNewsRss }),
+    console: { warn: () => {}, log: () => {} },
+  });
+
+  const items = await rssFetcher.discover({
+    id: 'src_google',
+    type: 'rss',
+    name: 'Google News',
+    url: 'https://news.google.com/rss/search?q=test',
+    language: 'en',
+    category: null,
+    fetch_interval_minutes: 60,
+    parser_config: null,
+  });
+
+  assert.equal(items.length, 0);
 });

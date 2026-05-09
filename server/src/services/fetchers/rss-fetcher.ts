@@ -28,6 +28,41 @@ const rssParser = new RssParser({
   },
 });
 
+let googleDecoderPromise: Promise<any | null> | null = null;
+
+function isGoogleNewsArticleUrl(url: string): boolean {
+  return url.includes('news.google.com/rss/articles/');
+}
+
+async function getGoogleNewsDecoder(): Promise<any | null> {
+  if (!googleDecoderPromise) {
+    // @ts-ignore
+    googleDecoderPromise = import('google-news-url-decoder')
+      .then((decoderModule: any) => {
+        const GoogleDecoder = decoderModule.GoogleDecoder || decoderModule.default;
+        return GoogleDecoder ? new GoogleDecoder() : null;
+      })
+      .catch(() => null);
+  }
+  return googleDecoderPromise;
+}
+
+async function decodeGoogleNewsUrl(url: string): Promise<string> {
+  if (!isGoogleNewsArticleUrl(url)) return url;
+
+  const decoder = await getGoogleNewsDecoder();
+  if (!decoder) throw new Error('Google News URL decoder is not available');
+
+  const decoded = await decoder.decode(url);
+  if (!decoded?.status || !decoded.decoded_url) {
+    throw new Error(decoded?.message || 'Google News URL decoder returned no article URL');
+  }
+
+  const normalized = normalizePublicHttpUrl(decoded.decoded_url);
+  if (!normalized) throw new Error('Google News decoded URL is not a public http(s) URL');
+  return normalized;
+}
+
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = parseInt(value || '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -279,31 +314,20 @@ export const rssFetcher: SourceFetcher = {
     const xml = await response.text();
     const items = (await parseFeedItems(xml)).slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 20));
 
-    let GoogleDecoder: any = null;
-    try {
-      // @ts-ignore
-      const decoderModule = await import('google-news-url-decoder');
-      GoogleDecoder = decoderModule.GoogleDecoder || decoderModule.default;
-    } catch {
-      // Ignored if not installed
-    }
-    const decoder = GoogleDecoder ? new GoogleDecoder() : null;
-
     const results = [];
     for (const item of items) {
       const rawItem = item as RssParser.Item & Record<string, any>;
       if (!item.link || !item.title) continue;
       let url = normalizePublicHttpUrl(item.link);
       if (!url) continue;
+      const googleNewsUrl = isGoogleNewsArticleUrl(url) ? url : null;
 
-      if (url.includes('news.google.com/rss/articles/') && decoder) {
+      if (googleNewsUrl) {
         try {
-          const decoded = await decoder.decode(url);
-          if (decoded && decoded.status && decoded.decoded_url) {
-            url = normalizePublicHttpUrl(decoded.decoded_url) || url;
-          }
-        } catch (err) {
-          console.warn(`Failed to decode Google News URL ${url}:`, err);
+          url = await decodeGoogleNewsUrl(googleNewsUrl);
+        } catch (err: any) {
+          console.warn(`Failed to decode Google News URL ${googleNewsUrl}: ${err.message}`);
+          continue;
         }
       }
 
@@ -329,6 +353,7 @@ export const rssFetcher: SourceFetcher = {
           rawContent: stripHtml(rawContent),
           contentHashSeed: decodeText(item.title) + rawExcerpt,
           imageUrl,
+          googleNewsUrl,
         },
       });
     }
@@ -341,10 +366,19 @@ export const rssFetcher: SourceFetcher = {
     const rssContent = payload.rawContent || '';
     let fullArticle: Awaited<ReturnType<typeof fetchFullArticle>> | null = null;
 
+    let articleUrl = job.url;
+    if (isGoogleNewsArticleUrl(articleUrl)) {
+      try {
+        articleUrl = await decodeGoogleNewsUrl(articleUrl);
+      } catch (err: any) {
+        throw new Error(`Google News URL decode failed for queued article: ${err.message}`);
+      }
+    }
+
     try {
-      fullArticle = await fetchFullArticle(job.url);
+      fullArticle = await fetchFullArticle(articleUrl);
     } catch (err: any) {
-      console.warn(`Failed to fetch full RSS article ${job.url}: ${err.message}`);
+      console.warn(`Failed to fetch full RSS article ${articleUrl}: ${err.message}`);
     }
 
     const fullContent = fullArticle?.content || '';
@@ -354,7 +388,7 @@ export const rssFetcher: SourceFetcher = {
     return {
       source,
       externalId: job.external_id,
-      url: job.url,
+      url: articleUrl,
       title: fullArticle?.title || job.title,
       author: payload.author || null,
       publishedAt: fullArticle?.publishedAt || job.published_at,
