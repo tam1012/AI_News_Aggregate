@@ -279,11 +279,33 @@ export const rssFetcher: SourceFetcher = {
     const xml = await response.text();
     const items = (await parseFeedItems(xml)).slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 20));
 
-    return items.flatMap((item) => {
+    let GoogleDecoder: any = null;
+    try {
+      // @ts-ignore
+      const decoderModule = await import('google-news-url-decoder');
+      GoogleDecoder = decoderModule.GoogleDecoder || decoderModule.default;
+    } catch {
+      // Ignored if not installed
+    }
+    const decoder = GoogleDecoder ? new GoogleDecoder() : null;
+
+    const results = [];
+    for (const item of items) {
       const rawItem = item as RssParser.Item & Record<string, any>;
-      if (!item.link || !item.title) return [];
-      const url = normalizePublicHttpUrl(item.link);
-      if (!url) return [];
+      if (!item.link || !item.title) continue;
+      let url = normalizePublicHttpUrl(item.link);
+      if (!url) continue;
+
+      if (url.includes('news.google.com/rss/articles/') && decoder) {
+        try {
+          const decoded = await decoder.decode(url);
+          if (decoded && decoded.status && decoded.decoded_url) {
+            url = normalizePublicHttpUrl(decoded.decoded_url) || url;
+          }
+        } catch (err) {
+          console.warn(`Failed to decode Google News URL ${url}:`, err);
+        }
+      }
 
       const rawExcerpt = item.contentSnippet || item.content || '';
       const rawContent = item.content || rawItem['content:encoded'] || '';
@@ -295,7 +317,7 @@ export const rssFetcher: SourceFetcher = {
         imageUrl = $('img').first().attr('src') || null;
       }
 
-      return [{
+      results.push({
         sourceId: source.id,
         url,
         title: decodeText(item.title),
@@ -308,8 +330,10 @@ export const rssFetcher: SourceFetcher = {
           contentHashSeed: decodeText(item.title) + rawExcerpt,
           imageUrl,
         },
-      }];
-    });
+      });
+    }
+
+    return results;
   },
   async fetchArticle(job, source) {
     const payload = job.payload_json || {};

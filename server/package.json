@@ -16,6 +16,7 @@
     "cheerio": "^1.0.0",
     "dotenv": "^16.5.0",
     "entities": "^4.5.0",
+    "google-news-url-decoder": "^1.2.1",
     "hono": "^4.7.4",
     "jsdom": "^29.1.1",
     "nanoid": "^5.1.3",
