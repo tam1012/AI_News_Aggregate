@@ -36,7 +36,14 @@ interface RssDomainPolicy {
 }
 
 const DEFAULT_RSS_SNIPPET_FALLBACK_MIN_LENGTH = parsePositiveInt(process.env.RSS_SNIPPET_FALLBACK_MIN_LENGTH, 800);
-const DEFAULT_BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS = ['nytimes.com', 'eweek.com', 'kotaku.com', 'theinformation.com', 'politico.eu', 'latimes.com', 'axios.com', 'wsj.com', 'bloomberg.com'];
+const DEFAULT_BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS = [
+  'nytimes.com', 'eweek.com', 'kotaku.com', 'theinformation.com', 'politico.eu', 
+  'latimes.com', 'axios.com', 'wsj.com', 'bloomberg.com', 'ft.com', 'economist.com', 
+  'barrons.com', 'businessinsider.com', 'seekingalpha.com', 'nikkei.com', 
+  'washingtonpost.com', 'thetimes.co.uk', 'telegraph.co.uk', 'scmp.com', 
+  'theglobeandmail.com', 'theatlantic.com', 'newyorker.com', 'medium.com', 
+  'towardsdatascience.com', 'wired.com', 'technologyreview.com', 'hbr.org'
+];
 
 let googleDecoderPromise: Promise<any | null> | null = null;
 
