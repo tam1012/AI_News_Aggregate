@@ -36,6 +36,7 @@ interface RssDomainPolicy {
 }
 
 const DEFAULT_RSS_SNIPPET_FALLBACK_MIN_LENGTH = parsePositiveInt(process.env.RSS_SNIPPET_FALLBACK_MIN_LENGTH, 800);
+const DEFAULT_BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS = ['nytimes.com', 'eweek.com', 'kotaku.com', 'theinformation.com'];
 
 let googleDecoderPromise: Promise<any | null> | null = null;
 
@@ -49,6 +50,19 @@ function getHostname(url: string): string {
 
 function domainMatches(hostname: string, domain: string): boolean {
   return hostname === domain || hostname.endsWith(`.${domain}`);
+}
+
+function getBlockedGoogleNewsPublisherDomains(): string[] {
+  const configured = (process.env.BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS || '')
+    .split(',')
+    .map(domain => domain.trim().toLowerCase())
+    .filter(Boolean);
+  return configured.length > 0 ? configured : DEFAULT_BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS;
+}
+
+function isBlockedGoogleNewsPublisherUrl(url: string): boolean {
+  const hostname = getHostname(url);
+  return getBlockedGoogleNewsPublisherDomains().some(domain => domainMatches(hostname, domain));
 }
 
 function getRssDomainPolicy(url: string): RssDomainPolicy {
@@ -393,6 +407,10 @@ export const rssFetcher: SourceFetcher = {
           console.warn(`Failed to decode Google News URL ${googleNewsUrl}: ${err.message}`);
           continue;
         }
+        if (isBlockedGoogleNewsPublisherUrl(url)) {
+          console.log(`[google-news-filter] Skipped "${item.title}" from blocked publisher ${getHostname(url)}`);
+          continue;
+        }
       }
 
       const rawExcerpt = item.contentSnippet || item.content || '';
@@ -437,6 +455,10 @@ export const rssFetcher: SourceFetcher = {
       } catch (err: any) {
         throw new Error(`Google News URL decode failed for queued article: ${err.message}`);
       }
+    }
+
+    if ((payload.googleNewsUrl || isGoogleNewsArticleUrl(job.url)) && isBlockedGoogleNewsPublisherUrl(articleUrl)) {
+      throw new Error(`Google News publisher blocked by domain policy: ${getHostname(articleUrl)}`);
     }
 
     const policy = getRssDomainPolicy(articleUrl);

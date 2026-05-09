@@ -163,6 +163,77 @@ test('RSS discover decodes Google News URLs before enqueueing', async () => {
   assert.equal(items[0].payload.googleNewsUrl, 'https://news.google.com/rss/articles/CBMi-test?oc=5');
 });
 
+test('RSS discover skips blocked Google News publisher domains after decode', async () => {
+  const { rssFetcher } = loadTsModule('../src/services/fetchers/rss-fetcher.ts', {
+    ...baseStubs,
+    'rss-parser': {
+      default: class Parser {
+        async parseString() {
+          return {
+            items: [{
+              title: 'Blocked Google News story',
+              link: 'https://news.google.com/rss/articles/CBMi-blocked?oc=5',
+              guid: 'google/blocked',
+              contentSnippet: 'Google News excerpt',
+            }],
+          };
+        }
+      },
+    },
+    'google-news-url-decoder': {
+      GoogleDecoder: class {
+        async decode() {
+          return { status: true, decoded_url: 'https://www.nytimes.com/2026/05/09/business/example.html' };
+        }
+      },
+    },
+  }, {
+    fetch: async () => ({ ok: true, text: async () => googleNewsRss }),
+    console: { warn: () => {}, log: () => {} },
+  });
+
+  const items = await rssFetcher.discover({
+    id: 'src_google',
+    type: 'rss',
+    name: 'Google News',
+    url: 'https://news.google.com/rss/search?q=test',
+    language: 'en',
+    category: null,
+    fetch_interval_minutes: 60,
+    parser_config: null,
+  });
+
+  assert.equal(items.length, 0);
+});
+
+test('RSS fetchArticle rejects queued blocked Google News publisher domains', async () => {
+  const { rssFetcher } = loadTsModule('../src/services/fetchers/rss-fetcher.ts', baseStubs, {
+    fetch: async () => ({ ok: true, text: async () => '<html><body>unused</body></html>' }),
+  });
+
+  await assert.rejects(
+    () => rssFetcher.fetchArticle({
+      id: 'job_blocked',
+      source_id: 'src_google',
+      url: 'https://www.nytimes.com/2026/05/09/business/example.html',
+      title: 'Blocked story',
+      external_id: 'google/blocked',
+      published_at: null,
+      payload_json: { googleNewsUrl: 'https://news.google.com/rss/articles/CBMi-test?oc=5' },
+    }, {
+      id: 'src_google',
+      type: 'rss',
+      name: 'Google News',
+      url: 'https://news.google.com/rss/search?q=test',
+      language: 'en',
+      category: null,
+      fetch_interval_minutes: 60,
+      parser_config: null,
+    }),
+    /Google News publisher blocked by domain policy: nytimes.com/
+  );
+});
+
 test('RSS fetchArticle uses RSS snippet fallback when full article fetch fails', async () => {
   const longSnippet = 'Detailed RSS content '.repeat(60);
   const { rssFetcher } = loadTsModule('../src/services/fetchers/rss-fetcher.ts', baseStubs, {
@@ -173,7 +244,7 @@ test('RSS fetchArticle uses RSS snippet fallback when full article fetch fails',
   const article = await rssFetcher.fetchArticle({
     id: 'job_1',
     source_id: 'src_google',
-    url: 'https://www.nytimes.com/2026/05/09/business/example.html',
+    url: 'https://www.reuters.com/world/example',
     title: 'Paywalled story',
     external_id: 'google/paywall',
     published_at: null,
