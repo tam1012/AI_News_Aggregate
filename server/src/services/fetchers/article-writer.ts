@@ -7,7 +7,7 @@ interface ArticleWriterSource {
   language: string;
 }
 
-const MIN_ARTICLE_TEXT_LENGTH = parseInt(typeof process !== 'undefined' ? process.env.MIN_ARTICLE_TEXT_LENGTH || '500' : '500', 10);
+export const MIN_ARTICLE_TEXT_LENGTH = parseInt(typeof process !== 'undefined' ? process.env.MIN_ARTICLE_TEXT_LENGTH || '500' : '500', 10);
 
 export class ArticleContentTooShortError extends Error {
   constructor(length: number, minLength: number) {

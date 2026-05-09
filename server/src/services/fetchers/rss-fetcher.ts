@@ -1,10 +1,12 @@
 import RssParser from 'rss-parser';
 import * as cheerio from 'cheerio';
 import { decodeHTML } from 'entities';
-import { normalizePublicHttpUrl, truncate } from '../../lib/utils.js';
+import { Readability } from '@mozilla/readability';
+import { JSDOM } from 'jsdom';
+import { normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
 import { matchPromoKeyword } from '../../lib/promoFilter.js';
 import { BROWSER_UA, browserFetch } from './http-utils.js';
-import { insertArticleIfNew } from './article-writer.js';
+import { insertArticleIfNew, MIN_ARTICLE_TEXT_LENGTH } from './article-writer.js';
 import { SourceFetcher } from './types.js';
 import { learnSelectorProfileFromHtml } from './selector-learning.js';
 import {
@@ -93,6 +95,18 @@ function extractArticleText($: cheerio.CheerioAPI): string {
   return best;
 }
 
+function extractWithReadability(html: string, url: string): string {
+  try {
+    const dom = new JSDOM(html, { url });
+    const reader = new Readability(dom.window.document);
+    const article = reader.parse();
+    dom.window.close();
+    return article?.textContent?.replace(/\s+/g, ' ').trim() || '';
+  } catch {
+    return '';
+  }
+}
+
 function normalizeDate(value: string | null): string | null {
   if (!value) return null;
   const date = new Date(value);
@@ -116,19 +130,27 @@ async function extractArticleFromHtml(html: string, jobUrl: string, extractor: s
   const title = $('h1').first().text().replace(/\s+/g, ' ').trim() ||
     getMetaContent($, 'meta[property="og:title"]') ||
     $('title').first().text().replace(/\s+/g, ' ').trim();
-  const content = extractArticleText($);
+  let content = extractArticleText($);
   const imageUrl = getMetaContent($, 'meta[property="og:image"]') || getMetaContent($, 'meta[name="twitter:image"]') || null;
   const publishedAt = $('time[datetime]').first().attr('datetime') ||
     getMetaContent($, 'meta[property="article:published_time"]') ||
     getMetaContent($, 'meta[name="pubdate"]') ||
     null;
 
+  // Fallback: Mozilla Readability when cheerio selectors produce short content
+  if (content.length < MIN_ARTICLE_TEXT_LENGTH) {
+    const readabilityContent = extractWithReadability(html, jobUrl);
+    if (readabilityContent.length > content.length) {
+      content = readabilityContent;
+    }
+  }
+
   return {
     title,
     content,
     imageUrl: imageUrl ? normalizePublicHttpUrl(new URL(imageUrl, jobUrl).toString()) : null,
     publishedAt: normalizeDate(publishedAt),
-    metadata: { extractor: `${extractor}:selectors` },
+    metadata: { extractor: content.length >= MIN_ARTICLE_TEXT_LENGTH && extractArticleText($).length < MIN_ARTICLE_TEXT_LENGTH ? `${extractor}:readability` : `${extractor}:selectors` },
   };
 }
 
@@ -178,7 +200,7 @@ async function fetchFullArticle(jobUrl: string): Promise<{ title: string; conten
 
     const html = await response.text();
     const article = await extractArticleFromHtml(html, jobUrl, 'fetch');
-    if (article.content.length >= 500) return article;
+    if (article.content.length >= MIN_ARTICLE_TEXT_LENGTH) return article;
     fetchError = new Error(`fetch extraction too short (${article.content.length} characters)`);
   } catch (err: any) {
     fetchError = err instanceof Error ? err : new Error(String(err));
@@ -186,9 +208,10 @@ async function fetchFullArticle(jobUrl: string): Promise<{ title: string; conten
 
   try {
     console.warn(`Retrying RSS article with browser fetch ${jobUrl}: ${fetchError?.message || 'short content'}`);
+    await sleep(2000);
     const html = await browserFetch(jobUrl, parseInt(process.env.ARTICLE_BROWSER_FETCH_TIMEOUT_MS || '30000', 10));
     const article = await extractArticleFromHtml(html, jobUrl, 'browser');
-    if (article.content.length >= 500) return article;
+    if (article.content.length >= MIN_ARTICLE_TEXT_LENGTH) return article;
     throw new Error(`browser extraction too short (${article.content.length} characters)`);
   } catch (browserErr: any) {
     throw new Error(`Full article fetch failed: ${fetchError?.message || 'unknown fetch error'}; browser fallback failed: ${browserErr.message}`);

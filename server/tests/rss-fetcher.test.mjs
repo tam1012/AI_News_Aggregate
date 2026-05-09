@@ -61,9 +61,11 @@ test('RSS fetcher falls back to tolerant item parsing when strict parser rejects
     },
     cheerio,
     entities: { decodeHTML: (value) => value },
-    '../../lib/utils.js': { normalizePublicHttpUrl: (value) => new URL(value).toString(), truncate: (value) => value },
+    '@mozilla/readability': { Readability: class { parse() { return null; } } },
+    jsdom: { JSDOM: class { constructor() { this.window = { document: {}, close() {} }; } } },
+    '../../lib/utils.js': { normalizePublicHttpUrl: (value) => new URL(value).toString(), truncate: (value) => value, sleep: async () => {} },
     './http-utils.js': { BROWSER_UA: 'test-agent', browserFetch: async () => '' },
-    './article-writer.js': { insertArticleIfNew: async () => true },
+    './article-writer.js': { insertArticleIfNew: async () => true, MIN_ARTICLE_TEXT_LENGTH: 500 },
     '../../lib/promoFilter.js': { matchPromoKeyword: () => null },
     './selector-learning.js': { learnSelectorProfileFromHtml: async () => null },
     './selector-profile.js': {

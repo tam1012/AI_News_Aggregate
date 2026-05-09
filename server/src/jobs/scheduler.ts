@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { getMany, query, getOne } from '../db/index.js';
 import { scrapeSource, retryRedditComments } from '../services/scraper.js';
 import { summarizePendingArticles, generateDigest } from '../services/summarizer.js';
-import { generateId } from '../lib/utils.js';
+import { generateId, sleep } from '../lib/utils.js';
 import { rescrapeArticle, runForumRescrapeJob } from '../services/rescrape.js';
 import { getFetcherForSource } from '../services/fetchers/registry.js';
 import { sourceFetchers, SourceRow } from '../services/fetchers/index.js';
@@ -175,7 +175,9 @@ async function runArticleFetchJob() {
   let succeeded = 0;
   let failed = 0;
 
+  let fetchCount = 0;
   for (const job of jobs) {
+    if (fetchCount > 0) await sleep(1500);
     const source: SourceRow = {
       id: job.source_id,
       type: job.source_type,
@@ -208,6 +210,7 @@ async function runArticleFetchJob() {
       await markArticleFetchJobFailed(job.id, err);
       failed++;
     }
+    fetchCount++;
   }
 
   console.log(`  Article fetch jobs: processed=${jobs.length}, succeeded=${succeeded}, failed=${failed}`);
