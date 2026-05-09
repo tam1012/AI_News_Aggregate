@@ -131,6 +131,7 @@ async function extractArticleFromHtml(html: string, jobUrl: string, extractor: s
     getMetaContent($, 'meta[property="og:title"]') ||
     $('title').first().text().replace(/\s+/g, ' ').trim();
   let content = extractArticleText($);
+  const selectorContentLength = content.length;
   const imageUrl = getMetaContent($, 'meta[property="og:image"]') || getMetaContent($, 'meta[name="twitter:image"]') || null;
   const publishedAt = $('time[datetime]').first().attr('datetime') ||
     getMetaContent($, 'meta[property="article:published_time"]') ||
@@ -150,7 +151,7 @@ async function extractArticleFromHtml(html: string, jobUrl: string, extractor: s
     content,
     imageUrl: imageUrl ? normalizePublicHttpUrl(new URL(imageUrl, jobUrl).toString()) : null,
     publishedAt: normalizeDate(publishedAt),
-    metadata: { extractor: content.length >= MIN_ARTICLE_TEXT_LENGTH && extractArticleText($).length < MIN_ARTICLE_TEXT_LENGTH ? `${extractor}:readability` : `${extractor}:selectors` },
+    metadata: { extractor: content.length >= MIN_ARTICLE_TEXT_LENGTH && selectorContentLength < MIN_ARTICLE_TEXT_LENGTH ? `${extractor}:readability` : `${extractor}:selectors` },
   };
 }
 
