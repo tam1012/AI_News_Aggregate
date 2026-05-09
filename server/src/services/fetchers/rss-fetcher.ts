@@ -5,7 +5,7 @@ import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import { normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
 import { matchPromoKeyword } from '../../lib/promoFilter.js';
-import { BROWSER_UA, BrowserFetchOptions, browserFetch } from './http-utils.js';
+import { BROWSER_UA, GOOGLEBOT_UA, BrowserFetchOptions, browserFetch } from './http-utils.js';
 import { insertArticleIfNew, MIN_ARTICLE_TEXT_LENGTH } from './article-writer.js';
 import { SourceFetcher } from './types.js';
 import { learnSelectorProfileFromHtml } from './selector-learning.js';
@@ -36,14 +36,7 @@ interface RssDomainPolicy {
 }
 
 const DEFAULT_RSS_SNIPPET_FALLBACK_MIN_LENGTH = parsePositiveInt(process.env.RSS_SNIPPET_FALLBACK_MIN_LENGTH, 800);
-const DEFAULT_BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS = [
-  'nytimes.com', 'eweek.com', 'kotaku.com', 'theinformation.com', 'politico.eu', 
-  'latimes.com', 'axios.com', 'wsj.com', 'bloomberg.com', 'ft.com', 'economist.com', 
-  'barrons.com', 'businessinsider.com', 'seekingalpha.com', 'nikkei.com', 
-  'washingtonpost.com', 'thetimes.co.uk', 'telegraph.co.uk', 'scmp.com', 
-  'theglobeandmail.com', 'theatlantic.com', 'newyorker.com', 'medium.com', 
-  'towardsdatascience.com', 'wired.com', 'technologyreview.com', 'hbr.org'
-];
+const DEFAULT_BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS: string[] = [];
 
 let googleDecoderPromise: Promise<any | null> | null = null;
 
@@ -323,6 +316,25 @@ async function fetchFullArticle(jobUrl: string, policy = getRssDomainPolicy(jobU
     fetchError = err instanceof Error ? err : new Error(String(err));
   }
 
+  try {
+    console.warn(`Retrying RSS article with Googlebot UA ${jobUrl}: ${fetchError?.message || 'short content'}`);
+    const response = await fetch(jobUrl, {
+      headers: {
+        'User-Agent': GOOGLEBOT_UA,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new Error(`Status code ${response.status}`);
+
+    const html = await response.text();
+    const article = await extractArticleFromHtml(html, jobUrl, 'fetch:googlebot');
+    if (article.content.length >= MIN_ARTICLE_TEXT_LENGTH) return article;
+    fetchError = new Error(`googlebot extraction too short (${article.content.length} characters)`);
+  } catch (err: any) {
+    fetchError = err instanceof Error ? err : new Error(String(err));
+  }
+
   if (policy.skipBrowserFallback) {
     throw new Error(`Full article fetch failed: ${fetchError?.message || 'unknown fetch error'}; browser fallback skipped by domain policy`);
   }
@@ -330,7 +342,8 @@ async function fetchFullArticle(jobUrl: string, policy = getRssDomainPolicy(jobU
   try {
     console.warn(`Retrying RSS article with browser fetch ${jobUrl}: ${fetchError?.message || 'short content'}`);
     await sleep(2000);
-    const html = await browserFetch(jobUrl, parseInt(process.env.ARTICLE_BROWSER_FETCH_TIMEOUT_MS || '30000', 10), policy.browserOptions || false);
+    const options = { ...(policy.browserOptions || {}), userAgent: GOOGLEBOT_UA };
+    const html = await browserFetch(jobUrl, parseInt(process.env.ARTICLE_BROWSER_FETCH_TIMEOUT_MS || '30000', 10), options);
     const article = await extractArticleFromHtml(html, jobUrl, 'browser');
     if (article.content.length >= MIN_ARTICLE_TEXT_LENGTH) return article;
     throw new Error(`browser extraction too short (${article.content.length} characters)`);

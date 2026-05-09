@@ -190,6 +190,7 @@ test('RSS discover skips blocked Google News publisher domains after decode', as
   }, {
     fetch: async () => ({ ok: true, text: async () => googleNewsRss }),
     console: { warn: () => {}, log: () => {} },
+    process: { env: { BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS: 'nytimes.com' } },
   });
 
   const items = await rssFetcher.discover({
@@ -209,6 +210,7 @@ test('RSS discover skips blocked Google News publisher domains after decode', as
 test('RSS fetchArticle rejects queued blocked Google News publisher domains', async () => {
   const { rssFetcher } = loadTsModule('../src/services/fetchers/rss-fetcher.ts', baseStubs, {
     fetch: async () => ({ ok: true, text: async () => '<html><body>unused</body></html>' }),
+    process: { env: { BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS: 'nytimes.com' } },
   });
 
   await assert.rejects(

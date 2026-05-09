@@ -3,6 +3,7 @@ import puppeteer from 'puppeteer-core';
 import { normalizePublicHttpUrl } from '../../lib/utils.js';
 
 export const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+export const GOOGLEBOT_UA = 'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/W.X.Y.Z Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
 
 export function curlFetch(url: string, accept: string, timeoutSec: number): Promise<{ ok: boolean; status: number; text: () => Promise<string>; json: () => Promise<any> }> {
   return new Promise((resolve, reject) => {
@@ -60,6 +61,7 @@ export interface BrowserFetchOptions {
   waitUntil?: 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2';
   blockHeavyResources?: boolean;
   settleMs?: number;
+  userAgent?: string;
 }
 
 export async function browserFetch(url: string, timeoutMs: number = 30000, rawTextOrOptions: boolean | BrowserFetchOptions = false): Promise<string> {
@@ -87,7 +89,7 @@ export async function browserFetch(url: string, timeoutMs: number = 30000, rawTe
         request.continue();
       });
     }
-    await page.setUserAgent(BROWSER_UA);
+    await page.setUserAgent(options.userAgent || BROWSER_UA);
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
     await page.setViewport({ width: 1920, height: 1080 });
     await page.goto(safeUrl, { waitUntil: options.waitUntil || 'networkidle2', timeout: timeoutMs });
