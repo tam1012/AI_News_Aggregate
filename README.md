@@ -51,7 +51,9 @@ Project này được thiết kế cho nhu cầu tự host cá nhân: ít thao t
 - Điều hướng theo ngày có bài, điều hướng bàn phím giữa các bài.
 - Đánh dấu bài đã đọc bằng `localStorage`.
 - Thumbnail trong feed khi ảnh đủ hữu ích, image proxy server-side.
-- Copy link bài gốc và mở bài gốc.
+- Copy link bài gốc, mở bài gốc, nút chia sẻ Web Share API.
+- Thanh reading progress khi đọc bài dài.
+- Swipe trái/phải để chuyển bài trên mobile.
 - Dark mode (GitHub palette) / light mode.
 - Chỉnh cỡ chữ qua Settings sheet.
 - Skeleton riêng cho feed và article detail, giúp hard refresh deep link không bị nhảy layout.
@@ -61,6 +63,11 @@ Project này được thiết kế cho nhu cầu tự host cá nhân: ít thao t
 
 - RSS parser cho nguồn RSS chuẩn.
 - Web scraper với AI-learned selector profiles: tự học CSS selector từ HTML lần đầu, cache lại cho lần sau.
+- **Content extraction 3 tầng**: AI selector → cheerio CSS selectors → Mozilla Readability fallback.
+- **Quality gate**: chặn insert bài có content quá ngắn trước khi vào DB, tránh tạo summary rỗng.
+- **Fetch fallback**: nếu HTTP fetch thường bị block (429/403), tự retry bằng Puppeteer headless browser.
+- **Rate limiting**: delay 1.5s giữa các article fetch jobs và 2s trước browser retry để tránh bị rate-limit.
+- **Rescue job**: tự tìm bài cũ bị skipped vì thiếu content, requeue fetch lại và cập nhật article gốc.
 - GitHub Trending scraper riêng.
 - Reddit scraper theo hướng RSS + enrich comment theo nhiều fallback.
 - VOZ scraper riêng: lấy RSS thread, mở thread thật, đọc nhiều page, chọn comment nổi bật.
@@ -129,6 +136,8 @@ Backend:
 - rss-parser
 - cheerio
 - puppeteer-core
+- @mozilla/readability + jsdom (content extraction fallback)
+- sharp (image processing)
 
 DevOps:
 
@@ -158,7 +167,8 @@ DevOps:
 │   │   ├── services/
 │   │   │   ├── api.ts              # API client
 │   │   │   ├── apiCache.ts         # In-memory cache policy
-│   │   │   └── persistentCache.ts  # localStorage fallback cache
+│   │   │   ├── persistentCache.ts  # localStorage fallback cache
+│   │   │   └── serviceWorker.ts    # PWA service worker registration
 │   │   ├── styles/global.css       # Toàn bộ CSS
 │   │   ├── main.tsx
 │   │   └── router.tsx
@@ -172,6 +182,7 @@ DevOps:
 │   │   ├── jobs/scheduler.ts       # Cron scheduler + job lock
 │   │   ├── lib/
 │   │   │   ├── auth.ts             # Auth middleware + rate limit
+│   │   │   ├── htmlEntities.ts     # HTML entity decode + mojibake repair
 │   │   │   ├── promoFilter.ts      # Keyword + AI promo detection
 │   │   │   ├── promptConfig.ts     # Prompt config types
 │   │   │   ├── summaryOutput.ts    # AI output parser (JSON + legacy)
@@ -196,22 +207,26 @@ DevOps:
 │   │   │   ├── scraper.ts          # Scraping orchestrator
 │   │   │   ├── summarizer.ts       # AI summarization + promo classify
 │   │   │   ├── ai-client.ts        # Multi-provider AI client
-│   │   │   ├── article-fetch-queue.ts # 2-phase fetch queue
+│   │   │   ├── article-fetch-queue.ts # 2-phase fetch queue + rescue
 │   │   │   ├── prompt-settings.ts  # Prompt config DB access
 │   │   │   ├── rescrape.ts         # Forum rescrape
 │   │   │   └── fetchers/
-│   │   │       ├── rss-fetcher.ts      # RSS + promo keyword filter
+│   │   │       ├── rss-fetcher.ts      # RSS + Readability + browser fallback
 │   │   │       ├── html-fetcher.ts     # Web scraper + promo filter
 │   │   │       ├── forum-fetchers.ts   # Reddit + VOZ logic
+│   │   │       ├── forum-utils.ts      # Shared forum comment utilities
+│   │   │       ├── reddit-fetcher.ts   # Reddit fetcher re-export
+│   │   │       ├── voz-fetcher.ts      # VOZ fetcher re-export
 │   │   │       ├── youtube-fetcher.ts  # YouTube channel + transcript
 │   │   │       ├── github-trending-fetcher.ts # GitHub Trending
 │   │   │       ├── selector-learning.ts  # AI selector learning
 │   │   │       ├── selector-profile.ts   # Selector cache/profile
-│   │   │       ├── article-writer.ts     # DB insert logic
+│   │   │       ├── article-writer.ts     # DB insert + quality gate
+│   │   │       ├── http-utils.ts         # HTTP fetch + Puppeteer browserFetch
 │   │   │       ├── registry.ts           # Fetcher routing
 │   │   │       └── types.ts
 │   │   └── index.ts                # Server entry point
-│   └── tests/
+│   └── tests/                      # 16 test files (58 tests)
 ├── scripts/                        # Local dev helpers
 ├── Dockerfile
 ├── docker-compose.yml
@@ -474,6 +489,13 @@ Biến quan trọng:
 | `YOUTUBE_RECENT_DAYS` | Số ngày video YouTube gần nhất được giữ lại, mặc định 7 |
 | `YOUTUBE_TRANSCRIPT_MAX_CHARS` | Trần độ dài transcript đưa vào raw content, mặc định 30000 |
 | `PUPPETEER_EXECUTABLE_PATH` | Chromium path trong container |
+| `MIN_ARTICLE_TEXT_LENGTH` | Ngưỡng tối thiểu content để insert article, mặc định `500` chars |
+| `ARTICLE_BROWSER_FETCH_TIMEOUT_MS` | Timeout cho Puppeteer browser fetch fallback, mặc định `30000` |
+| `MAX_ARTICLE_FETCH_JOBS_PER_RUN` | Số fetch jobs xử lý mỗi lượt, mặc định `30` |
+| `SOURCE_SCRAPE_TIMEOUT_MS` | Timeout tổng cho mỗi source scrape, mặc định auto theo loại source |
+| `FORUM_MIN_COMMENTS` | Số comment tối thiểu để giữ bài forum VOZ, mặc định `10` |
+| `REDDIT_MIN_COMMENTS` | Số comment tối thiểu để giữ bài Reddit, mặc định `5` |
+| `IMAGE_CACHE_MAX_MB` | Giới hạn cache ảnh proxy trên đĩa, mặc định `200` MB |
 
 Default cần chú ý:
 
@@ -723,11 +745,11 @@ Lưu ý: đổi URL smoke test public trong `deploy.yml` nếu dùng domain khá
 | Job | Lịch | Việc làm |
 |---|---|---|
 | Source discovery | `*/5 * * * *` + startup check | Kiểm tra source đến hạn theo `next_run_at`; source mặc định 60 phút/lần, có jitter nhỏ, lỗi thì backoff tối đa 24 giờ |
-| Article Fetch Queue | `*/5 * * * *` | Claim URL đã discover trong `article_fetch_jobs`, fetch nội dung chi tiết, rồi tạo article pending summary |
+| Article Fetch Queue | `*/5 * * * *` | Claim URL đã discover trong `article_fetch_jobs`, fetch nội dung chi tiết (HTTP → Readability → browser fallback), rate limit 1.5s giữa mỗi job |
 | Summarize | `*/10 * * * *` | Claim bài `pending`, gọi AI, cập nhật `done/skipped/failed` |
 | Forum Rescrape | `0,30 * * * *` | Cào lại Reddit/VOZ mới, bỏ qua phút `00` theo nhịp digest để giảm tải |
 | Digest | `30 */SCRAPE_INTERVAL_HOURS * * *` | Tạo bản tin từ các bài đã tóm tắt trong 24 giờ gần nhất |
-| Retry | `*/10 * * * *` | Reset bài/queue kẹt, retry failed còn hạn và retry comment Reddit |
+| Retry | `*/10 * * * *` | Reset bài/queue kẹt, retry failed còn hạn, retry comment Reddit, **rescue bài skipped vì content ngắn** |
 | Cleanup | `43 2 * * *` | Xóa scrape logs cũ, dọn raw_content bài cũ, reset processing kẹt |
 
 Cleanup hiện tại:
