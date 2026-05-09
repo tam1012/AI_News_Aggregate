@@ -1085,6 +1085,9 @@ function ArticleDetail({
         {/* Close button */}
         <button className="detail-close" onClick={onClose} title="Đóng (Esc)">✕</button>
 
+        {/* Share button (top-right, opposite close) */}
+        <button className="detail-share-btn" onClick={handleShare} title="Chia sẻ">↗</button>
+
         {/* Content */}
         <div className="detail-content">
           <div className="detail-meta-centered">
@@ -1152,9 +1155,6 @@ function ArticleDetail({
         <div className="detail-reading-nav" aria-label="Chuyển bài">
           <button className="detail-reading-nav-btn" onClick={onPrevArticle} disabled={!hasPrevArticle} title="Bài trước">
             ‹
-          </button>
-          <button className="detail-reading-nav-btn detail-share-btn" onClick={handleShare} title="Chia sẻ">
-            ↗
           </button>
           <span className="detail-reading-nav-status">{navIndex} / {navTotal}</span>
           <button className="detail-reading-nav-btn" onClick={onNextArticle} disabled={!hasNextArticle} title="Bài sau">
