@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio';
 import { normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
 import { matchPromoKeyword } from '../../lib/promoFilter.js';
-import { BROWSER_UA } from './http-utils.js';
+import { browserHeaders, randomUA, playwrightFetch } from './http-utils.js';
 import { insertArticleIfNew } from './article-writer.js';
 import { SourceFetcher } from './types.js';
 import { learnSelectorProfileFromHtml } from './selector-learning.js';
@@ -69,7 +69,7 @@ export const htmlFetcher: SourceFetcher = {
     if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
 
     const response = await fetch(sourceUrl, {
-      headers: { 'User-Agent': BROWSER_UA },
+      headers: browserHeaders(randomUA()),
       signal: AbortSignal.timeout(15000),
     });
     if (!response.ok) throw new Error(`Status code ${response.status}`);
@@ -104,12 +104,25 @@ export const htmlFetcher: SourceFetcher = {
     }
 
     await sleep(500);
-    const articleRes = await fetch(job.url, {
-      headers: { 'User-Agent': BROWSER_UA },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!articleRes.ok) throw new Error(`Status code ${articleRes.status}`);
-    const articleHtml = await articleRes.text();
+    // Try native fetch first, then fall back to Playwright stealth if content is short
+    let articleHtml = '';
+    try {
+      const articleRes = await fetch(job.url, {
+        headers: browserHeaders(randomUA()),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!articleRes.ok) throw new Error(`Status code ${articleRes.status}`);
+      articleHtml = await articleRes.text();
+    } catch (firstErr: any) {
+      console.warn(`html-fetcher: native fetch failed for ${job.url}, falling back to Playwright: ${firstErr.message}`);
+      articleHtml = await playwrightFetch(job.url, {
+        rawText: false,
+        blockHeavyResources: false,
+        settleMs: 1000,
+        userAgent: randomUA(),
+      });
+    }
+
     const aiExtraction = await extractWithAiSelector(articleHtml, job.url);
     if (aiExtraction) {
       const { extraction, matchedSelector, sourceProfileId } = aiExtraction;

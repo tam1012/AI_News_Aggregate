@@ -1,11 +1,52 @@
 import { execFile } from 'child_process';
+import { chromium, ChromiumBrowser } from 'playwright';
 import puppeteer from 'puppeteer-core';
 import { normalizePublicHttpUrl } from '../../lib/utils.js';
 
-export const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+// ---------------------------------------------------------------------------
+// User-Agent pool – realistic desktop browsers
+// ---------------------------------------------------------------------------
+export const UA_POOL = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15',
+];
+
+let _uaIndex = Math.floor(Math.random() * UA_POOL.length);
+export function randomUA(): string {
+  // Round-robin-ish rotate so each call gets a different one
+  const ua = UA_POOL[_uaIndex];
+  _uaIndex = (_uaIndex + 1) % UA_POOL.length;
+  return ua;
+}
+
+export const BROWSER_UA = UA_POOL[0];
 export const GOOGLEBOT_UA = 'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/W.X.Y.Z Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
 
-export function curlFetch(url: string, accept: string, timeoutSec: number): Promise<{ ok: boolean; status: number; text: () => Promise<string>; json: () => Promise<any> }> {
+// ---------------------------------------------------------------------------
+// Full realistic browser headers
+// ---------------------------------------------------------------------------
+export function browserHeaders(ua?: string): Record<string, string> {
+  return {
+    'User-Agent': ua || BROWSER_UA,
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9,vi;q=0.8',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': '?1',
+  };
+}
+
+// ---------------------------------------------------------------------------
+// curl wrapper
+// ---------------------------------------------------------------------------
+export function curlFetch(url: string, _accept: string, timeoutSec: number, ua?: string): Promise<{ ok: boolean; status: number; text: () => Promise<string>; json: () => Promise<any> }> {
   return new Promise((resolve, reject) => {
     const safeUrl = normalizePublicHttpUrl(url);
     if (!safeUrl) {
@@ -14,13 +55,19 @@ export function curlFetch(url: string, accept: string, timeoutSec: number): Prom
     }
 
     const safeTimeout = Math.max(1, Math.min(timeoutSec, 60));
+    const effectiveUA = ua || BROWSER_UA;
     const args = [
-      '-s',
-      '-L',
-      '--max-time', String(safeTimeout),
-      '-H', `User-Agent: ${BROWSER_UA}`,
-      '-H', `Accept: ${accept}`,
-      '-H', 'Accept-Language: vi-VN,vi;q=0.9,en;q=0.8',
+      '-s', '-L', '--max-time', String(safeTimeout),
+      '-H', `User-Agent: ${effectiveUA}`,
+      '-H', `Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8`,
+      '-H', 'Accept-Language: en-US,en;q=0.9,vi;q=0.8',
+      '-H', 'Accept-Encoding: gzip, deflate, br',
+      '-H', 'Connection: keep-alive',
+      '-H', 'Upgrade-Insecure-Requests: 1',
+      '-H', 'Sec-Fetch-Dest: document',
+      '-H', 'Sec-Fetch-Mode: navigate',
+      '-H', 'Sec-Fetch-Site: none',
+      '-H', 'Sec-Fetch-User: ?1',
       safeUrl,
     ];
     execFile('curl', args, { timeout: (safeTimeout + 2) * 1000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
@@ -40,11 +87,14 @@ export function curlFetch(url: string, accept: string, timeoutSec: number): Prom
   });
 }
 
-let browserInstance: any = null;
+// ---------------------------------------------------------------------------
+// Puppeteer core browser fetch (legacy – kept for compatibility)
+// ---------------------------------------------------------------------------
+let pupBrowserInstance: any = null;
 
-async function getBrowser(): Promise<any> {
-  if (browserInstance && browserInstance.connected) return browserInstance;
-  browserInstance = await puppeteer.launch({
+async function getPuppeteerBrowser(): Promise<any> {
+  if (pupBrowserInstance && pupBrowserInstance.connected) return pupBrowserInstance;
+  pupBrowserInstance = await puppeteer.launch({
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
     headless: true,
     args: [
@@ -53,7 +103,7 @@ async function getBrowser(): Promise<any> {
       '--window-size=1920,1080',
     ],
   });
-  return browserInstance;
+  return pupBrowserInstance;
 }
 
 export interface BrowserFetchOptions {
@@ -69,7 +119,7 @@ export async function browserFetch(url: string, timeoutMs: number = 30000, rawTe
   if (!safeUrl) throw new Error('URL must be a public http(s) URL');
 
   const options: BrowserFetchOptions = typeof rawTextOrOptions === 'boolean' ? { rawText: rawTextOrOptions } : rawTextOrOptions;
-  const browser = await getBrowser();
+  const browser = await getPuppeteerBrowser();
   const page = await browser.newPage();
   try {
     await page.evaluateOnNewDocument(() => {
@@ -107,4 +157,187 @@ export async function browserFetch(url: string, timeoutMs: number = 30000, rawTe
   } finally {
     await page.close();
   }
+}
+
+// ---------------------------------------------------------------------------
+// Playwright + stealth plugin fetch (primary stealth browser)
+// ---------------------------------------------------------------------------
+
+let pwBrowser: ChromiumBrowser | null = null;
+
+async function getPlaywrightBrowser(): Promise<ChromiumBrowser> {
+  if (pwBrowser && pwBrowser.isConnected()) return pwBrowser;
+
+  const execPath = process.env.PLAYWRIGHT_CHROMIUM_PATH || process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
+
+  pwBrowser = await chromium.launch({
+    executablePath: execPath,
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-blink-features=AutomationControlled',
+      '--window-size=1920,1080',
+      '--lang=en-US,en',
+    ],
+  });
+  return pwBrowser;
+}
+
+export interface PlaywrightFetchOptions {
+  /** Return only document.body.innerText instead of full HTML (saves bandwidth) */
+  rawText?: boolean;
+  /** When to consider page "loaded" */
+  waitUntil?: 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2';
+  /** Block images/fonts/media/stylesheets to speed up fetch */
+  blockHeavyResources?: boolean;
+  /** Extra ms to wait after DOM settles */
+  settleMs?: number;
+  /** Override User-Agent; default is random from UA_POOL */
+  userAgent?: string;
+  /** Extra cookies to inject */
+  cookies?: { name: string; value: string; domain: string; path?: string }[];
+  /** Extra HTTP headers for every request */
+  extraHeaders?: Record<string, string>;
+  /** Custom page timeout (default 30000) */
+  timeoutMs?: number;
+}
+
+const stealthEvasionScript = () => {
+  // Run in every new page context before any JS executes
+  Object.defineProperty(navigator, 'webdriver', { get: () => false });
+  Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+  Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+  Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+  Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+  Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+  Object.defineProperty(screen, 'width', { get: () => 1920 });
+  Object.defineProperty(screen, 'height', { get: () => 1080 });
+  Object.defineProperty(screen, 'colorDepth', { get: () => 24 });
+  (window as any).chrome = { runtime: {}, app: {} };
+  // Remove automation-related global variables that some detectors check
+  delete (window as any)['callSelenium'];
+  delete (window as any)['__selenium'];
+  delete (window as any)['__webdriver__'];
+  delete (window as any)['__cdc__'];
+  delete (window as any)['webdriver'];
+  delete (window as any)['selenium'];
+  delete (window as any)['_selenium'];
+  delete (window as any)['cdc_asdjflasutopfhvc7mc5g'];
+  // Patch Permissions API to return granted for everything
+  const origQuery = (window as any).Permissions?.prototype?.query;
+  if (origQuery) {
+    (window as any).Permissions.prototype.query = async function (desc: any) {
+      if (desc.name === 'notifications') {
+        return { state: 'granted' };
+      }
+      return origQuery.call(this, desc);
+    };
+  }
+};
+
+export async function playwrightFetch(
+  url: string,
+  options: PlaywrightFetchOptions = {},
+): Promise<string> {
+  const safeUrl = normalizePublicHttpUrl(url);
+  if (!safeUrl) throw new Error('URL must be a public http(s) URL');
+
+  const browser = await getPlaywrightBrowser();
+  const context = await browser.newContext({
+    userAgent: options.userAgent || randomUA(),
+    viewport: { width: 1920, height: 1080 },
+    extraHTTPHeaders: {
+      'Accept-Language': 'en-US,en;q=0.9',
+      ...(options.extraHeaders || {}),
+    },
+    ...(options.cookies ? { cookies: options.cookies as any } : {}),
+  });
+
+  const page = await context.newPage();
+
+  try {
+    // ── Stealth: block automation signals before any script runs ─────────────
+    await page.addInitScript(stealthEvasionScript);
+
+    // ── Block heavy resources (images, fonts, media) to speed up ───────────
+    if (options.blockHeavyResources) {
+      await page.route('**/*', (route) => {
+        const req = route.request();
+        const type = req.resourceType();
+        if (['image', 'font', 'media', 'stylesheet'].includes(type)) {
+          route.abort();
+        } else {
+          route.continue();
+        }
+      });
+    }
+
+    // ── Click cookie banners if present ────────────────────────────────────
+    page.on('dialog', async (dialog) => {
+      if (dialog.type() === 'alert' || dialog.type() === 'confirm') {
+        // Auto-dismiss cookie/paywall modals that open as dialogs
+        await dialog.dismiss();
+      }
+    });
+
+    await page.goto(safeUrl, {
+      waitUntil: (options.waitUntil || 'networkidle2') as any,
+      timeout: options.timeoutMs ?? 30000,
+    });
+
+    // Small settle delay
+    await page.waitForTimeout(options.settleMs ?? 800);
+
+    // Try to click common cookie / "Accept all" buttons
+    try {
+      const acceptBtn = await page.$(
+        'button[aria-label*="Accept"], button[class*="cookie"] button, ' +
+        '#onetrust-accept-btn-handler, button[class*="consent"]',
+      );
+      if (acceptBtn) {
+        await acceptBtn.click();
+        await page.waitForTimeout(500);
+      }
+    } catch {
+      // Ignore – button may not exist on this site
+    }
+
+    if (options.rawText) {
+      return await page.evaluate(() => document.body?.innerText || document.documentElement?.textContent || '');
+    }
+    return await page.content();
+  } finally {
+    await page.close();
+    await context.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Convenience: fetch with Googlebot UA (bypasses paywalls that check UA)
+// ---------------------------------------------------------------------------
+export async function curlFetchGooglebot(url: string, timeoutSec = 20) {
+  return curlFetch(url, 'text/html', timeoutSec, GOOGLEBOT_UA);
+}
+
+// ---------------------------------------------------------------------------
+// Health-check: ensure both browsers can launch
+// ---------------------------------------------------------------------------
+export async function browserHealthCheck(): Promise<{ puppeteer: boolean; playwright: boolean }> {
+  let puppeteer = false;
+  let playwright = false;
+
+  try {
+    const b1 = await getPuppeteerBrowser();
+    puppeteer = !!b1;
+  } catch {}
+
+  try {
+    const b2 = await getPlaywrightBrowser();
+    playwright = !!b2;
+  } catch {}
+
+  return { puppeteer, playwright };
 }

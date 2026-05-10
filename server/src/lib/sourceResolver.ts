@@ -26,7 +26,7 @@ export interface ResolveFetchResponse {
 export type ResolveFetch = (url: string, init?: RequestInit) => Promise<ResolveFetchResponse>;
 
 const COMMON_FEED_PATHS = ['/feed', '/rss', '/rss.xml', '/atom.xml', '/index.xml'];
-const USER_AGENT = 'Mozilla/5.0 (compatible; SynthNews/1.0)';
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 const defaultFetch: ResolveFetch = (url, init) => fetch(url, init);
 
 function isPrivateHostname(hostname: string): boolean {

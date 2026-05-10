@@ -5,7 +5,7 @@ import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import { normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
 import { matchPromoKeyword } from '../../lib/promoFilter.js';
-import { BROWSER_UA, GOOGLEBOT_UA, BrowserFetchOptions, browserFetch } from './http-utils.js';
+import { BROWSER_UA, GOOGLEBOT_UA, browserHeaders, randomUA, playwrightFetch } from './http-utils.js';
 import { insertArticleIfNew, MIN_ARTICLE_TEXT_LENGTH } from './article-writer.js';
 import { SourceFetcher } from './types.js';
 import { learnSelectorProfileFromHtml } from './selector-learning.js';
@@ -32,7 +32,7 @@ interface RssDomainPolicy {
   allowSnippetFallback: boolean;
   snippetFallbackMinLength: number;
   skipBrowserFallback?: boolean;
-  browserOptions?: BrowserFetchOptions;
+  browserOptions?: any;
 }
 
 const DEFAULT_RSS_SNIPPET_FALLBACK_MIN_LENGTH = parsePositiveInt(process.env.RSS_SNIPPET_FALLBACK_MIN_LENGTH, 800);
@@ -73,7 +73,15 @@ function getRssDomainPolicy(url: string): RssDomainPolicy {
   };
 
   if (domainMatches(hostname, 'nytimes.com')) {
-    return { ...policy, skipBrowserFallback: true };
+    return {
+      ...policy,
+      // Removed skipBrowserFallback so Playwright stealth fallback can run
+      browserOptions: {
+        waitUntil: 'networkidle2',
+        blockHeavyResources: false,
+        settleMs: 2000,
+      },
+    };
   }
 
   if (hostname.includes('kotaku.com') || hostname.includes('eweek.com')) {
@@ -298,12 +306,11 @@ async function extractWithAiSelector(html: string, pageUrl: string) {
 async function fetchFullArticle(jobUrl: string, policy = getRssDomainPolicy(jobUrl)): Promise<{ title: string; content: string; imageUrl: string | null; publishedAt: string | null; metadata?: any }> {
   let fetchError: Error | null = null;
 
+  // ── Attempt 1: native fetch with random browser UA + full headers ────────
   try {
+    const ua = randomUA();
     const response = await fetch(jobUrl, {
-      headers: {
-        'User-Agent': BROWSER_UA,
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      },
+      headers: browserHeaders(ua),
       signal: AbortSignal.timeout(15000),
     });
     if (!response.ok) throw new Error(`Status code ${response.status}`);
@@ -316,13 +323,11 @@ async function fetchFullArticle(jobUrl: string, policy = getRssDomainPolicy(jobU
     fetchError = err instanceof Error ? err : new Error(String(err));
   }
 
+  // ── Attempt 2: native fetch with Googlebot UA ────────────────────────────────
   try {
     console.warn(`Retrying RSS article with Googlebot UA ${jobUrl}: ${fetchError?.message || 'short content'}`);
     const response = await fetch(jobUrl, {
-      headers: {
-        'User-Agent': GOOGLEBOT_UA,
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      },
+      headers: browserHeaders(GOOGLEBOT_UA),
       signal: AbortSignal.timeout(15000),
     });
     if (!response.ok) throw new Error(`Status code ${response.status}`);
@@ -335,20 +340,22 @@ async function fetchFullArticle(jobUrl: string, policy = getRssDomainPolicy(jobU
     fetchError = err instanceof Error ? err : new Error(String(err));
   }
 
-  if (policy.skipBrowserFallback) {
-    throw new Error(`Full article fetch failed: ${fetchError?.message || 'unknown fetch error'}; browser fallback skipped by domain policy`);
-  }
-
+  // ── Attempt 3: Playwright + stealth plugin ─────────────────────────────────
   try {
-    console.warn(`Retrying RSS article with browser fetch ${jobUrl}: ${fetchError?.message || 'short content'}`);
-    await sleep(2000);
-    const options = { ...(policy.browserOptions || {}), userAgent: GOOGLEBOT_UA };
-    const html = await browserFetch(jobUrl, parseInt(process.env.ARTICLE_BROWSER_FETCH_TIMEOUT_MS || '30000', 10), options);
-    const article = await extractArticleFromHtml(html, jobUrl, 'browser');
+    console.warn(`Retrying RSS article with Playwright stealth fetch ${jobUrl}`);
+    await sleep(1500);
+    const pwOptions = {
+      ...(policy.browserOptions || {}),
+      userAgent: randomUA(),
+      blockHeavyResources: true,
+      settleMs: 1000,
+    };
+    const html = await playwrightFetch(jobUrl, pwOptions);
+    const article = await extractArticleFromHtml(html, jobUrl, 'playwright-stealth');
     if (article.content.length >= MIN_ARTICLE_TEXT_LENGTH) return article;
-    throw new Error(`browser extraction too short (${article.content.length} characters)`);
+    throw new Error(`playwright extraction too short (${article.content.length} characters)`);
   } catch (browserErr: any) {
-    throw new Error(`Full article fetch failed: ${fetchError?.message || 'unknown fetch error'}; browser fallback failed: ${browserErr.message}`);
+    throw new Error(`Full article fetch failed: ${fetchError?.message || 'unknown fetch error'}; playwright fallback failed: ${browserErr.message}`);
   }
 }
 
