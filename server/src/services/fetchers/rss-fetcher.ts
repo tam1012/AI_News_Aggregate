@@ -5,7 +5,7 @@ import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import { normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
 import { matchPromoKeyword } from '../../lib/promoFilter.js';
-import { BROWSER_UA, GOOGLEBOT_UA, browserHeaders, randomUA, playwrightFetch } from './http-utils.js';
+import { BROWSER_UA, GOOGLEBOT_UA, browserHeaders, randomUA, playwrightFetch, isBlockedHtml } from './http-utils.js';
 import { insertArticleIfNew, MIN_ARTICLE_TEXT_LENGTH } from './article-writer.js';
 import { SourceFetcher } from './types.js';
 import { learnSelectorProfileFromHtml } from './selector-learning.js';
@@ -451,13 +451,13 @@ export const rssFetcher: SourceFetcher = {
       xml = await response.text();
       
       // Some anti-bot pages return 200 OK but with HTML challenge instead of XML
-      if (xml.toLowerCase().includes('just a moment...') || xml.toLowerCase().includes('cf-browser-verification')) {
+      if (isBlockedHtml(xml)) {
         throw new Error('Cloudflare blocked HTML received instead of RSS XML');
       }
     } catch (err: any) {
       console.warn(`rss-fetcher: native discover failed for ${sourceUrl}, falling back to Playwright: ${err.message}`);
       xml = await playwrightFetch(sourceUrl, {
-        rawText: false,
+        rawText: true,
         blockHeavyResources: true,
         settleMs: 1500,
         userAgent: randomUA(),

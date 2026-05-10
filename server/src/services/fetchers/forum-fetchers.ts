@@ -351,13 +351,13 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
 
       if (!rssRes.ok) throw new Error(`Reddit RSS ${rssRes.status}`);
       xml = await rssRes.text();
-      if (xml.toLowerCase().includes('just a moment...') || xml.toLowerCase().includes('cf-browser-verification')) {
+      if (isBlockedHtml(xml)) {
         throw new Error('Cloudflare blocked HTML received instead of RSS XML');
       }
     } catch (err: any) {
       console.warn(`[reddit] native RSS fetch failed for ${rssUrl}, falling back to Playwright: ${err.message}`);
       xml = await playwrightFetch(rssUrl, {
-        rawText: false,
+        rawText: true,
         blockHeavyResources: true,
         settleMs: 1500,
         userAgent: randomUA(),
@@ -623,13 +623,13 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
 
       if (!response.ok) throw new Error(`Status code ${response.status}`);
       xml = await response.text();
-      if (xml.toLowerCase().includes('just a moment...') || xml.toLowerCase().includes('cf-browser-verification')) {
+      if (isBlockedHtml(xml)) {
         throw new Error('Cloudflare blocked HTML received instead of RSS XML');
       }
     } catch (err: any) {
       console.warn(`[voz] native RSS fetch failed for ${sourceUrl}, falling back to Playwright: ${err.message}`);
       xml = await playwrightFetch(sourceUrl, {
-        rawText: false,
+        rawText: true,
         blockHeavyResources: true,
         settleMs: 1500,
         userAgent: randomUA(),
