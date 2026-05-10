@@ -37,6 +37,8 @@ interface RssDomainPolicy {
 
 const DEFAULT_RSS_SNIPPET_FALLBACK_MIN_LENGTH = parsePositiveInt(process.env.RSS_SNIPPET_FALLBACK_MIN_LENGTH, 800);
 const DEFAULT_BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS: string[] = [
+  'thestreet.com',
+  'timesofisrael.com',
   'nytimes.com',
   'eweek.com',
   'kotaku.com',
