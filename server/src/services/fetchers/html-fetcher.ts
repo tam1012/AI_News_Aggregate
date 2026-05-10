@@ -65,7 +65,7 @@ export const htmlFetcher: SourceFetcher = {
       throw new Error('parser_config with articleLinkSelector is required for web sources');
     }
 
-    const sourceUrl = normalizePublicHttpUrl(source.url);
+    const sourceUrl = normalizePublicHttpUrl(source.url, false);
     if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
 
     const response = await fetch(sourceUrl, {

@@ -15,10 +15,10 @@ export function createContentHash(content: string): string {
   return createHash('sha256').update(content.trim().toLowerCase()).digest('hex').slice(0, 32);
 }
 
-export function normalizeUrl(url: string): string {
+export function normalizeUrl(url: string, stripTrailingSlash = true): string {
   try {
     const u = new URL(url);
-    // Loai bo trailing slash, fragment, tracking params
+    // Loai bo fragment, tracking params
     u.hash = '';
     u.searchParams.delete('utm_source');
     u.searchParams.delete('utm_medium');
@@ -27,8 +27,11 @@ export function normalizeUrl(url: string): string {
     u.searchParams.delete('utm_term');
     u.searchParams.delete('fbclid');
     u.searchParams.delete('ref');
-    let path = u.pathname.replace(/\/+$/, '') || '/';
-    u.pathname = path;
+    
+    if (stripTrailingSlash) {
+      let path = u.pathname.replace(/\/+$/, '') || '/';
+      u.pathname = path;
+    }
     return u.toString();
   } catch {
     return url;
@@ -56,12 +59,12 @@ export function isPrivateHostname(hostname: string): boolean {
   );
 }
 
-export function normalizePublicHttpUrl(url: string): string | null {
+export function normalizePublicHttpUrl(url: string, stripTrailingSlash = true): string | null {
   try {
     const u = new URL(url);
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
     if (isPrivateHostname(u.hostname)) return null;
-    return normalizeUrl(u.toString());
+    return normalizeUrl(u.toString(), stripTrailingSlash);
   } catch {
     return null;
   }

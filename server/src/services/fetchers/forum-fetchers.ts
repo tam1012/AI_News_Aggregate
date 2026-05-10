@@ -596,7 +596,7 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
   const result: ScrapeResult = { itemsFound: 0, itemsInserted: 0, errors: [], metadata: { forum: forumStats } };
 
   try {
-    const sourceUrl = normalizePublicHttpUrl(source.url);
+    const sourceUrl = normalizePublicHttpUrl(source.url, false);
     if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
 
     const response = await fetch(sourceUrl, {

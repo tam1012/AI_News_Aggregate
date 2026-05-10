@@ -150,7 +150,7 @@ export const githubTrendingFetcher: SourceFetcher = {
     return { itemsFound: discovered.length, itemsInserted, errors: [] };
   },
   async discover(source) {
-    const sourceUrl = normalizePublicHttpUrl(source.url);
+    const sourceUrl = normalizePublicHttpUrl(source.url, false);
     if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
 
     const response = await fetch(sourceUrl, {

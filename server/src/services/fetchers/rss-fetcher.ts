@@ -433,7 +433,7 @@ export const rssFetcher: SourceFetcher = {
   key: 'rss',
   canHandle: (source) => source.type === 'rss',
   async discover(source) {
-    const normalizedUrl = normalizePublicHttpUrl(source.url);
+    const normalizedUrl = normalizePublicHttpUrl(source.url, false);
     const sourceUrl = normalizedUrl ? normalizeFeedUrl(normalizedUrl) : null;
     if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
 

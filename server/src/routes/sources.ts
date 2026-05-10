@@ -93,7 +93,7 @@ sources.post('/', async (c) => {
   }
 
   const id = generateId('src');
-  const normalizedUrl = normalizePublicHttpUrl(url);
+  const normalizedUrl = normalizePublicHttpUrl(url, false);
   if (!normalizedUrl) {
     return c.json({
       success: false,
@@ -165,7 +165,7 @@ sources.patch('/:id', async (c) => {
     if (body[field] !== undefined) {
       let value = body[field];
       if (field === 'url') {
-        value = normalizePublicHttpUrl(value);
+        value = normalizePublicHttpUrl(value, false);
         if (!value) {
           return c.json({
             success: false,
