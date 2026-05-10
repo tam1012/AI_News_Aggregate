@@ -658,9 +658,10 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
           if (!threadRes.ok || pagePosts.length === 0) {
             console.log(`[voz] Retrying thread with Playwright ${pageUrl}: curl status=${threadRes.status}, posts=${pagePosts.length}`);
             threadHtml = await playwrightFetch(pageUrl, {
-              waitUntil: 'networkidle2',
+              waitUntil: 'domcontentloaded',
               blockHeavyResources: true,
-              settleMs: 1500,
+              settleMs: 3000,
+              timeoutMs: 60000,
               userAgent: randomUA(),
             });
             pagePosts = parseVozPosts(threadHtml, pageIndex + 1);
