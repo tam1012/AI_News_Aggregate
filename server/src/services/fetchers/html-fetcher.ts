@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio';
 import { normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
 import { matchPromoKeyword } from '../../lib/promoFilter.js';
-import { browserHeaders, randomUA, playwrightFetch } from './http-utils.js';
+import { browserHeaders, isBlockedHtml, randomUA, playwrightFetch } from './http-utils.js';
 import { insertArticleIfNew } from './article-writer.js';
 import { SourceFetcher } from './types.js';
 import { learnSelectorProfileFromHtml } from './selector-learning.js';
@@ -68,25 +68,54 @@ export const htmlFetcher: SourceFetcher = {
     const sourceUrl = normalizePublicHttpUrl(source.url, false);
     if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
 
-    const response = await fetch(sourceUrl, {
-      headers: browserHeaders(randomUA()),
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!response.ok) throw new Error(`Status code ${response.status}`);
-    const html = await response.text();
-    const $ = cheerio.load(html);
+    let html = '';
+    try {
+      const response = await fetch(sourceUrl, {
+        headers: browserHeaders(randomUA()),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!response.ok) throw new Error(`Status code ${response.status}`);
+      html = await response.text();
+      if (isBlockedHtml(html)) throw new Error('blocked HTML');
+    } catch (err: any) {
+      console.warn(`html-fetcher: native discover failed for ${sourceUrl}, falling back to Playwright: ${err.message}`);
+      html = await playwrightFetch(sourceUrl, {
+        rawText: false,
+        blockHeavyResources: true,
+        settleMs: 1000,
+        userAgent: randomUA(),
+      });
+    }
+
+    let $ = cheerio.load(html);
 
     const discovered: { sourceId: string; url: string; title: string }[] = [];
-    $(config.articleLinkSelector).each((_: number, el: any) => {
-      const href = $(el).attr('href');
-      if (!href) return;
-      try {
-        const publicUrl = normalizePublicHttpUrl(new URL(href, sourceUrl).toString());
-        if (!publicUrl) return;
-        const title = $(el).text().replace(/\s+/g, ' ').trim() || publicUrl;
-        discovered.push({ sourceId: source.id, url: publicUrl, title });
-      } catch {}
-    });
+    const collectLinks = () => {
+      discovered.length = 0;
+      $(config.articleLinkSelector).each((_: number, el: any) => {
+        const href = $(el).attr('href');
+        if (!href) return;
+        try {
+          const publicUrl = normalizePublicHttpUrl(new URL(href, sourceUrl).toString());
+          if (!publicUrl) return;
+          const title = $(el).text().replace(/\s+/g, ' ').trim() || publicUrl;
+          discovered.push({ sourceId: source.id, url: publicUrl, title });
+        } catch {}
+      });
+    };
+
+    collectLinks();
+    if (discovered.length === 0) {
+      console.warn(`html-fetcher: native discover found 0 links for ${sourceUrl}, falling back to Playwright`);
+      html = await playwrightFetch(sourceUrl, {
+        rawText: false,
+        blockHeavyResources: true,
+        settleMs: 1000,
+        userAgent: randomUA(),
+      });
+      $ = cheerio.load(html);
+      collectLinks();
+    }
 
     const seen = new Set<string>();
     return discovered

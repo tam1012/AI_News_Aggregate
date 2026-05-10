@@ -2,7 +2,7 @@ import RssParser from 'rss-parser';
 import * as cheerio from 'cheerio';
 import { query, getOne, getMany } from '../../db/index.js';
 import { generateId, createContentHash, normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
-import { BROWSER_UA, browserFetch, curlFetch } from './http-utils.js';
+import { BROWSER_UA, browserFetch, curlFetch, isBlockedHtml, playwrightFetch, randomUA } from './http-utils.js';
 import {
   ForumComment,
   VozPost,
@@ -650,10 +650,24 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
 
           await sleep(500);
           const threadRes = await curlFetch(pageUrl, 'text/html,application/xhtml+xml', 15);
-          if (!threadRes.ok) throw new Error(`VOZ thread status ${threadRes.status}`);
+          let threadHtml = await threadRes.text();
+          let pagePosts = threadRes.ok && !isBlockedHtml(threadHtml)
+            ? parseVozPosts(threadHtml, pageIndex + 1)
+            : [];
 
-          const threadHtml = await threadRes.text();
-          allPosts.push(...parseVozPosts(threadHtml, pageIndex + 1));
+          if (!threadRes.ok || pagePosts.length === 0) {
+            console.log(`[voz] Retrying thread with Playwright ${pageUrl}: curl status=${threadRes.status}, posts=${pagePosts.length}`);
+            threadHtml = await playwrightFetch(pageUrl, {
+              waitUntil: 'networkidle2',
+              blockHeavyResources: true,
+              settleMs: 1500,
+              userAgent: randomUA(),
+            });
+            pagePosts = parseVozPosts(threadHtml, pageIndex + 1);
+          }
+
+          if (pagePosts.length === 0) throw new Error(`VOZ thread parse returned 0 posts${isBlockedHtml(threadHtml) ? ' (blocked HTML)' : ''}`);
+          allPosts.push(...pagePosts);
 
           if (pageIndex === 0) {
             const pageLinks = extractVozPagination(threadHtml, url).slice(0, Math.max(0, VOZ_MAX_THREAD_PAGES - 1));
@@ -739,6 +753,10 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
     }
   } catch (err: any) {
     result.errors.push(err.message);
+  }
+
+  if (result.itemsInserted === 0 && forumStats.fetchErrors > 0 && forumStats.fetchErrors + forumStats.skippedDuplicate >= forumStats.threadsSeen) {
+    result.errors.push(`VOZ thread detail fetch failed for ${forumStats.fetchErrors}/${forumStats.threadsSeen} threads`);
   }
 
   return result;

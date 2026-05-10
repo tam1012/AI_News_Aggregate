@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
 import { normalizePublicHttpUrl, truncate } from '../../lib/utils.js';
-import { BROWSER_UA } from './http-utils.js';
+import { BROWSER_UA, isBlockedHtml, playwrightFetch, randomUA } from './http-utils.js';
 import { SourceFetcher } from './types.js';
 
 interface GitHubTrendingPayload {
@@ -100,19 +100,44 @@ async function fetchReadmeFromRaw(repoUrl: string): Promise<string | null> {
 }
 
 async function fetchReadmeFromRepoPage(repoUrl: string): Promise<string | null> {
+  let html = '';
   try {
     const response = await fetch(repoUrl, {
       headers: { 'User-Agent': BROWSER_UA, Accept: 'text/html,application/xhtml+xml' },
       signal: AbortSignal.timeout(15000),
     });
-    if (!response.ok) return null;
-    const html = await response.text();
-    const $ = cheerio.load(html);
-    const text = cleanText($('article.markdown-body, #readme').first().text());
-    return text.length >= 80 ? text : null;
-  } catch {
-    return null;
+    if (!response.ok) throw new Error(`Status code ${response.status}`);
+    html = await response.text();
+    if (isBlockedHtml(html)) throw new Error('blocked HTML');
+  } catch (err: any) {
+    console.warn(`github-trending: native repo page fetch failed for ${repoUrl}, falling back to Playwright: ${err.message}`);
+    try {
+      html = await playwrightFetch(repoUrl, {
+        waitUntil: 'networkidle2',
+        blockHeavyResources: true,
+        settleMs: 1000,
+        userAgent: randomUA(),
+      });
+    } catch {
+      return null;
+    }
   }
+
+  let $ = cheerio.load(html);
+  let text = cleanText($('article.markdown-body, #readme').first().text());
+  if (text.length < 80) {
+    try {
+      html = await playwrightFetch(repoUrl, {
+        waitUntil: 'networkidle2',
+        blockHeavyResources: true,
+        settleMs: 1000,
+        userAgent: randomUA(),
+      });
+      $ = cheerio.load(html);
+      text = cleanText($('article.markdown-body, #readme').first().text());
+    } catch {}
+  }
+  return text.length >= 80 ? text : null;
 }
 
 export function buildGitHubTrendingContent(payload: GitHubTrendingPayload, readme: string | null): string {
@@ -153,16 +178,41 @@ export const githubTrendingFetcher: SourceFetcher = {
     const sourceUrl = normalizePublicHttpUrl(source.url, false);
     if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
 
-    const response = await fetch(sourceUrl, {
-      headers: { 'User-Agent': BROWSER_UA, Accept: 'text/html,application/xhtml+xml' },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!response.ok) throw new Error(`Status code ${response.status}`);
+    let html = '';
+    try {
+      const response = await fetch(sourceUrl, {
+        headers: { 'User-Agent': BROWSER_UA, Accept: 'text/html,application/xhtml+xml' },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!response.ok) throw new Error(`Status code ${response.status}`);
+      html = await response.text();
+      if (isBlockedHtml(html)) throw new Error('blocked HTML');
+    } catch (err: any) {
+      console.warn(`github-trending: native discover failed for ${sourceUrl}, falling back to Playwright: ${err.message}`);
+      html = await playwrightFetch(sourceUrl, {
+        waitUntil: 'networkidle2',
+        blockHeavyResources: true,
+        settleMs: 1000,
+        userAgent: randomUA(),
+      });
+    }
 
-    const html = await response.text();
-    const $ = cheerio.load(html);
+    let $ = cheerio.load(html);
     const discoveredAt = new Date().toISOString();
-    const items = $('article.Box-row').map((_: number, row: any) => {
+    let rows = $('article.Box-row');
+    if (rows.length === 0) {
+      console.warn(`github-trending: native discover found 0 rows for ${sourceUrl}, falling back to Playwright`);
+      html = await playwrightFetch(sourceUrl, {
+        waitUntil: 'networkidle2',
+        blockHeavyResources: true,
+        settleMs: 1000,
+        userAgent: randomUA(),
+      });
+      $ = cheerio.load(html);
+      rows = $('article.Box-row');
+    }
+
+    const items = rows.map((_: number, row: any) => {
       const link = $(row).find('h2 a').first();
       const href = link.attr('href');
       if (!href) return null;

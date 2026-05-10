@@ -238,6 +238,15 @@ const stealthEvasionScript = () => {
   }
 };
 
+export function isBlockedHtml(html: string): boolean {
+  const lowered = html.toLowerCase();
+  return lowered.includes('just a moment...') ||
+    lowered.includes('<title>blocked</title>') ||
+    lowered.includes('challenges.cloudflare.com') ||
+    lowered.includes('cf-browser-verification') ||
+    lowered.includes('access denied');
+}
+
 export async function playwrightFetch(
   url: string,
   options: PlaywrightFetchOptions = {},

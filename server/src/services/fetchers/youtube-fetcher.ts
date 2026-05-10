@@ -1,6 +1,7 @@
 import { query } from '../../db/index.js';
 import { normalizePublicHttpUrl } from '../../lib/utils.js';
 import { insertArticleIfNew } from './article-writer.js';
+import { isBlockedHtml, playwrightFetch, randomUA } from './http-utils.js';
 import type { DiscoveredArticle } from '../article-fetch-queue.js';
 import type { SourceFetcher, SourceRow } from './types.js';
 
@@ -109,22 +110,34 @@ async function resolveYouTubeChannelId(source: SourceRow): Promise<string> {
   if (!handle) throw new Error(`Cannot resolve YouTube channel from URL: ${source.url}`);
 
   try {
-    const pageResponse = await fetch(`https://www.youtube.com/@${handle}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; SynthNews/1.0)',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (pageResponse.ok) {
-      const html = await pageResponse.text();
-      const rssMatch = html.match(/"rssUrl":"https:\/\/www\.youtube\.com\/feeds\/videos\.xml\?channel_id=([a-zA-Z0-9_-]+)"/);
-      const externalIdMatch = html.match(/"externalId":"(UC[a-zA-Z0-9_-]+)"/);
-      const channelId = rssMatch?.[1] || externalIdMatch?.[1];
-      if (channelId) {
-        await saveYouTubeChannelId(source, channelId);
-        return channelId;
-      }
+    let html = '';
+    try {
+      const pageResponse = await fetch(`https://www.youtube.com/@${handle}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; SynthNews/1.0)',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!pageResponse.ok) throw new Error(`Status code ${pageResponse.status}`);
+      html = await pageResponse.text();
+      if (isBlockedHtml(html)) throw new Error('blocked HTML');
+    } catch (err: any) {
+      console.warn(`[YouTube Fetcher] Native handle page fetch failed for @${handle}, falling back to Playwright: ${err.message}`);
+      html = await playwrightFetch(`https://www.youtube.com/@${handle}`, {
+        waitUntil: 'networkidle2',
+        blockHeavyResources: true,
+        settleMs: 1500,
+        userAgent: randomUA(),
+      });
+    }
+
+    const rssMatch = html.match(/"rssUrl":"https:\/\/www\.youtube\.com\/feeds\/videos\.xml\?channel_id=([a-zA-Z0-9_-]+)"/);
+    const externalIdMatch = html.match(/"externalId":"(UC[a-zA-Z0-9_-]+)"/);
+    const channelId = rssMatch?.[1] || externalIdMatch?.[1];
+    if (channelId) {
+      await saveYouTubeChannelId(source, channelId);
+      return channelId;
     }
   } catch {
     // Fall through to API fallback.
