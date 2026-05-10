@@ -53,6 +53,7 @@ const DEFAULT_BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS: string[] = [
   'seekingalpha.com',
   'nikkei.com',
   'washingtonpost.com',
+  'thetimes.com',
   'thetimes.co.uk',
   'telegraph.co.uk',
   'scmp.com',
