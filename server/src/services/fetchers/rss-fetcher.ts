@@ -437,17 +437,33 @@ export const rssFetcher: SourceFetcher = {
     const sourceUrl = normalizedUrl ? normalizeFeedUrl(normalizedUrl) : null;
     if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
 
-    const response = await fetch(sourceUrl, {
-      headers: {
-        'User-Agent': BROWSER_UA,
-        Accept: 'application/rss+xml, application/xml, text/xml, application/atom+xml;q=0.9, */*;q=0.8',
-      },
-      signal: AbortSignal.timeout(15000),
-    });
+    let xml = '';
+    try {
+      const response = await fetch(sourceUrl, {
+        headers: {
+          'User-Agent': BROWSER_UA,
+          Accept: 'application/rss+xml, application/xml, text/xml, application/atom+xml;q=0.9, */*;q=0.8',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
 
-    if (!response.ok) throw new Error(`Status code ${response.status}`);
+      if (!response.ok) throw new Error(`Status code ${response.status}`);
+      xml = await response.text();
+      
+      // Some anti-bot pages return 200 OK but with HTML challenge instead of XML
+      if (xml.toLowerCase().includes('just a moment...') || xml.toLowerCase().includes('cf-browser-verification')) {
+        throw new Error('Cloudflare blocked HTML received instead of RSS XML');
+      }
+    } catch (err: any) {
+      console.warn(`rss-fetcher: native discover failed for ${sourceUrl}, falling back to Playwright: ${err.message}`);
+      xml = await playwrightFetch(sourceUrl, {
+        rawText: false,
+        blockHeavyResources: true,
+        settleMs: 1500,
+        userAgent: randomUA(),
+      });
+    }
 
-    const xml = await response.text();
     const items = (await parseFeedItems(xml)).slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 20));
 
     const results = [];

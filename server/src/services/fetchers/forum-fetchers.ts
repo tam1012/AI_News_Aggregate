@@ -339,19 +339,31 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
 
   try {
     const rssUrl = `https://www.reddit.com/r/${subreddit}/hot/.rss`;
-    const rssRes = await fetch(rssUrl, {
-      headers: {
-        'User-Agent': BROWSER_UA,
-        Accept: 'application/rss+xml, application/xml, text/xml',
-      },
-      signal: AbortSignal.timeout(15000),
-    });
+    let xml = '';
+    try {
+      const rssRes = await fetch(rssUrl, {
+        headers: {
+          'User-Agent': BROWSER_UA,
+          Accept: 'application/rss+xml, application/xml, text/xml',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
 
-    if (!rssRes.ok) {
-      throw new Error(`Reddit RSS ${rssRes.status}`);
+      if (!rssRes.ok) throw new Error(`Reddit RSS ${rssRes.status}`);
+      xml = await rssRes.text();
+      if (xml.toLowerCase().includes('just a moment...') || xml.toLowerCase().includes('cf-browser-verification')) {
+        throw new Error('Cloudflare blocked HTML received instead of RSS XML');
+      }
+    } catch (err: any) {
+      console.warn(`[reddit] native RSS fetch failed for ${rssUrl}, falling back to Playwright: ${err.message}`);
+      xml = await playwrightFetch(rssUrl, {
+        rawText: false,
+        blockHeavyResources: true,
+        settleMs: 1500,
+        userAgent: randomUA(),
+      });
     }
 
-    const xml = await rssRes.text();
     const feed = await rssParser.parseString(xml);
     const items = feed.items.slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 15));
     result.itemsFound = items.length;
@@ -599,17 +611,31 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
     const sourceUrl = normalizePublicHttpUrl(source.url, false);
     if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
 
-    const response = await fetch(sourceUrl, {
-      headers: {
-        'User-Agent': BROWSER_UA,
-        Accept: 'application/rss+xml, application/xml, text/xml, application/atom+xml;q=0.9, */*;q=0.8',
-      },
-      signal: AbortSignal.timeout(15000),
-    });
+    let xml = '';
+    try {
+      const response = await fetch(sourceUrl, {
+        headers: {
+          'User-Agent': BROWSER_UA,
+          Accept: 'application/rss+xml, application/xml, text/xml, application/atom+xml;q=0.9, */*;q=0.8',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
 
-    if (!response.ok) throw new Error(`Status code ${response.status}`);
+      if (!response.ok) throw new Error(`Status code ${response.status}`);
+      xml = await response.text();
+      if (xml.toLowerCase().includes('just a moment...') || xml.toLowerCase().includes('cf-browser-verification')) {
+        throw new Error('Cloudflare blocked HTML received instead of RSS XML');
+      }
+    } catch (err: any) {
+      console.warn(`[voz] native RSS fetch failed for ${sourceUrl}, falling back to Playwright: ${err.message}`);
+      xml = await playwrightFetch(sourceUrl, {
+        rawText: false,
+        blockHeavyResources: true,
+        settleMs: 1500,
+        userAgent: randomUA(),
+      });
+    }
 
-    const xml = await response.text();
     const feed = await rssParser.parseString(xml);
     const items = feed.items.slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 15));
     result.itemsFound = items.length;
