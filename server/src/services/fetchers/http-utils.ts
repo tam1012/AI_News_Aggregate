@@ -283,8 +283,16 @@ export async function playwrightFetch(
       }
     });
 
+    // Normalize waitUntil: playwright <1.61 only accepts load|domcontentloaded|networkidle|commit
+    const waitMap: Record<string, string> = {
+      networkidle2: 'networkidle',
+      networkidle0: 'networkidle',
+    };
+    const waitVal = (options.waitUntil || 'networkidle2') as string;
+    const normalizedWait = waitMap[waitVal] ?? waitVal;
+
     await page.goto(safeUrl, {
-      waitUntil: (options.waitUntil || 'networkidle2') as any,
+      waitUntil: normalizedWait as any,
       timeout: options.timeoutMs ?? 30000,
     });
 
