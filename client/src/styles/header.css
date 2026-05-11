@@ -1,0 +1,110 @@
+/* ===== Header ===== */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: color-mix(in srgb, var(--color-bg) 88%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  padding: calc(12px + var(--safe-top)) 0 12px;
+  backdrop-filter: blur(18px);
+}
+.header-inner {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.header-left { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.header-logo {
+  font-family: var(--font-heading);
+  font-size: 1.42rem; font-weight: 800;
+  color: var(--color-text); letter-spacing: -0.7px;
+}
+.header-logo:hover { color: var(--color-text); text-decoration: none; }
+.header-date {
+  font-size: 0.78rem; color: var(--color-text-muted); font-weight: 600;
+}
+@media (max-width: 480px) {
+  .header-date { display: none; }
+  .header-logo { font-size: 1.18rem; }
+  .header-actions { gap: 4px; }
+  .icon-btn { width: 34px; height: 34px; }
+  .font-size-btn { height: 34px; padding: 0 8px; }
+}
+.header-actions { display: flex; align-items: center; gap: 6px; }
+
+/* ===== Icon Buttons ===== */
+.icon-btn {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 1px solid var(--color-border-light);
+  background: color-mix(in srgb, var(--color-bg-card) 72%, transparent);
+  color: var(--color-text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; transition: all 0.15s;
+}
+.icon-btn:hover { background: var(--color-bg-hover); color: var(--color-text); border-color: var(--color-border); }
+.icon-btn.active { border-color: var(--color-accent); color: var(--color-accent); }
+.icon-btn:disabled { opacity: 0.3; cursor: default; }
+
+/* ===== Font Size Button ===== */
+.font-size-btn {
+  display: inline-flex; align-items: center; gap: 3px;
+  height: 34px; padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-light);
+  background: color-mix(in srgb, var(--color-bg-card) 72%, transparent);
+  color: var(--color-text-secondary);
+  font-family: var(--font-heading);
+  transition: all 0.15s; cursor: pointer;
+  margin-right: 2px;
+}
+.font-size-btn:hover {
+  background: var(--color-bg-hover); color: var(--color-text);
+  border-color: var(--color-border);
+}
+.font-size-btn:active { transform: scale(0.95); }
+.text-settings-control {
+  position: relative;
+}
+.text-settings-menu {
+  position: absolute; top: 42px; right: 0;
+  width: 190px; padding: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-card);
+  box-shadow: 0 8px 24px var(--color-shadow);
+  z-index: 120;
+  animation: fadeIn 0.12s ease-out;
+}
+.text-settings-size,
+.text-settings-option {
+  width: 100%; border: none; border-radius: 8px;
+  background: transparent; color: var(--color-text-secondary);
+  text-align: left; font-size: 0.84rem;
+}
+.text-settings-size {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 10px; margin-bottom: 4px;
+}
+.text-settings-size strong { color: var(--color-accent); }
+.text-settings-label {
+  padding: 6px 10px 4px;
+  font-size: 0.68rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+.text-settings-option {
+  display: block; padding: 8px 10px;
+}
+.text-settings-size:hover,
+.text-settings-option:hover,
+.text-settings-option.active {
+  background: var(--color-bg-hover); color: var(--color-text);
+}
+.text-settings-option.active {
+  color: var(--color-accent); font-weight: 700;
+}
+.font-size-btn-label {
+  font-size: 0.88rem; font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.font-size-btn-value {
+  font-size: 0.65rem; font-weight: 500;
+  color: var(--color-text-muted);
+  min-width: 14px; text-align: center;
+}

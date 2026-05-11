@@ -6,8 +6,20 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-test('desktop split feed tabs scroll within the left pane instead of overflowing it', () => {
+function readCssBundle() {
+  const stylesDir = resolve(__dirname, '../src/styles');
+  const globalCss = readFileSync(resolve(stylesDir, 'global.css'), 'utf8');
+  return globalCss.replace(/@import '\.\/(.+?)';/g, (_, file) => readFileSync(resolve(stylesDir, file), 'utf8'));
+}
+
+test('global stylesheet imports split CSS modules in cascade order', () => {
   const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
+
+  assert.match(css, /@import '\.\/tokens\.css';\s*@import '\.\/base\.css';\s*@import '\.\/header\.css';\s*@import '\.\/components\.css';\s*@import '\.\/home\.css';\s*@import '\.\/sources\.css';\s*@import '\.\/admin\.css';\s*@import '\.\/settings-sheet\.css';/);
+});
+
+test('desktop split feed tabs scroll within the left pane instead of overflowing it', () => {
+  const css = readCssBundle();
   const splitTabsRule = css.match(/\.split-left \.feed-tabs\s*\{([^}]+)\}/)?.[1] || '';
   const feedTabRule = css.match(/\.feed-tab\s*\{([^}]+)\}/)?.[1] || '';
 
@@ -17,7 +29,7 @@ test('desktop split feed tabs scroll within the left pane instead of overflowing
 });
 
 test('dark theme uses GitHub-style neutral dark tokens', () => {
-  const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
+  const css = readCssBundle();
   const darkThemeRule = css.match(/\[data-theme="dark"\]\s*\{([^}]+)\}/)?.[1] || '';
 
   assert.match(darkThemeRule, /--color-bg:\s*#0d1117/);
@@ -27,7 +39,7 @@ test('dark theme uses GitHub-style neutral dark tokens', () => {
 });
 
 test('split feed toolbar keeps compact tabs separate from the filter button on narrow panes', () => {
-  const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
+  const css = readCssBundle();
   const toolbarTabsRule = css.match(/\.split-feed-toolbar \.feed-tabs\s*\{([^}]+)\}/)?.[1] || '';
   const toolbarTabRule = css.match(/\.split-feed-toolbar \.feed-tab\s*\{([^}]+)\}/)?.[1] || '';
 
@@ -38,7 +50,7 @@ test('split feed toolbar keeps compact tabs separate from the filter button on n
 });
 
 test('desktop split view widens reader without changing feed column width', () => {
-  const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
+  const css = readCssBundle();
 
   assert.match(css, /@media \(min-width:\s*900px\)\s*\{[\s\S]*body\.split-view-active \.container-fluid\s*\{[\s\S]*max-width:\s*calc\(100vw - 300px\)/);
   assert.match(css, /\.home-split-layout\s*\{[\s\S]*width:\s*100%/);
@@ -47,7 +59,7 @@ test('desktop split view widens reader without changing feed column width', () =
 });
 
 test('mobile reader exposes refresh row and floating scroll-to-top affordance styles', () => {
-  const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
+  const css = readCssBundle();
   const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
 
   assert.match(css, /\.feed-refresh-row\s*\{/);
@@ -57,7 +69,7 @@ test('mobile reader exposes refresh row and floating scroll-to-top affordance st
 });
 
 test('mobile feed uses a fixed bottom tab bar while digest keeps the feed hidden', () => {
-  const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
+  const css = readCssBundle();
   const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
 
   assert.doesNotMatch(homeSource, /feed-tabs visible-on-mobile-only/);
@@ -68,7 +80,7 @@ test('mobile feed uses a fixed bottom tab bar while digest keeps the feed hidden
 });
 
 test('mobile feed and detail styles prioritize clean reading', () => {
-  const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
+  const css = readCssBundle();
   const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
   const detailSource = readFileSync(resolve(__dirname, '../src/pages/home/ArticleDetail.tsx'), 'utf8');
 
@@ -107,7 +119,7 @@ test('feed uses server-side tab pagination and exposes load-more control', () =>
 
 test('feed omits hot ranking controls for a simpler toolbar', () => {
   const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
-  const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
+  const css = readCssBundle();
 
   assert.doesNotMatch(homeSource, /Tin nóng/);
   assert.doesNotMatch(homeSource, /sort: feedSort/);

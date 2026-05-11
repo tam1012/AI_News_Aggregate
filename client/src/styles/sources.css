@@ -1,0 +1,9 @@
+/* ===== Sources list ===== */
+.source-item {
+  display: flex; align-items: center;
+  justify-content: space-between; gap: 12px; flex-wrap: wrap;
+}
+.source-info { flex: 1; min-width: 200px; }
+.source-name { font-weight: 600; }
+.source-url { font-size: 0.8rem; color: var(--color-text-muted); word-break: break-all; }
+.source-actions { display: flex; gap: 6px; flex-shrink: 0; }
