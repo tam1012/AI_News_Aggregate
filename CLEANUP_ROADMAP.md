@@ -74,7 +74,7 @@ Status: Complete on VPS as of 2026-05-12; ongoing observation remains recommende
 
 ### 6. Split large frontend files
 
-Status: Completed locally, pending interactive browser verification/deploy
+Status: Complete on VPS as of 2026-05-12
 
 - Split `Admin.tsx` into feature panels.
 - Split `Home.tsx` into reader/feed/detail components.
@@ -106,4 +106,4 @@ Status: Not started
 - 2026-05-12: Final pre-commit validation: server tests 68/68 pass, client tests 30/30 pass, full build passes. Diff reviewed for secrets; only placeholders found.
 - 2026-05-12: Commit `ce28552` deployed successfully via GitHub Actions. VPS is on `ce28552`, `newstamhv-app` and `newstamhv-db` are healthy, `/api/health/live` returns success, and recent logs show 200 OK responses with no deploy errors.
 - 2026-05-12: Reddit comment fetching was centralized locally and deployed in commit `cb88192`. Normal scrape/rescrape now share OAuth → proxy → RSS → old.reddit strategy order, Pullpush remains retry-only, focused proxy/RSS tests were added, server tests pass 70/70, client tests pass 30/30, full build passes, GitHub Actions deploy succeeded, VPS is on `cb88192`, containers are healthy, and `/api/health/live` returns success. Ongoing observation of Reddit comment fetch success across scrape cycles remains recommended.
-- 2026-05-12: Large frontend files were split locally. `Home.tsx` now delegates feed/detail/digest helpers to `client/src/pages/home/`, `Admin.tsx` delegates tab panels to `client/src/pages/admin/`, source-reading tests were updated, client tests pass 30/30, server tests pass 70/70, full build passes, and local route checks for `/`, `/admin`, `/reddit`, and `/digest` return 200. Interactive browser verification is still pending.
+- 2026-05-12: Large frontend files were split and deployed in commit `40d298a`. `Home.tsx` now delegates feed/detail/digest helpers to `client/src/pages/home/`, `Admin.tsx` delegates tab panels to `client/src/pages/admin/`, source-reading tests were updated, client tests pass 30/30, server tests pass 70/70, full build passes, GitHub Actions deploy succeeded, VPS is on `40d298a`, containers are healthy, `/api/health/live` returns success, and recent UI/API logs return 200.

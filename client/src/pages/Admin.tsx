@@ -24,6 +24,9 @@ export function Admin() {
     setFetchFilter(status);
     setTab('fetchJobs');
   };
+  const goToQuality = () => {
+    setTab('quality');
+  };
 
   const trigger = async (action: string, fn: () => Promise<any>) => {
     setActionLoading(action);
@@ -71,6 +74,7 @@ export function Admin() {
           trigger={trigger}
           goToQueue={goToQueue}
           goToFetch={goToFetch}
+          goToQuality={goToQuality}
         />
       )}
       {tab === 'queue' && <SummaryQueueTab initialStatus={queueFilter} />}
