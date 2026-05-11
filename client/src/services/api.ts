@@ -1,5 +1,4 @@
 import { getCachePolicy, makeApiCacheKey } from './apiCache';
-import { loadPersistentApiCache, markPersistentData, savePersistentApiCache } from './persistentCache';
 
 const API_BASE = '/api';
 const responseCache = new Map<string, { expiresAt: number; data: any }>();
@@ -30,10 +29,6 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       });
       return res.json();
     } catch (err) {
-      if (cachePolicy.cacheable) {
-        const cached = loadPersistentApiCache<T>(path);
-        if (cached) return markPersistentData(cached as Record<string, any>) as T;
-      }
       throw err;
     }
   };
@@ -58,7 +53,6 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
         data,
         expiresAt: Date.now() + cachePolicy.ttlMs,
       });
-      if (!data.offline) savePersistentApiCache(path, data);
     }
 
     return data;
