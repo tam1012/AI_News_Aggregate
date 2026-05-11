@@ -31,7 +31,7 @@ articles.get('/tags', async (c) => {
   } else if (feedTab === 'voz') {
     where += ` AND (s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`;
   } else if (feedTab === 'news') {
-    where += ` AND NOT (s.type = 'youtube' OR a.url ILIKE '%youtube.com%' OR a.url ILIKE '%youtu.be%' OR s.name ILIKE '%reddit%' OR a.url ILIKE '%reddit.com%' OR a.title ILIKE '[r/%' OR s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`;
+    where += ` AND NOT (s.name ILIKE '%reddit%' OR a.url ILIKE '%reddit.com%' OR a.title ILIKE '[r/%' OR s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`;
   }
 
   const rows = await getMany(

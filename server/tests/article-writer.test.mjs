@@ -80,17 +80,17 @@ test('build article insert row supports video content metadata', () => {
   });
 
   const row = buildArticleInsertRow({
-    source: { id: 'src_youtube', language: 'vi' },
-    url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    source: { id: 'src_video', language: 'vi' },
+    url: 'https://example.com/video/123',
     title: 'Video title',
     rawExcerpt: 'Video description',
     rawContent: 'Transcript text',
     contentType: 'video',
-    metadata: { videoId: 'dQw4w9WgXcQ', channelId: 'UC123' },
+    metadata: { videoId: 'video-123', channelId: 'channel-123' },
   });
 
   assert.equal(row.content_type, 'video');
-  assert.deepEqual(row.metadata, { videoId: 'dQw4w9WgXcQ', channelId: 'UC123' });
+  assert.deepEqual(row.metadata, { videoId: 'video-123', channelId: 'channel-123' });
 });
 
 test('build article insert row decodes HTML entities in article text', () => {
@@ -204,8 +204,8 @@ test('insert article allows short video content', async () => {
   });
 
   const result = await insertArticleIfNew({
-    source: { id: 'src_youtube', language: 'vi' },
-    url: 'https://www.youtube.com/watch?v=short',
+    source: { id: 'src_video', language: 'vi' },
+    url: 'https://example.com/video/short',
     title: 'Video title',
     rawExcerpt: '',
     rawContent: 'short transcript',

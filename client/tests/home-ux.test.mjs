@@ -45,13 +45,6 @@ test('digest route keeps the right pane visible without opening article detail s
   assert.equal(shouldShowRightPane({ tab: 'digest', hasSelectedArticle: false, hasArticleDeepLink: false }), true);
 });
 
-test('youtube tab behaves like an article feed tab', () => {
-  const { shouldShowDetailPane, shouldShowRightPane } = loadTsModule('../src/pages/homeUx.ts');
-
-  assert.equal(shouldShowDetailPane({ tab: 'youtube', hasSelectedArticle: true, hasArticleDeepLink: false }), true);
-  assert.equal(shouldShowRightPane({ tab: 'youtube', hasSelectedArticle: false, hasArticleDeepLink: false }), false);
-});
-
 test('scroll-to-top affordance appears only for long feed scroll without detail pane', () => {
   const { shouldShowScrollTopButton } = loadTsModule('../src/pages/homeUx.ts');
 

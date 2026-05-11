@@ -88,7 +88,7 @@ export function buildArticleListFilters(input: ArticleListFilterInput): ArticleL
   } else if (input.feedTab === 'voz') {
     clauses.push(`(s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`);
   } else if (input.feedTab === 'news') {
-    clauses.push(`NOT (s.type = 'youtube' OR a.url ILIKE '%youtube.com%' OR a.url ILIKE '%youtu.be%' OR s.name ILIKE '%reddit%' OR a.url ILIKE '%reddit.com%' OR a.title ILIKE '[r/%' OR s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`);
+    clauses.push(`NOT (s.name ILIKE '%reddit%' OR a.url ILIKE '%reddit.com%' OR a.title ILIKE '[r/%' OR s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`);
   }
 
   if (input.qualityIssue) {

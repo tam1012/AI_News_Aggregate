@@ -30,7 +30,6 @@ test('select source fetcher by URL specialization before generic source type', (
 
   assert.equal(getFetcherKeyForSource({ type: 'rss', url: 'https://www.reddit.com/r/LocalLLaMA/.rss' }), 'reddit');
   assert.equal(getFetcherKeyForSource({ type: 'rss', url: 'https://voz.vn/forums/chuyen-tro-linh-tinh.17/index.rss' }), 'voz');
-  assert.equal(getFetcherKeyForSource({ type: 'youtube', url: 'https://www.youtube.com/@mkbhd' }), 'youtube');
   assert.equal(getFetcherKeyForSource({ type: 'rss', url: 'https://example.com/feed.xml' }), 'rss');
   assert.equal(getFetcherKeyForSource({ type: 'web', url: 'https://github.com/trending' }), 'github-trending');
   assert.equal(getFetcherKeyForSource({ type: 'web', url: 'https://example.com' }), 'html');

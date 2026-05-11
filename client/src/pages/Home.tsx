@@ -139,7 +139,7 @@ function ReadmeWelcome() {
     <div className="card" style={{ padding: 'clamp(20px, 4vw, 32px)', textAlign: 'center', marginTop: '16px' }}>
       <h2 style={{ fontSize: 'clamp(1.4rem, 4vw, 1.8rem)', marginBottom: '10px', fontFamily: 'var(--font-heading)' }}>SynthNews</h2>
       <p style={{ color: 'var(--color-text-secondary)', margin: '0 auto 18px', fontSize: '0.98rem', lineHeight: '1.55', maxWidth: '650px' }}>
-        SynthNews là repo đọc tin cá nhân tự host: backend cào RSS, web, Reddit, VOZ, YouTube và GitHub Trending; AI tóm tắt tiếng Việt; frontend hiển thị feed đọc nhanh cho desktop và mobile.
+        SynthNews là repo đọc tin cá nhân tự host: backend cào RSS, web, Reddit, VOZ và GitHub Trending; AI tóm tắt tiếng Việt; frontend hiển thị feed đọc nhanh cho desktop và mobile.
       </p>
 
       <div style={{ textAlign: 'left', background: 'var(--color-bg)', padding: 'clamp(14px, 3vw, 18px)', borderRadius: 'var(--radius)', fontSize: '0.9rem', lineHeight: '1.55' }}>

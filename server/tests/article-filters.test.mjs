@@ -57,7 +57,7 @@ test('article filters validate score, status, and date', () => {
 test('article filters add feed tab predicates before pagination', () => {
   const { buildArticleListFilters } = loadTsModule('../src/lib/articleFilters.ts');
 
-  assert.match(buildArticleListFilters({ feedTab: 'news' }).where, /NOT \(s\.type = 'youtube'/);
+  assert.match(buildArticleListFilters({ feedTab: 'news' }).where, /NOT \(s\.name ILIKE '%reddit%'/);
   assert.match(buildArticleListFilters({ feedTab: 'reddit' }).where, /reddit/);
   assert.match(buildArticleListFilters({ feedTab: 'voz' }).where, /voz/);
 });

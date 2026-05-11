@@ -56,15 +56,15 @@ test('mobile reader exposes refresh row and floating scroll-to-top affordance st
   assert.match(homeSource, /className="scroll-top-button"/);
 });
 
-test('mobile digest keeps the main tab bar at the top instead of a bottom-only bar', () => {
+test('mobile feed uses a fixed bottom tab bar while digest keeps the feed hidden', () => {
   const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
   const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
 
   assert.doesNotMatch(homeSource, /feed-tabs visible-on-mobile-only/);
   assert.doesNotMatch(css, /\.visible-on-mobile-only\.feed-tabs\s*\{/);
   assert.match(homeSource, /tab !== 'digest' && \(\s*<div className="feed-container">/);
-  assert.match(css, /\.split-feed-toolbar \.toolbar-tabs-row\s*\{[\s\S]*justify-content:\s*flex-start/);
-  assert.match(css, /overflow-x:\s*clip/);
+  assert.match(css, /\.split-feed-toolbar \.toolbar-tabs-row\s*\{[\s\S]*position:\s*fixed[\s\S]*bottom:\s*0/);
+  assert.match(css, /\.split-feed-toolbar \.toolbar-tabs-row\s*\{[\s\S]*justify-content:\s*center/);
 });
 
 test('mobile feed and detail styles prioritize clean reading', () => {
@@ -86,11 +86,12 @@ test('mobile feed and detail styles prioritize clean reading', () => {
   assert.match(homeSource, /Tin mới/);
 });
 
-test('service worker cache version is bumped for updated app shell', () => {
+test('service worker unregisters legacy caches and reloads open clients', () => {
   const serviceWorker = readFileSync(resolve(__dirname, '../public/sw.js'), 'utf8');
 
-  assert.match(serviceWorker, /CACHE_VERSION = 'synthnews-v3'/);
-  assert.match(serviceWorker, /fetch\(request, \{ cache: 'no-store' \}\)/);
+  assert.match(serviceWorker, /self\.registration\.unregister\(\)/);
+  assert.match(serviceWorker, /key\.startsWith\('synthnews-'\)/);
+  assert.match(serviceWorker, /client\.navigate\(client\.url\)/);
 });
 
 test('feed uses server-side tab pagination and exposes load-more control', () => {
