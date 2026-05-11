@@ -42,7 +42,14 @@ const baseStubs = {
   '@mozilla/readability': { Readability: class { parse() { return null; } } },
   jsdom: { JSDOM: class { constructor() { this.window = { document: {}, close() {} }; } } },
   '../../lib/utils.js': { normalizePublicHttpUrl: (value) => new URL(value).toString(), truncate: (value) => value, sleep: async () => {} },
-  './http-utils.js': { BROWSER_UA: 'test-agent', browserFetch: async () => '' },
+  './http-utils.js': {
+    BROWSER_UA: 'test-agent',
+    GOOGLEBOT_UA: 'googlebot-agent',
+    browserHeaders: (ua) => ({ 'User-Agent': ua }),
+    randomUA: () => 'random-agent',
+    playwrightFetch: async () => '',
+    isBlockedHtml: () => false,
+  },
   './article-writer.js': { insertArticleIfNew: async () => true, MIN_ARTICLE_TEXT_LENGTH: 500 },
   '../../lib/promoFilter.js': { matchPromoKeyword: () => null },
   './selector-learning.js': { learnSelectorProfileFromHtml: async () => null },
@@ -139,7 +146,7 @@ test('RSS discover decodes Google News URLs before enqueueing', async () => {
     'google-news-url-decoder': {
       GoogleDecoder: class {
         async decode() {
-          return { status: true, decoded_url: 'https://www.reuters.com/world/example' };
+          return { status: true, decoded_url: 'https://www.apnews.com/world/example' };
         }
       },
     },
@@ -159,7 +166,7 @@ test('RSS discover decodes Google News URLs before enqueueing', async () => {
   });
 
   assert.equal(items.length, 1);
-  assert.equal(items[0].url, 'https://www.reuters.com/world/example');
+  assert.equal(items[0].url, 'https://www.apnews.com/world/example');
   assert.equal(items[0].payload.googleNewsUrl, 'https://news.google.com/rss/articles/CBMi-test?oc=5');
 });
 
@@ -246,7 +253,7 @@ test('RSS fetchArticle uses RSS snippet fallback when full article fetch fails',
   const article = await rssFetcher.fetchArticle({
     id: 'job_1',
     source_id: 'src_google',
-    url: 'https://www.reuters.com/world/example',
+    url: 'https://www.apnews.com/world/example',
     title: 'Paywalled story',
     external_id: 'google/paywall',
     published_at: null,
@@ -277,10 +284,14 @@ test('RSS fetchArticle passes lightweight browser options for anti-bot-light dom
     ...baseStubs,
     './http-utils.js': {
       BROWSER_UA: 'test-agent',
-      browserFetch: async (_url, _timeout, options) => {
+      GOOGLEBOT_UA: 'googlebot-agent',
+      browserHeaders: (ua) => ({ 'User-Agent': ua }),
+      randomUA: () => 'random-agent',
+      playwrightFetch: async (_url, options) => {
         browserOptions = options;
         return '<html><body><article>' + 'Full browser article '.repeat(40) + '</article></body></html>';
       },
+      isBlockedHtml: () => false,
     },
   }, {
     fetch: async () => ({ ok: true, text: async () => '<html><body>short</body></html>' }),
@@ -308,7 +319,7 @@ test('RSS fetchArticle passes lightweight browser options for anti-bot-light dom
 
   assert.equal(browserOptions.waitUntil, 'domcontentloaded');
   assert.equal(browserOptions.blockHeavyResources, true);
-  assert.equal(article.metadata.extractor, 'browser:selectors');
+  assert.equal(article.metadata.extractor, 'playwright-stealth:selectors');
 });
 
 test('RSS discover skips Google News items when decode fails', async () => {
