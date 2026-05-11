@@ -152,7 +152,14 @@ interface ScrapeResult {
 
 type ForumSkipReason = 'few_comments' | 'few_useful_comments' | 'duplicate' | 'comment_fetch_failed';
 
-type ForumStrategyName = 'oauth' | 'puppeteer' | 'rss' | 'proxy' | 'pullpush';
+type ForumStrategyName = 'oauth' | 'proxy' | 'rss' | 'puppeteer' | 'pullpush';
+
+interface RedditCommentFetchResult {
+  postContent: string;
+  outboundUrl: string | null;
+  discussionComments: ForumComment[];
+  strategyUsed: ForumStrategyName | null;
+}
 
 interface ForumScrapeStats {
   kind: 'reddit' | 'voz';
@@ -203,11 +210,122 @@ function getForumSkipReason(commentCount: number, minComments: number, usefulCou
   return null;
 }
 
-function markRedditStrategy(stats: ForumScrapeStats, strategy: ForumStrategyName, success: boolean) {
-  const entry = stats.strategies?.[strategy];
+function markRedditStrategy(stats: ForumScrapeStats | undefined, strategy: ForumStrategyName, success: boolean) {
+  const entry = stats?.strategies?.[strategy];
   if (!entry) return;
   entry.attempts++;
   if (success) entry.successes++;
+}
+
+function parseRedditJsonComments(commentsData: any, postContent: string): RedditCommentFetchResult | null {
+  if (!Array.isArray(commentsData)) return null;
+
+  let nextPostContent = postContent;
+  let outboundUrl: string | null = null;
+  const postData = commentsData[0]?.data?.children?.[0]?.data;
+  if (postData?.selftext && postData.selftext.length > nextPostContent.length) {
+    nextPostContent = normalizeWhitespace(postData.selftext);
+  }
+  if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
+    outboundUrl = normalizePublicHttpUrl(String(postData.url));
+  }
+
+  const comments = commentsData[1]?.data?.children || [];
+  const flattened: ForumComment[] = [];
+  flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
+  return {
+    postContent: nextPostContent,
+    outboundUrl,
+    discussionComments: selectForumComments(flattened, REDDIT_COMMENT_LIMIT),
+    strategyUsed: null,
+  };
+}
+
+export async function fetchRedditCommentsForPost(postPath: string, initialPostContent: string, stats?: ForumScrapeStats): Promise<RedditCommentFetchResult> {
+  if (hasRedditOAuth()) {
+    markRedditStrategy(stats, 'oauth', false);
+    const commentsData = await redditApiFetch(`${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`);
+    const parsed = parseRedditJsonComments(commentsData, initialPostContent);
+    if (parsed && parsed.discussionComments.length > 0) {
+      markRedditStrategy(stats, 'oauth', true);
+      console.log(`[reddit] comments strategy=oauth count=${parsed.discussionComments.length} path=${postPath}`);
+      return { ...parsed, strategyUsed: 'oauth' };
+    }
+  }
+
+  if (REDDIT_PROXY_URL) {
+    try {
+      markRedditStrategy(stats, 'proxy', false);
+      const proxyUrl = `${REDDIT_PROXY_URL}?path=${encodeURIComponent(postPath + '.json')}&limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
+      const proxyRes = await curlFetch(proxyUrl, 'application/json', 15);
+      if (proxyRes.ok) {
+        const parsed = parseRedditJsonComments(await proxyRes.json(), initialPostContent);
+        if (parsed && parsed.discussionComments.length > 0) {
+          markRedditStrategy(stats, 'proxy', true);
+          console.log(`[reddit] comments strategy=proxy count=${parsed.discussionComments.length} path=${postPath}`);
+          return { ...parsed, strategyUsed: 'proxy' };
+        }
+      }
+    } catch (e: any) {
+      console.log(`[reddit] comments strategy=proxy failed path=${postPath}: ${e.message}`);
+    }
+  }
+
+  try {
+    markRedditStrategy(stats, 'rss', false);
+    const commentRssUrl = `https://www.reddit.com${postPath}.rss`;
+    const rssRes = await fetch(commentRssUrl, {
+      headers: {
+        'User-Agent': BROWSER_UA,
+        Accept: 'application/rss+xml, application/xml, text/xml',
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (rssRes.ok) {
+      const feed = await rssParser.parseString(await rssRes.text());
+      const comments: ForumComment[] = [];
+      for (let i = 1; i < feed.items.length; i++) {
+        const item = feed.items[i];
+        const body = normalizeWhitespace(stripHtmlBasic(item.contentSnippet || item.content || ''));
+        if (body && body.length > 20) {
+          comments.push({
+            author: item.author || 'unknown',
+            body: body.substring(0, 900),
+            reactions: 0,
+            page: 1,
+            order: i,
+            score: scoreForumComment(body, 0, 1, i),
+          });
+        }
+      }
+      const discussionComments = selectForumComments(comments, REDDIT_COMMENT_LIMIT);
+      if (discussionComments.length > 0) {
+        markRedditStrategy(stats, 'rss', true);
+        console.log(`[reddit] comments strategy=rss count=${discussionComments.length} path=${postPath}`);
+        return { postContent: initialPostContent, outboundUrl: null, discussionComments, strategyUsed: 'rss' };
+      }
+    }
+  } catch (e: any) {
+    console.log(`[reddit] comments strategy=rss failed path=${postPath}: ${e.message}`);
+  }
+
+  try {
+    markRedditStrategy(stats, 'puppeteer', false);
+    const oldUrl = `https://old.reddit.com${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
+    const rawJsonText = await browserFetch(oldUrl, 25000, true);
+    if (rawJsonText && (rawJsonText.trim().startsWith('[') || rawJsonText.trim().startsWith('{'))) {
+      const parsed = parseRedditJsonComments(JSON.parse(rawJsonText), initialPostContent);
+      if (parsed && parsed.discussionComments.length > 0) {
+        markRedditStrategy(stats, 'puppeteer', true);
+        console.log(`[reddit] comments strategy=puppeteer count=${parsed.discussionComments.length} path=${postPath}`);
+        return { ...parsed, strategyUsed: 'puppeteer' };
+      }
+    }
+  } catch (e: any) {
+    console.log(`[reddit] comments strategy=puppeteer failed path=${postPath}: ${e.message}`);
+  }
+
+  return { postContent: initialPostContent, outboundUrl: null, discussionComments: [], strategyUsed: null };
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
@@ -389,163 +507,13 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
       let outboundUrl: string | null = null;
       let discussionComments: ForumComment[] = [];
 
-      try {
+      if (hasRedditOAuth() || enrichedCount < MAX_ENRICH_PER_RUN) {
+        enrichedCount++;
         await sleep(1200);
-        const postId = postPath.match(/\/comments\/([a-z0-9]+)/)?.[1];
-
-        if (hasRedditOAuth()) {
-          markRedditStrategy(forumStats, 'oauth', false);
-          // Use OAuth API for full comment access
-          const commentsData = await redditApiFetch(`${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`);
-          if (commentsData) {
-            const postData = commentsData[0]?.data?.children?.[0]?.data;
-            if (postData?.selftext && postData.selftext.length > postContent.length) {
-              postContent = normalizeWhitespace(postData.selftext);
-            }
-            if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
-              outboundUrl = normalizePublicHttpUrl(String(postData.url));
-            }
-            const comments = commentsData[1]?.data?.children || [];
-            const flattened: ForumComment[] = [];
-            flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
-            discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
-            markRedditStrategy(forumStats, 'oauth', discussionComments.length > 0);
-          }
-        } else if (enrichedCount < MAX_ENRICH_PER_RUN) {
-          enrichedCount++;
-
-          // Strategy 1: Puppeteer Headless Browser (Mimics real user to bypass blocks)
-          try {
-            markRedditStrategy(forumStats, 'puppeteer', false);
-            const oldUrl = `https://old.reddit.com${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
-            const rawJsonText = await browserFetch(oldUrl, 25000, true);
-            if (rawJsonText && (rawJsonText.trim().startsWith('[') || rawJsonText.trim().startsWith('{'))) {
-              const commentsData = JSON.parse(rawJsonText);
-              if (Array.isArray(commentsData)) {
-                const postData = commentsData[0]?.data?.children?.[0]?.data;
-                if (postData?.selftext && postData.selftext.length > postContent.length) {
-                  postContent = normalizeWhitespace(postData.selftext);
-                }
-                if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
-                  outboundUrl = normalizePublicHttpUrl(String(postData.url));
-                }
-                const comments = commentsData[1]?.data?.children || [];
-                const flattened: ForumComment[] = [];
-                flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
-                discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
-                if (discussionComments.length > 0) {
-                  markRedditStrategy(forumStats, 'puppeteer', true);
-                  console.log(`[reddit] Puppeteer (old.reddit.com): got ${discussionComments.length} comments for ${postPath}`);
-                }
-              }
-            }
-          } catch (e: any) {
-            console.log(`[reddit] old.reddit.com failed for ${postPath}: ${e.message}`);
-          }
-
-          // Strategy 2: Comment RSS Feed (Native backdoor, bypasses Cloudflare JSON block)
-          if (discussionComments.length === 0) {
-            try {
-              markRedditStrategy(forumStats, 'rss', false);
-              const commentRssUrl = `https://www.reddit.com${postPath}.rss`;
-              const rssRes = await fetch(commentRssUrl, {
-                headers: {
-                  'User-Agent': BROWSER_UA,
-                  Accept: 'application/rss+xml, application/xml, text/xml',
-                },
-                signal: AbortSignal.timeout(15000),
-              });
-              if (rssRes.ok) {
-                const xml = await rssRes.text();
-                const feed = await rssParser.parseString(xml);
-                const comments: ForumComment[] = [];
-                // First item is usually the post itself, skip it or filter
-                for (let i = 1; i < feed.items.length; i++) {
-                  const item = feed.items[i];
-                  const body = normalizeWhitespace(stripHtmlBasic(item.contentSnippet || item.content || ''));
-                  if (body && body.length > 20) {
-                    comments.push({
-                      author: item.author || 'unknown',
-                      body: body.substring(0, 900),
-                      reactions: 0, // RSS doesn't provide scores, but we have the text
-                      page: 1,
-                      order: i,
-                      score: scoreForumComment(body, 0, 1, i)
-                    });
-                  }
-                }
-                discussionComments = selectForumComments(comments, REDDIT_COMMENT_LIMIT);
-                if (discussionComments.length > 0) {
-                  markRedditStrategy(forumStats, 'rss', true);
-                  console.log(`[reddit] RSS Comment Fallback: got ${discussionComments.length} comments for ${postPath}`);
-                }
-              }
-            } catch (e: any) {
-              console.log(`[reddit] RSS Comment Fallback failed for ${postPath}: ${e.message}`);
-            }
-          }
-
-          // Strategy 3: Cloudflare Worker proxy (real-time Reddit API access)
-          if (discussionComments.length === 0 && REDDIT_PROXY_URL) {
-            try {
-              markRedditStrategy(forumStats, 'proxy', false);
-              const proxyUrl = `${REDDIT_PROXY_URL}?path=${encodeURIComponent(postPath + '.json')}&limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
-              const proxyRes = await curlFetch(proxyUrl, 'application/json', 15);
-              if (proxyRes.ok) {
-                const commentsData = await proxyRes.json();
-                if (Array.isArray(commentsData)) {
-                  const postData = commentsData[0]?.data?.children?.[0]?.data;
-                  if (postData?.selftext && postData.selftext.length > postContent.length) {
-                    postContent = normalizeWhitespace(postData.selftext);
-                  }
-                  if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
-                    outboundUrl = normalizePublicHttpUrl(String(postData.url));
-                  }
-                  const comments = commentsData[1]?.data?.children || [];
-                  const flattened: ForumComment[] = [];
-                  flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
-                  discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
-                  if (discussionComments.length > 0) {
-                    markRedditStrategy(forumStats, 'proxy', true);
-                    console.log(`[reddit] Proxy: got ${discussionComments.length} comments for ${postPath}`);
-                  }
-                }
-              }
-            } catch (e: any) {
-              console.log(`[reddit] Proxy failed for ${postPath}: ${e.message}`);
-            }
-          }
-
-          // Strategy 4: Pullpush archive API (fallback, data may be stale)
-          if (discussionComments.length === 0 && postId) {
-            try {
-              markRedditStrategy(forumStats, 'pullpush', false);
-              const pullpushUrl = `https://api.pullpush.io/reddit/comment/search?link_id=${postId}&size=${REDDIT_COMMENT_LIMIT}&sort=score&sort_type=score`;
-              const pullpushRes = await curlFetch(pullpushUrl, 'application/json', 10);
-              if (pullpushRes.ok) {
-                const pullpushData = await pullpushRes.json();
-                const pullpushComments: ForumComment[] = (pullpushData.data || [])
-                  .filter((c: any) => c.body && c.body !== '[deleted]' && c.body !== '[removed]' && c.body.length > 20)
-                  .map((c: any, idx: number) => ({
-                    author: c.author || 'unknown',
-                    body: c.body.substring(0, 900),
-                    reactions: c.score || 0,
-                    page: 1,
-                    order: idx,
-                    score: scoreForumComment(c.body, c.score || 0, 1, idx),
-                  }));
-                discussionComments = selectForumComments(pullpushComments, REDDIT_COMMENT_LIMIT);
-                if (pullpushComments.length > 0) {
-                  markRedditStrategy(forumStats, 'pullpush', discussionComments.length > 0);
-                  console.log(`[reddit] Pullpush: got ${pullpushComments.length} comments for ${postPath}`);
-                }
-              }
-            } catch (e: any) {
-              console.log(`[reddit] Pullpush failed for ${postPath}: ${e.message}`);
-            }
-          }
-        }
-      } catch {
+        const fetched = await fetchRedditCommentsForPost(postPath, postContent, forumStats);
+        postContent = fetched.postContent;
+        outboundUrl = fetched.outboundUrl;
+        discussionComments = fetched.discussionComments;
       }
 
       const selectedRedditComments = selectForumComments(discussionComments, REDDIT_COMMENT_LIMIT);

@@ -1,9 +1,10 @@
 import { getOne, getMany, query } from '../db/index.js';
 import { truncate, normalizePublicHttpUrl, sleep } from '../lib/utils.js';
 import {
-  curlFetch, browserFetch, parseVozPosts, extractVozPagination,
-  buildVozRawContent, flattenRedditComments, buildRedditRawContent,
-  scoreForumComment, selectForumComments, ForumComment, VozPost
+  curlFetch, parseVozPosts, extractVozPagination,
+  buildVozRawContent, buildRedditRawContent,
+  scoreForumComment, selectForumComments, ForumComment, VozPost,
+  fetchRedditCommentsForPost
 } from './scraper.js';
 
 const VOZ_MAX_THREAD_PAGES = parseInt(process.env.VOZ_MAX_THREAD_PAGES || '15');
@@ -87,71 +88,18 @@ export async function rescrapeArticle(articleId: string, force: boolean = false)
         return false;
       }
 
-      const oldUrl = `https://old.reddit.com${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
-      const rawJsonText = await browserFetch(oldUrl, 25000, true);
-      
       let postContent = article.title;
       const existingContent = article.raw_content || '';
       const postContentMatch = existingContent.match(/\[Nội dung bài viết\]\n([\s\S]*?)\n\n\[/);
       if (postContentMatch) postContent = postContentMatch[1].trim();
 
-      let outboundUrl: string | null = null;
       const linkMatch = existingContent.match(/\[Link chia sẻ\]: (.+)/);
-      if (linkMatch) outboundUrl = linkMatch[1].trim();
+      const existingOutboundUrl = linkMatch ? linkMatch[1].trim() : null;
+      const fetched = await fetchRedditCommentsForPost(postPath, postContent);
+      postContent = fetched.postContent;
+      const outboundUrl = fetched.outboundUrl || existingOutboundUrl;
+      const discussionComments = fetched.discussionComments;
 
-      let discussionComments: ForumComment[] = [];
-
-      if (rawJsonText && (rawJsonText.trim().startsWith('[') || rawJsonText.trim().startsWith('{'))) {
-        const commentsData = JSON.parse(rawJsonText);
-        if (Array.isArray(commentsData)) {
-          const postData = commentsData[0]?.data?.children?.[0]?.data;
-          if (postData?.selftext && postData.selftext.length > postContent.length) {
-            postContent = postData.selftext.replace(/\s+/g, ' ').trim();
-          }
-          if (postData?.url && !postData.is_self && !String(postData.url).includes('reddit.com')) {
-            outboundUrl = normalizePublicHttpUrl(String(postData.url));
-          }
-          const comments = commentsData[1]?.data?.children || [];
-          const flattened: ForumComment[] = [];
-          flattenRedditComments(comments, 1, REDDIT_COMMENT_DEPTH, flattened);
-          discussionComments = selectForumComments(flattened, REDDIT_COMMENT_LIMIT);
-        }
-      }
-
-      if (discussionComments.length === 0) {
-        try {
-          const RssParser = (await import('rss-parser')).default;
-          const rssParser = new RssParser({ timeout: 10000 });
-          const rssRes = await fetch(`https://www.reddit.com${postPath}.rss`, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-            signal: AbortSignal.timeout(15000),
-          });
-          if (rssRes.ok) {
-             const xml = await rssRes.text();
-             const feed = await rssParser.parseString(xml);
-             const comments: ForumComment[] = [];
-             for (let i = 1; i < feed.items.length; i++) {
-                const item = feed.items[i];
-                const body = (item.contentSnippet || item.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-                if (body && body.length > 20) {
-                  comments.push({
-                    author: item.author || 'unknown',
-                    body: body.substring(0, 900),
-                    reactions: 0,
-                    page: 1,
-                    order: i,
-                    score: scoreForumComment(body, 0, 1, i)
-                  });
-                }
-             }
-             discussionComments = selectForumComments(comments, REDDIT_COMMENT_LIMIT);
-             console.log(`[rescrape] RSS Backdoor fetched ${discussionComments.length} comments for ${postPath}`);
-          }
-        } catch (e) {
-          // ignore
-        }
-      }
-      
       if (discussionComments.length > 0) {
         newRawContent = buildRedditRawContent(postContent, outboundUrl, discussionComments, discussionComments.length);
       }

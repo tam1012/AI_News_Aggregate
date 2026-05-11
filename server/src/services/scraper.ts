@@ -13,6 +13,7 @@ export {
   browserFetch,
   curlFetch,
   extractVozPagination,
+  fetchRedditCommentsForPost,
   flattenRedditComments,
   parseVozPosts,
   scoreForumComment,

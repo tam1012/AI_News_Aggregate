@@ -26,7 +26,7 @@ VPS untracked classification from 2026-05-12:
 
 ### 2. Remove unused YouTube support
 
-Status: Completed locally, pending deploy
+Status: Complete on VPS as of 2026-05-12
 
 - Remove YouTube fetcher code and tests.
 - Remove YouTube source detection/registration paths.
@@ -45,7 +45,7 @@ Status: Complete
 
 ### 4. Deploy and observe
 
-Status: Ready after commit/push
+Status: Complete
 
 - Commit and push only after local validation passes.
 - Let GitHub Actions deploy to VPS.
@@ -63,10 +63,12 @@ Pre-commit status from 2026-05-12:
 
 ### 5. Stabilize Reddit/comment fetching
 
-Status: Not started
+Status: Completed locally, pending deploy/observation
 
-- Finish Cloudflare Worker proxy if still needed.
-- Observe Reddit comment fetch success for several scrape cycles.
+- Centralize Reddit comment fetching so normal scrape and rescrape use the same strategy order.
+- Prefer OAuth when configured, then Cloudflare Worker proxy, RSS fallback, and old.reddit browser fallback.
+- Keep Pullpush isolated to the retry-only archive enrichment job for now.
+- Observe Reddit comment fetch success for several scrape cycles after deploy.
 - Remove fallback strategies that no longer help after proxy is stable.
 - Keep logging focused on comments fetched, useful comments, and skip reason.
 
@@ -94,3 +96,5 @@ Status: Not started
 - 2026-05-12: Validation results after stale test cleanup: server tests pass, client tests pass, full build passes.
 - 2026-05-12: VPS untracked files were backed up to `/home/ubuntu/newstamhv-untracked-backup-20260512-013524.tar.gz`, then removed from the working tree. VPS `git status --short` is clean and containers remain healthy.
 - 2026-05-12: Final pre-commit validation: server tests 68/68 pass, client tests 30/30 pass, full build passes. Diff reviewed for secrets; only placeholders found.
+- 2026-05-12: Commit `ce28552` deployed successfully via GitHub Actions. VPS is on `ce28552`, `newstamhv-app` and `newstamhv-db` are healthy, `/api/health/live` returns success, and recent logs show 200 OK responses with no deploy errors.
+- 2026-05-12: Reddit comment fetching was centralized locally. Normal scrape/rescrape now share OAuth → proxy → RSS → old.reddit strategy order, Pullpush remains retry-only, focused proxy/RSS tests were added, server tests pass 70/70, client tests pass 30/30, and full build passes.
