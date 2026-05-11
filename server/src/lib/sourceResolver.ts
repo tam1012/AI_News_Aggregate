@@ -1,3 +1,5 @@
+import { buildSitemapCandidates, parseSitemapIndexUrls, parseSitemapUrls } from '../services/fetchers/sitemap-discovery.js';
+
 type SourceType = 'rss' | 'web';
 
 export interface SourceDetectResult {
@@ -231,6 +233,43 @@ async function probeFeed(url: string, fetcher: ResolveFetch): Promise<boolean> {
   }
 }
 
+async function probeSitemaps(url: string, fetcher: ResolveFetch): Promise<{ sitemapCount: number; recentSitemapCount: number }> {
+  let sitemapCount = 0;
+  let recentSitemapCount = 0;
+  const candidates = buildSitemapCandidates(url).slice(0, 5);
+
+  for (const candidate of candidates) {
+    try {
+      const response = await fetcher(candidate, {
+        headers: { 'User-Agent': USER_AGENT },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok) continue;
+      const xml = await response.text();
+      const childUrls = parseSitemapIndexUrls(xml, candidate).slice(0, 5);
+      const directEntries = parseSitemapUrls(xml, candidate, { maxAgeHours: 72 });
+      sitemapCount += directEntries.length;
+      recentSitemapCount += directEntries.length;
+
+      for (const child of childUrls) {
+        try {
+          const childResponse = await fetcher(child, {
+            headers: { 'User-Agent': USER_AGENT },
+            signal: AbortSignal.timeout(10000),
+          });
+          if (!childResponse.ok) continue;
+          const childXml = await childResponse.text();
+          const childEntries = parseSitemapUrls(childXml, child, { maxAgeHours: 72 });
+          sitemapCount += childEntries.length;
+          recentSitemapCount += childEntries.length;
+        } catch {}
+      }
+    } catch {}
+  }
+
+  return { sitemapCount, recentSitemapCount };
+}
+
 export async function resolveSourceUrl(rawUrl: string, fetcher: ResolveFetch = defaultFetch): Promise<SourceDetectResult> {
   const normalized = normalizeHttpUrl(rawUrl);
   if (!normalized) throw new Error('url must be a public http(s) URL');
@@ -303,11 +342,16 @@ export async function resolveSourceUrl(rawUrl: string, fetcher: ResolveFetch = d
       }
     }
 
+    const sitemapPreview = await probeSitemaps(result.canonical_url, fetcher);
+
     result.detected = true;
     if (result.rss_feeds.length > 0) {
       result.type = 'rss';
       result.suggested_url = result.rss_feeds[0].url;
       if (result.detected_kind === 'html') result.detected_kind = 'rss';
+    } else if (sitemapPreview.sitemapCount > 0) {
+      result.type = 'web';
+      result.parser_config = { discoverSitemap: true };
     }
 
     result.preview = {
@@ -316,6 +360,8 @@ export async function resolveSourceUrl(rawUrl: string, fetcher: ResolveFetch = d
       image: imageFromHtml(body),
       language: langFromHtml(body),
       rss_count: result.rss_feeds.length,
+      sitemap_count: sitemapPreview.sitemapCount,
+      recent_sitemap_count: sitemapPreview.recentSitemapCount,
     };
   } catch (err: any) {
     result.warnings.push(err.message || 'Failed to inspect source URL');

@@ -19,6 +19,7 @@ import {
   rowToSelectorProfile,
   saveSourceProfile,
 } from './selector-profile.js';
+import { discoverSitemapArticles } from './sitemap-discovery.js';
 
 const rssParser = new RssParser({
   timeout: 15000,
@@ -182,6 +183,21 @@ async function decodeGoogleNewsUrl(url: string): Promise<string> {
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = parseInt(value || '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function shouldDiscoverSitemap(config: any): boolean {
+  return config?.discoverSitemap === true || process.env.ENABLE_SITEMAP_DISCOVERY === 'true';
+}
+
+function mergeDiscoveredArticles<T extends { url: string }>(primary: T[], secondary: T[]): T[] {
+  const seen = new Set(primary.map((item) => item.url));
+  const merged = [...primary];
+  for (const item of secondary) {
+    if (seen.has(item.url)) continue;
+    seen.add(item.url);
+    merged.push(item);
+  }
+  return merged;
 }
 
 function decodeText(value: string): string {
@@ -507,6 +523,7 @@ export const rssFetcher: SourceFetcher = {
         externalId: item.guid || null,
         publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : null,
         payload: {
+          discovery: googleNewsUrl ? 'google-news-rss' : 'rss',
           author: item.creator || rawItem.author || null,
           rawExcerpt: stripHtml(rawExcerpt),
           rawContent: stripHtml(rawContent),
@@ -515,6 +532,14 @@ export const rssFetcher: SourceFetcher = {
           googleNewsUrl,
         },
       });
+    }
+
+    if (shouldDiscoverSitemap(source.parser_config)) {
+      const sitemapArticles = await discoverSitemapArticles(source, fetch, {
+        limit: parsePositiveInt(process.env.MAX_SITEMAP_ARTICLES_PER_SOURCE, 20),
+        maxAgeHours: parsePositiveInt(process.env.SITEMAP_MAX_AGE_HOURS, 72),
+      });
+      return mergeDiscoveredArticles(results, sitemapArticles).slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 20));
     }
 
     return results;

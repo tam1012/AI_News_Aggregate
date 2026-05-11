@@ -84,7 +84,7 @@ test('reset retryable article fetch jobs respects retry cap', () => {
   assert.deepEqual(Array.from(statement.params), [3, 15]);
 });
 
-test('short-content rescue query targets skipped RSS and HTML articles only', () => {
+test('short-content rescue query targets skipped RSS and web articles only', () => {
   const { buildFindShortContentArticlesSql } = loadTsModule('../src/services/article-fetch-queue.ts', {
     '../lib/utils.js': {},
     '../db/index.js': {},
@@ -94,7 +94,7 @@ test('short-content rescue query targets skipped RSS and HTML articles only', ()
   assert.match(statement.sql, /summary_status = 'skipped'/);
   assert.match(statement.sql, /source content too short/);
   assert.match(statement.sql, /GREATEST\(length\(coalesce\(a\.raw_content/);
-  assert.match(statement.sql, /s\.type IN \('rss', 'html'\)/);
+  assert.match(statement.sql, /s\.type IN \('rss', 'web'\)/);
   assert.deepEqual(Array.from(statement.params), [500, 15]);
 });
 

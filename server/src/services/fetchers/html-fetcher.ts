@@ -3,7 +3,9 @@ import { normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
 import { matchPromoKeyword } from '../../lib/promoFilter.js';
 import { browserHeaders, isBlockedHtml, randomUA, playwrightFetch } from './http-utils.js';
 import { insertArticleIfNew } from './article-writer.js';
+import type { DiscoveredArticle } from '../article-fetch-queue.js';
 import { SourceFetcher } from './types.js';
+import { discoverSitemapArticles } from './sitemap-discovery.js';
 import { learnSelectorProfileFromHtml } from './selector-learning.js';
 import {
   extractWithSelectorProfile,
@@ -19,6 +21,68 @@ import {
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = parseInt(value || '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function shouldDiscoverSitemap(config: any): boolean {
+  return config?.discoverSitemap === true || process.env.ENABLE_SITEMAP_DISCOVERY === 'true';
+}
+
+function dedupeDiscovered<T extends { url: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.url)) return false;
+    seen.add(item.url);
+    return true;
+  });
+}
+
+function scoreArticleLink(url: string, title: string, sourceUrl: string): number {
+  try {
+    const parsed = new URL(url);
+    const source = new URL(sourceUrl);
+    if (parsed.hostname.replace(/^www\./, '') !== source.hostname.replace(/^www\./, '')) return 0;
+
+    const path = parsed.pathname.toLowerCase();
+    if (/\/(tag|tags|author|login|subscribe|search|category|privacy|about|contact)\b/.test(path)) return 0;
+    if (/facebook|twitter|x\.com|linkedin|mailto:|javascript:/i.test(url)) return 0;
+
+    const slug = path.split('/').filter(Boolean).pop() || '';
+    let score = 0;
+    if (/\/20\d{2}[/-]/.test(path) || /\/\d{4}\/\d{2}\//.test(path)) score += 5;
+    if (/\/(news|world|business|technology|tech|article|story|politics|markets)\b/.test(path)) score += 4;
+    if (slug.length >= 24 && /[-_]/.test(slug)) score += 4;
+    if (title.length >= 24) score += 3;
+    if (title.length >= 50) score += 2;
+    if (path.split('/').filter(Boolean).length >= 2) score += 1;
+    return score;
+  } catch {
+    return 0;
+  }
+}
+
+function collectHeuristicArticleLinks($: cheerio.CheerioAPI, sourceUrl: string, sourceId: string): { sourceId: string; url: string; title: string; payload: any }[] {
+  const candidates: { sourceId: string; url: string; title: string; payload: any; score: number }[] = [];
+
+  $('a[href]').each((_: number, el: any) => {
+    const href = $(el).attr('href');
+    if (!href) return;
+    try {
+      const publicUrl = normalizePublicHttpUrl(new URL(href, sourceUrl).toString());
+      if (!publicUrl) return;
+      const title = $(el).text().replace(/\s+/g, ' ').trim();
+      const score = scoreArticleLink(publicUrl, title, sourceUrl);
+      if (score < 6) return;
+      candidates.push({
+        sourceId,
+        url: publicUrl,
+        title: title || publicUrl,
+        payload: { discovery: 'web-heuristic', discoveryScore: score },
+        score,
+      });
+    } catch {}
+  });
+
+  return dedupeDiscovered(candidates.sort((a, b) => b.score - a.score)).map(({ score, ...item }) => item);
 }
 
 function getMetaContent($: cheerio.CheerioAPI, selector: string): string {
@@ -60,8 +124,9 @@ export const htmlFetcher: SourceFetcher = {
   key: 'html',
   canHandle: (source) => source.type === 'web',
   async discover(source) {
-    const config = source.parser_config;
-    if (!config || !config.articleLinkSelector) {
+    const config = source.parser_config || {};
+    const sitemapEnabled = shouldDiscoverSitemap(config);
+    if (!config.articleLinkSelector && !sitemapEnabled) {
       throw new Error('parser_config with articleLinkSelector is required for web sources');
     }
 
@@ -89,9 +154,10 @@ export const htmlFetcher: SourceFetcher = {
 
     let $ = cheerio.load(html);
 
-    const discovered: { sourceId: string; url: string; title: string }[] = [];
+    const discovered: DiscoveredArticle[] = [];
     const collectLinks = () => {
       discovered.length = 0;
+      if (!config.articleLinkSelector) return;
       $(config.articleLinkSelector).each((_: number, el: any) => {
         const href = $(el).attr('href');
         if (!href) return;
@@ -99,12 +165,17 @@ export const htmlFetcher: SourceFetcher = {
           const publicUrl = normalizePublicHttpUrl(new URL(href, sourceUrl).toString());
           if (!publicUrl) return;
           const title = $(el).text().replace(/\s+/g, ' ').trim() || publicUrl;
-          discovered.push({ sourceId: source.id, url: publicUrl, title });
+          discovered.push({ sourceId: source.id, url: publicUrl, title, payload: { discovery: 'web-selector' } });
         } catch {}
       });
     };
 
     collectLinks();
+    const minDiscoveredLinks = Number.isInteger(config.minDiscoveredLinks) && config.minDiscoveredLinks > 0 ? config.minDiscoveredLinks : 3;
+    if (discovered.length < minDiscoveredLinks) {
+      discovered.push(...collectHeuristicArticleLinks($, sourceUrl, source.id));
+    }
+
     if (discovered.length === 0) {
       console.warn(`html-fetcher: native discover found 0 links for ${sourceUrl}, falling back to Playwright`);
       html = await playwrightFetch(sourceUrl, {
@@ -115,20 +186,25 @@ export const htmlFetcher: SourceFetcher = {
       });
       $ = cheerio.load(html);
       collectLinks();
+      if (discovered.length < minDiscoveredLinks) {
+        discovered.push(...collectHeuristicArticleLinks($, sourceUrl, source.id));
+      }
     }
 
-    const seen = new Set<string>();
-    return discovered
-      .filter((item) => {
-        if (seen.has(item.url)) return false;
-        seen.add(item.url);
-        return true;
-      })
+    if (sitemapEnabled) {
+      const sitemapArticles = await discoverSitemapArticles(source, fetch, {
+        limit: parsePositiveInt(process.env.MAX_SITEMAP_ARTICLES_PER_SOURCE, 20),
+        maxAgeHours: parsePositiveInt(process.env.SITEMAP_MAX_AGE_HOURS, 72),
+      });
+      discovered.push(...sitemapArticles);
+    }
+
+    return dedupeDiscovered(discovered)
       .slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 20));
   },
   async fetchArticle(job, source) {
-    const config = source.parser_config;
-    if (!config || !config.articleLinkSelector) {
+    const config = source.parser_config || {};
+    if (!config.articleLinkSelector && !config.discoverSitemap) {
       throw new Error('parser_config with articleLinkSelector is required for web sources');
     }
 
@@ -219,9 +295,9 @@ export const htmlFetcher: SourceFetcher = {
   },
   async fetch(source) {
     const result = { itemsFound: 0, itemsInserted: 0, errors: [] as string[], metadata: {} as Record<string, unknown> };
-    const config = source.parser_config;
+    const config = source.parser_config || {};
 
-    if (!config || !config.articleLinkSelector) {
+    if (!config.articleLinkSelector && !config.discoverSitemap) {
       result.errors.push('parser_config with articleLinkSelector is required for web sources');
       return result;
     }

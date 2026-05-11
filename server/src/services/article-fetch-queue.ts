@@ -147,7 +147,7 @@ export function buildFindShortContentArticlesSql(limit: number, minLength = 500)
                 AND j.status IN ('discovered', 'fetching', 'failed')
                 AND coalesce(j.payload_json->>'rescueArticleId', '') = a.id
             )
-            AND s.type IN ('rss', 'html')
+            AND s.type IN ('rss', 'web')
           ORDER BY a.created_at DESC
           LIMIT $2`,
     params: [minLength, limit],
