@@ -70,6 +70,7 @@ test('mobile feed uses a fixed bottom tab bar while digest keeps the feed hidden
 test('mobile feed and detail styles prioritize clean reading', () => {
   const css = readFileSync(resolve(__dirname, '../src/styles/global.css'), 'utf8');
   const homeSource = readFileSync(resolve(__dirname, '../src/pages/Home.tsx'), 'utf8');
+  const detailSource = readFileSync(resolve(__dirname, '../src/pages/home/ArticleDetail.tsx'), 'utf8');
 
   assert.match(css, /\.feed-item-body\s*\{[\s\S]*display:\s*block/);
   assert.match(css, /\.detail-source-link\s*\{/);
@@ -81,7 +82,7 @@ test('mobile feed and detail styles prioritize clean reading', () => {
   assert.match(css, /touch-action:\s*none/);
   assert.match(css, /\.feed-item-title\s*\{[\s\S]*font-size:\s*1\.02rem/);
   assert.match(css, /\.detail-title-editorial\s*\{[\s\S]*font-size:\s*clamp\(1\.75rem, 3\.4vw, 2\.1rem\)/);
-  assert.match(homeSource, /startedOnPullBarRef/);
+  assert.match(detailSource, /startedOnPullBarRef/);
   assert.match(css, /--safe-bottom:\s*env\(safe-area-inset-bottom/);
   assert.match(homeSource, /Tin mới/);
 });

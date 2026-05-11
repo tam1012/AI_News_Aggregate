@@ -8,15 +8,18 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 test('admin exposes a dedicated summary queue tab', () => {
   const source = readFileSync(resolve(__dirname, '../src/pages/Admin.tsx'), 'utf8');
+  const helpers = readFileSync(resolve(__dirname, '../src/pages/admin/adminHelpers.ts'), 'utf8');
 
-  assert.match(source, /type AdminTab = 'overview' \| 'queue'/);
+  assert.match(helpers, /export type AdminTab = 'overview' \| 'queue'/);
   assert.match(source, /\{ key: 'queue', label: 'Hàng đợi tóm tắt' \}/);
-  assert.match(source, /tab === 'queue' && <SummaryQueueTab/);});
+  assert.match(source, /tab === 'queue' && <SummaryQueueTab/);
+});
 
 test('summary queue filters articles by summary status and shows operational fields', () => {
-  const source = readFileSync(resolve(__dirname, '../src/pages/Admin.tsx'), 'utf8');
+  const source = readFileSync(resolve(__dirname, '../src/pages/admin/SummaryQueueTab.tsx'), 'utf8');
+  const helpers = readFileSync(resolve(__dirname, '../src/pages/admin/adminHelpers.ts'), 'utf8');
 
-  assert.match(source, /type SummaryQueueStatus = 'failed' \| 'pending' \| 'processing' \| 'skipped' \| 'done'/);
+  assert.match(helpers, /export type SummaryQueueStatus = 'failed' \| 'pending' \| 'processing' \| 'skipped' \| 'done'/);
   assert.match(source, /api\.getArticles\(\{ page, limit: 50, status \}\)/);
   assert.match(source, /last_summary_error/);
   assert.match(source, /retry_count/);
@@ -25,7 +28,7 @@ test('summary queue filters articles by summary status and shows operational fie
 });
 
 test('admin overview exposes forum observability labels', () => {
-  const source = readFileSync(resolve(__dirname, '../src/pages/Admin.tsx'), 'utf8');
+  const source = readFileSync(resolve(__dirname, '../src/pages/admin/OverviewTab.tsx'), 'utf8');
 
   assert.match(source, /Theo dõi forum Reddit\/VOZ/);
   assert.match(source, /Bỏ qua: ít comment/);
@@ -35,7 +38,7 @@ test('admin overview exposes forum observability labels', () => {
 });
 
 test('admin overview exposes source quality labels in Vietnamese', () => {
-  const source = readFileSync(resolve(__dirname, '../src/pages/Admin.tsx'), 'utf8');
+  const source = readFileSync(resolve(__dirname, '../src/pages/admin/OverviewTab.tsx'), 'utf8');
 
   assert.match(source, /Chất lượng nguồn tin/);
   assert.match(source, /Ít bài mới/);
