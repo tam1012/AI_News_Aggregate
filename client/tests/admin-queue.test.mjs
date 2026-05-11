@@ -52,7 +52,9 @@ test('admin overview uses navigation callbacks owned by the shell', () => {
   const adminSource = readFileSync(resolve(__dirname, '../src/pages/Admin.tsx'), 'utf8');
   const overviewSource = readFileSync(resolve(__dirname, '../src/pages/admin/OverviewTab.tsx'), 'utf8');
 
+  assert.match(adminSource, /actionLoading=\{actionLoading\}/);
   assert.match(adminSource, /goToQuality=\{goToQuality\}/);
+  assert.match(overviewSource, /actionLoading: string/);
   assert.match(overviewSource, /goToQuality: \(\) => void/);
   assert.match(overviewSource, /onClick: goToQuality/);
   assert.doesNotMatch(overviewSource, /setTab\(/);

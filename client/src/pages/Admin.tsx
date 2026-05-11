@@ -72,6 +72,7 @@ export function Admin() {
           error={error}
           reload={reload}
           trigger={trigger}
+          actionLoading={actionLoading}
           goToQueue={goToQueue}
           goToFetch={goToFetch}
           goToQuality={goToQuality}

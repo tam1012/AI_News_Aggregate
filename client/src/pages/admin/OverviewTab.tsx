@@ -7,6 +7,7 @@ export function OverviewTab({
   error,
   reload,
   trigger,
+  actionLoading,
   goToQueue,
   goToFetch,
   goToQuality,
@@ -16,6 +17,7 @@ export function OverviewTab({
   error: string | null;
   reload: () => void;
   trigger: (action: string, fn: () => Promise<any>) => Promise<void>;
+  actionLoading: string;
   goToQueue: (status: SummaryQueueStatus) => void;
   goToFetch: (status: FetchJobStatus) => void;
   goToQuality: () => void;
