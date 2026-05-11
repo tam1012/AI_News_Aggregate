@@ -91,7 +91,7 @@ Local validation from 2026-05-12:
 
 ### 7. Reduce CSS size gradually
 
-Status: Completed locally, pending deploy
+Status: Complete on VPS as of 2026-05-12
 
 - Group or split CSS by base/layout/home/admin/components.
 - Remove duplicate/dead rules only after checking UI.
@@ -116,4 +116,4 @@ Local validation from 2026-05-12:
 - 2026-05-12: Reddit comment fetching was centralized locally and deployed in commit `cb88192`. Normal scrape/rescrape now share OAuth → proxy → RSS → old.reddit strategy order, Pullpush remains retry-only, focused proxy/RSS tests were added, server tests pass 70/70, client tests pass 30/30, full build passes, GitHub Actions deploy succeeded, VPS is on `cb88192`, containers are healthy, and `/api/health/live` returns success. Ongoing observation of Reddit comment fetch success across scrape cycles remains recommended.
 - 2026-05-12: Large frontend files were split and deployed in commit `40d298a`. `Home.tsx` now delegates feed/detail/digest helpers to `client/src/pages/home/`, `Admin.tsx` delegates tab panels to `client/src/pages/admin/`, source-reading tests were updated, client tests pass 30/30, server tests pass 70/70, full build passes, GitHub Actions deploy succeeded, VPS is on `40d298a`, containers are healthy, `/api/health/live` returns success, and recent UI/API logs return 200.
 - 2026-05-12: Admin blank-screen regression from the frontend split was fixed and deployed in commit `63f51e0`. The extracted overview tab now uses a shell-owned `goToQuality` callback instead of a stale `setTab` reference; client tests pass 31/31, server tests pass 70/70, full build passes, GitHub Actions deploy succeeded, VPS is on `63f51e0`, `/admin`, admin assets, `/api/health`, and `/api/health/live` return 200.
-- 2026-05-12: CSS was split locally into ordered modules under `client/src/styles/` with `global.css` kept as the entrypoint. Source-reading CSS tests now inline imports and assert import order, client tests pass 32/32, server tests pass 70/70, and full build passes.
+- 2026-05-12: CSS was split and deployed in commit `88945f7`. `global.css` remains the entrypoint and imports ordered modules under `client/src/styles/`; source-reading CSS tests inline imports and assert import order, client tests pass 32/32, server tests pass 70/70, full build passes, GitHub Actions deploy succeeded, VPS is on `88945f7`, containers are healthy, `/api/health/live` returns success, and the deployed CSS asset returns 200.
