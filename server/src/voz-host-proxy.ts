@@ -80,8 +80,11 @@ async function fetchVozPage(targetUrl: string): Promise<{ html: string; status: 
     const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     const status = response?.status() ?? 0;
 
-    // Wait a bit for JS to settle
-    await page.waitForTimeout(1000);
+    if (isRss) {
+      await page.waitForTimeout(500);
+    } else {
+      await page.waitForSelector('article.message--post', { timeout: 10000 }).catch(() => page.waitForTimeout(2000));
+    }
 
     const html = isRss
       ? await page.evaluate(() => document.body?.innerText || document.documentElement?.textContent || '')
