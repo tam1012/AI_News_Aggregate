@@ -17,11 +17,24 @@ function isChallengeHtml(text: string): boolean {
   return CHALLENGE_MARKERS.some((marker) => text.includes(marker));
 }
 
+async function waitForVozVerification(page: import('playwright').Page): Promise<void> {
+  const deadline = Date.now() + 90000;
+  while (Date.now() < deadline) {
+    const title = await page.title().catch(() => '');
+    const html = await page.content().catch(() => '');
+    if (!isChallengeHtml(`${title}\n${html}`)) {
+      return;
+    }
+    await page.waitForTimeout(3000);
+  }
+}
+
 async function warmupVozSession(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
   try {
     await page.goto('https://voz.vn/', { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(8000);
+    await waitForVozVerification(page);
+    await page.waitForTimeout(3000);
   } finally {
     await page.close();
   }
