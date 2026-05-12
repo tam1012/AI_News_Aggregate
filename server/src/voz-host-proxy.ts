@@ -11,9 +11,53 @@ const DEFAULT_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 const CHALLENGE_MARKERS = ['Just a moment...', 'Chờ một chút...', 'cf-challenge', 'challenges.cloudflare.com'];
 
 let contextPromise: Promise<BrowserContext> | null = null;
+let warmupPromise: Promise<void> | null = null;
 
 function isChallengeHtml(text: string): boolean {
   return CHALLENGE_MARKERS.some((marker) => text.includes(marker));
+}
+
+async function warmupVozSession(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  try {
+    await page.goto('https://voz.vn/', { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(8000);
+  } finally {
+    await page.close();
+  }
+}
+
+async function ensureWarmup(context: BrowserContext): Promise<void> {
+  if (!warmupPromise) {
+    warmupPromise = warmupVozSession(context).catch((error) => {
+      warmupPromise = null;
+      throw error;
+    });
+  }
+  await warmupPromise;
+}
+
+async function getChallengeSummary(context: BrowserContext): Promise<{
+  title: string;
+  cookies: Array<{ name: string; domain: string; expires: number }>;
+}> {
+  const page = await context.newPage();
+  try {
+    await page.goto('https://voz.vn/', { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(2000);
+    const title = await page.title();
+    const cookies = await context.cookies('https://voz.vn/');
+    return {
+      title,
+      cookies: cookies.map((cookie) => ({
+        name: cookie.name,
+        domain: cookie.domain,
+        expires: cookie.expires,
+      })),
+    };
+  } finally {
+    await page.close();
+  }
 }
 
 async function getContext(): Promise<BrowserContext> {
@@ -46,7 +90,21 @@ const server = createServer(async (req, res) => {
     const reqUrl = new URL(req.url || '/', `http://127.0.0.1:${PORT}`);
 
     if (reqUrl.pathname === '/health') {
-      sendJson(res, 200, { ok: true, profileDir: PROFILE_DIR });
+      sendJson(res, 200, { ok: true, profileDir: PROFILE_DIR, headless: HEADLESS });
+      return;
+    }
+
+    const context = await getContext();
+
+    if (reqUrl.pathname === '/warmup') {
+      await ensureWarmup(context);
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (reqUrl.pathname === '/debug/cookies') {
+      const summary = await getChallengeSummary(context);
+      sendJson(res, 200, summary);
       return;
     }
 
@@ -54,6 +112,8 @@ const server = createServer(async (req, res) => {
       sendJson(res, 404, { error: 'Not found' });
       return;
     }
+
+    await ensureWarmup(context);
 
     const target = reqUrl.searchParams.get('url');
     if (!target) {
@@ -67,7 +127,6 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    const context = await getContext();
     const page = await context.newPage();
 
     try {
