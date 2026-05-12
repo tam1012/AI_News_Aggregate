@@ -19,7 +19,7 @@ async function getContext(): Promise<BrowserContext> {
   if (!contextPromise) {
     contextPromise = chromium.launchPersistentContext(PROFILE_DIR, {
       executablePath: CHROMIUM_PATH,
-      headless: false,
+      headless: true,
       viewport: { width: 1440, height: 900 },
       userAgent: DEFAULT_UA,
       locale: 'vi-VN',
