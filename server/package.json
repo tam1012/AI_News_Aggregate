@@ -8,6 +8,7 @@
     "start": "node dist/index.js",
     "test": "node --test tests/*.test.mjs",
     "db:migrate": "tsx src/db/migrate.ts",
+    "voz:host-proxy": "tsx src/voz-host-proxy.ts",
     "repair:summary-metadata": "node dist/scripts/repair-summary-metadata.js"
   },
   "dependencies": {

@@ -14,6 +14,9 @@
     "local:start": "node --env-file=.env.local server/dist/index.js",
     "local:check-hosts": "node scripts/check-local-hosts.mjs"
   },
+  "dependencies": {
+    "@cloudflare/puppeteer": "^1.1.0"
+  },
   "devDependencies": {
     "concurrently": "^9.1.2",
     "typescript": "^5.7.3"
