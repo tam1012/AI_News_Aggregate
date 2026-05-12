@@ -619,23 +619,8 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
           visited.add(pageUrl);
 
           await sleep(500);
-          const threadRes = await curlFetch(pageUrl, 'text/html,application/xhtml+xml', 15);
-          let threadHtml = await threadRes.text();
-          let pagePosts = threadRes.ok && !isBlockedHtml(threadHtml)
-            ? parseVozPosts(threadHtml, pageIndex + 1)
-            : [];
-
-          if (!threadRes.ok || pagePosts.length === 0) {
-            console.log(`[voz] Retrying thread with Playwright ${pageUrl}: curl status=${threadRes.status}, posts=${pagePosts.length}`);
-            threadHtml = await playwrightFetch(pageUrl, {
-              waitUntil: 'domcontentloaded',
-              blockHeavyResources: true,
-              settleMs: 3000,
-              timeoutMs: 60000,
-              userAgent: randomUA(),
-            });
-            pagePosts = parseVozPosts(threadHtml, pageIndex + 1);
-          }
+          const threadHtml = await fetchVozThreadHtml(pageUrl);
+          const pagePosts = parseVozPosts(threadHtml, pageIndex + 1);
 
           if (pagePosts.length === 0) throw new Error(`VOZ thread parse returned 0 posts${isBlockedHtml(threadHtml) ? ' (blocked HTML)' : ''}`);
           allPosts.push(...pagePosts);
@@ -787,17 +772,49 @@ function buildVozProxyUrl(targetUrl: string): string {
   return proxy.toString();
 }
 
-async function fetchVozFeedXml(sourceUrl: string): Promise<string> {
-  if (VOZ_PROXY_URL) {
-    try {
-      const proxyRes = await curlFetch(buildVozProxyUrl(sourceUrl), 'application/rss+xml, application/xml, text/xml', 20);
-      const proxyXml = await proxyRes.text();
-      if (proxyRes.ok && !isBlockedHtml(proxyXml)) return proxyXml;
-      console.warn(`[voz] proxy feed failed for ${sourceUrl}: status=${proxyRes.status}`);
-    } catch (err: any) {
-      console.warn(`[voz] proxy feed failed for ${sourceUrl}: ${err.message}`);
+async function fetchVozViaProxy(targetUrl: string, accept: string, timeoutMs: number): Promise<string | null> {
+  if (!VOZ_PROXY_URL) return null;
+
+  try {
+    const proxyUrl = buildVozProxyUrl(targetUrl);
+    const proxyRes = await fetch(proxyUrl, {
+      headers: { Accept: accept },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const proxyText = await proxyRes.text();
+    if (proxyRes.ok && !isBlockedHtml(proxyText)) {
+      console.log(`[voz] proxy fetch ok ${targetUrl}`);
+      return proxyText;
     }
+    console.warn(`[voz] proxy fetch failed for ${targetUrl}: status=${proxyRes.status}`);
+  } catch (err: any) {
+    console.warn(`[voz] proxy fetch failed for ${targetUrl}: ${err.message}`);
   }
+
+  return null;
+}
+
+async function fetchVozThreadHtml(pageUrl: string): Promise<string> {
+  const proxyHtml = await fetchVozViaProxy(pageUrl, 'text/html,application/xhtml+xml', 60000);
+  if (proxyHtml) return proxyHtml;
+
+  const threadRes = await curlFetch(pageUrl, 'text/html,application/xhtml+xml', 15);
+  const threadHtml = await threadRes.text();
+  if (threadRes.ok && !isBlockedHtml(threadHtml)) return threadHtml;
+
+  console.log(`[voz] Retrying thread with Playwright ${pageUrl}: curl status=${threadRes.status}`);
+  return playwrightFetch(pageUrl, {
+    waitUntil: 'domcontentloaded',
+    blockHeavyResources: true,
+    settleMs: 3000,
+    timeoutMs: 60000,
+    userAgent: randomUA(),
+  });
+}
+
+async function fetchVozFeedXml(sourceUrl: string): Promise<string> {
+  const proxyXml = await fetchVozViaProxy(sourceUrl, 'application/rss+xml, application/xml, text/xml', 30000);
+  if (proxyXml) return proxyXml;
 
   try {
     const response = await fetch(sourceUrl, {
