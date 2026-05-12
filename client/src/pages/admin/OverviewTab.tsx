@@ -47,8 +47,16 @@ export function OverviewTab({
                   <div style={{ fontSize: '0.86rem', color: 'var(--color-text)', marginBottom: 6 }}>
                     {health.vozProxy.message || 'VOZ proxy chưa sẵn sàng để vượt Cloudflare.'}
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: 10 }}>
                     SSH/VNC vào VPS, mở Chromium đang bật remote debugging, truy cập voz.vn và vượt Cloudflare. Sau đó bấm “Tải lại số liệu”.
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {health.vozProxy.remoteBrowserUrl && (
+                      <button className="btn btn-sm btn-primary" onClick={() => window.open(health.vozProxy.remoteBrowserUrl, '_blank', 'noopener,noreferrer')}>
+                        Mở trình duyệt VPS
+                      </button>
+                    )}
+                    <button className="btn btn-sm" onClick={reload}>Tải lại số liệu</button>
                   </div>
                 </div>
               )}
@@ -56,9 +64,14 @@ export function OverviewTab({
               {!health.vozProxy?.needsBrowser && health.vozProxy?.cfClearanceExpiresAt && (
                 <div className="card" style={{ borderColor: 'var(--color-warning)', background: 'rgba(245, 158, 11, 0.08)' }}>
                   <div style={{ fontWeight: 700, marginBottom: 4 }}>VOZ proxy đang hoạt động</div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: health.vozProxy.remoteBrowserUrl ? 8 : 0 }}>
                     {formatVozCookieExpiry(health.vozProxy.cfClearanceExpiresAt)} Cloudflare vẫn có thể hết hạn sớm hơn, nếu VOZ lỗi thì mở lại voz.vn trên Chromium VPS.
                   </div>
+                  {health.vozProxy.remoteBrowserUrl && (
+                    <button className="btn btn-sm" onClick={() => window.open(health.vozProxy.remoteBrowserUrl, '_blank', 'noopener,noreferrer')}>
+                      Mở trình duyệt VPS
+                    </button>
+                  )}
                 </div>
               )}
 

@@ -26,6 +26,7 @@ interface VozProxyStatus {
   cdpConnected?: boolean;
   cfClearanceFound?: boolean;
   cfClearanceExpiresAt?: string | null;
+  remoteBrowserUrl?: string | null;
   message: string;
 }
 
@@ -44,13 +45,19 @@ function getVozProxyStatusUrl(): string | null {
   }
 }
 
+function getRemoteBrowserUrl(): string | null {
+  return process.env.BROWSER_REMOTE_URL || process.env.GUACAMOLE_URL || 'https://vpssgpt.tam1012.site';
+}
+
 async function getVozProxyStatus(): Promise<VozProxyStatus> {
   const statusUrl = getVozProxyStatusUrl();
+  const remoteBrowserUrl = getRemoteBrowserUrl();
   if (!statusUrl) {
     return {
       configured: false,
       ok: false,
       needsBrowser: true,
+      remoteBrowserUrl,
       message: 'VOZ proxy chưa được cấu hình, nguồn VOZ có thể bị Cloudflare chặn.',
     };
   }
@@ -63,6 +70,7 @@ async function getVozProxyStatus(): Promise<VozProxyStatus> {
         configured: true,
         ok: false,
         needsBrowser: true,
+        remoteBrowserUrl,
         message: data.error || 'Không kết nối được VOZ host proxy. Cần kiểm tra process proxy trên VPS.',
       };
     }
@@ -77,6 +85,7 @@ async function getVozProxyStatus(): Promise<VozProxyStatus> {
       cdpConnected,
       cfClearanceFound,
       cfClearanceExpiresAt: data.cfClearanceExpiresAt || null,
+      remoteBrowserUrl,
       message: needsBrowser
         ? 'VOZ cần mở Chromium trên VPS, truy cập voz.vn và vượt Cloudflare để làm mới cookie.'
         : 'VOZ proxy đang sẵn sàng.',
@@ -86,6 +95,7 @@ async function getVozProxyStatus(): Promise<VozProxyStatus> {
       configured: true,
       ok: false,
       needsBrowser: true,
+      remoteBrowserUrl,
       message: `Không gọi được VOZ host proxy: ${err.message}`,
     };
   }
