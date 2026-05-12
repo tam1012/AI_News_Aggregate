@@ -63,6 +63,7 @@ function isChallengeHtml(text: string): boolean {
 // Fetch a VOZ URL using the existing browser context (with cf_clearance)
 // ---------------------------------------------------------------------------
 async function fetchVozPage(targetUrl: string): Promise<{ html: string; status: number; challenged: boolean }> {
+  const isRss = new URL(targetUrl).pathname.endsWith('.rss');
   const ctx = await getCdpContext();
   const page = await ctx.newPage();
 
@@ -82,7 +83,9 @@ async function fetchVozPage(targetUrl: string): Promise<{ html: string; status: 
     // Wait a bit for JS to settle
     await page.waitForTimeout(1000);
 
-    const html = await page.content();
+    const html = isRss
+      ? await page.evaluate(() => document.body?.innerText || document.documentElement?.textContent || '')
+      : await page.content();
     const challenged = isChallengeHtml(html);
 
     if (challenged) {
