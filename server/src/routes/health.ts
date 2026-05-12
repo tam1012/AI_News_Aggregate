@@ -46,7 +46,7 @@ function getVozProxyStatusUrl(): string | null {
 }
 
 function getRemoteBrowserUrl(): string | null {
-  return process.env.BROWSER_REMOTE_URL || process.env.GUACAMOLE_URL || 'https://vpssgpt.tam1012.site';
+  return process.env.BROWSER_REMOTE_URL || process.env.GUACAMOLE_URL || 'https://vpssgp.tam1012.site';
 }
 
 async function getVozProxyStatus(): Promise<VozProxyStatus> {
