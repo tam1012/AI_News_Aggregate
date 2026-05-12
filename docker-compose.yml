@@ -50,6 +50,7 @@ services:
       REDDIT_USERNAME: ${REDDIT_USERNAME:-}
       REDDIT_PASSWORD: ${REDDIT_PASSWORD:-}
       REDDIT_PROXY_URL: ${REDDIT_PROXY_URL:-}
+      VOZ_PROXY_URL: ${VOZ_PROXY_URL:-}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/api/health/live >/dev/null"]
       interval: 30s

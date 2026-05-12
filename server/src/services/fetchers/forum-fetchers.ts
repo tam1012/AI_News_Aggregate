@@ -43,6 +43,7 @@ const REDDIT_CLIENT_SECRET = process.env.REDDIT_CLIENT_SECRET || '';
 const REDDIT_USERNAME = process.env.REDDIT_USERNAME || '';
 const REDDIT_PASSWORD = process.env.REDDIT_PASSWORD || '';
 const REDDIT_PROXY_URL = process.env.REDDIT_PROXY_URL || '';
+const VOZ_PROXY_URL = process.env.VOZ_PROXY_URL || '';
 let redditToken: { access_token: string; expires_at: number } | null = null;
 
 function hasRedditOAuth(): boolean {
@@ -578,31 +579,7 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
     const sourceUrl = normalizePublicHttpUrl(source.url, false);
     if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
 
-    let xml = '';
-    try {
-      const response = await fetch(sourceUrl, {
-        headers: {
-          'User-Agent': BROWSER_UA,
-          Accept: 'application/rss+xml, application/xml, text/xml, application/atom+xml;q=0.9, */*;q=0.8',
-        },
-        signal: AbortSignal.timeout(15000),
-      });
-
-      if (!response.ok) throw new Error(`Status code ${response.status}`);
-      xml = await response.text();
-      if (isBlockedHtml(xml)) {
-        throw new Error('Cloudflare blocked HTML received instead of RSS XML');
-      }
-    } catch (err: any) {
-      console.warn(`[voz] native RSS fetch failed for ${sourceUrl}, falling back to Playwright: ${err.message}`);
-      xml = await playwrightFetch(sourceUrl, {
-        rawText: true,
-        blockHeavyResources: true,
-        settleMs: 1500,
-        userAgent: randomUA(),
-      });
-    }
-
+    const xml = await fetchVozFeedXml(sourceUrl);
     const items = (await parseForumFeedItems(xml)).slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 15));
     result.itemsFound = items.length;
 
@@ -801,6 +778,50 @@ async function parseForumFeedItems(xml: string): Promise<RssParser.Item[]> {
     const items = parseForumRssItems(xml);
     if (items.length === 0) throw new Error('Feed not recognized as RSS 1 or 2.');
     return items;
+  }
+}
+
+function buildVozProxyUrl(targetUrl: string): string {
+  const proxy = new URL(VOZ_PROXY_URL);
+  proxy.searchParams.set('url', targetUrl);
+  return proxy.toString();
+}
+
+async function fetchVozFeedXml(sourceUrl: string): Promise<string> {
+  if (VOZ_PROXY_URL) {
+    try {
+      const proxyRes = await curlFetch(buildVozProxyUrl(sourceUrl), 'application/rss+xml, application/xml, text/xml', 20);
+      const proxyXml = await proxyRes.text();
+      if (proxyRes.ok && !isBlockedHtml(proxyXml)) return proxyXml;
+      console.warn(`[voz] proxy feed failed for ${sourceUrl}: status=${proxyRes.status}`);
+    } catch (err: any) {
+      console.warn(`[voz] proxy feed failed for ${sourceUrl}: ${err.message}`);
+    }
+  }
+
+  try {
+    const response = await fetch(sourceUrl, {
+      headers: {
+        'User-Agent': BROWSER_UA,
+        Accept: 'application/rss+xml, application/xml, text/xml, application/atom+xml;q=0.9, */*;q=0.8',
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!response.ok) throw new Error(`Status code ${response.status}`);
+    const xml = await response.text();
+    if (isBlockedHtml(xml)) {
+      throw new Error('Cloudflare blocked HTML received instead of RSS XML');
+    }
+    return xml;
+  } catch (err: any) {
+    console.warn(`[voz] native RSS fetch failed for ${sourceUrl}, falling back to Playwright: ${err.message}`);
+    return playwrightFetch(sourceUrl, {
+      rawText: true,
+      blockHeavyResources: true,
+      settleMs: 1500,
+      userAgent: randomUA(),
+    });
   }
 }
 
