@@ -19,6 +19,78 @@ function num(value: unknown): number {
 
 type SourceQualityStatus = 'healthy' | 'low_yield' | 'failing' | 'stale' | 'disabled';
 
+interface VozProxyStatus {
+  configured: boolean;
+  ok: boolean;
+  needsBrowser: boolean;
+  cdpConnected?: boolean;
+  cfClearanceFound?: boolean;
+  cfClearanceExpiresAt?: string | null;
+  message: string;
+}
+
+function getVozProxyStatusUrl(): string | null {
+  const proxyUrl = process.env.VOZ_PROXY_URL;
+  if (!proxyUrl) return null;
+
+  try {
+    const url = new URL(proxyUrl);
+    url.pathname = url.pathname.replace(/\/fetch\/?$/, '/status') || '/status';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function getVozProxyStatus(): Promise<VozProxyStatus> {
+  const statusUrl = getVozProxyStatusUrl();
+  if (!statusUrl) {
+    return {
+      configured: false,
+      ok: false,
+      needsBrowser: true,
+      message: 'VOZ proxy chưa được cấu hình, nguồn VOZ có thể bị Cloudflare chặn.',
+    };
+  }
+
+  try {
+    const response = await fetch(statusUrl, { signal: AbortSignal.timeout(3000) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) {
+      return {
+        configured: true,
+        ok: false,
+        needsBrowser: true,
+        message: data.error || 'Không kết nối được VOZ host proxy. Cần kiểm tra process proxy trên VPS.',
+      };
+    }
+
+    const cdpConnected = Boolean(data.cdpConnected);
+    const cfClearanceFound = Boolean(data.cfClearanceFound);
+    const needsBrowser = !cdpConnected || !cfClearanceFound;
+    return {
+      configured: true,
+      ok: !needsBrowser,
+      needsBrowser,
+      cdpConnected,
+      cfClearanceFound,
+      cfClearanceExpiresAt: data.cfClearanceExpiresAt || null,
+      message: needsBrowser
+        ? 'VOZ cần mở Chromium trên VPS, truy cập voz.vn và vượt Cloudflare để làm mới cookie.'
+        : 'VOZ proxy đang sẵn sàng.',
+    };
+  } catch (err: any) {
+    return {
+      configured: true,
+      ok: false,
+      needsBrowser: true,
+      message: `Không gọi được VOZ host proxy: ${err.message}`,
+    };
+  }
+}
+
 function getSourceQualityStatus(source: any): SourceQualityStatus {
   if (!source.is_enabled) return 'disabled';
   if (num(source.consecutive_failures) > 0) return 'failing';
@@ -35,6 +107,7 @@ function getSourceQualityStatus(source: any): SourceQualityStatus {
 health.get('/', async (c) => {
   try {
     const dbCheck = await getOne('SELECT NOW() as time');
+    const vozProxy = await getVozProxyStatus();
 
     const sourcesCount = await getOne<{ total: string; enabled: string; due: string; failing: string; backed_off: string }>(
       `SELECT COUNT(*) as total,
@@ -205,6 +278,7 @@ health.get('/', async (c) => {
         lastDigest: lastDigest || null,
         sourceQuality,
         sourceQualitySummary,
+        vozProxy,
         forum,
         recentLogs,
       },

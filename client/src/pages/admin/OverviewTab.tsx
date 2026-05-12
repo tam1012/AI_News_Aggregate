@@ -1,6 +1,14 @@
 import { api } from '../../services/api';
 import { FetchJobStatus, SummaryQueueStatus, forumKindLabel, forumStatsValue, numberText, percentText, sourceQualityBadgeClass, sourceQualityLabel, sourceQualityNote, statusLabel } from './adminHelpers';
 
+function formatVozCookieExpiry(expiresAt: string | null | undefined): string | null {
+  if (!expiresAt) return null;
+  const expiresMs = new Date(expiresAt).getTime();
+  if (!Number.isFinite(expiresMs)) return null;
+  const diffHours = Math.max(0, Math.round((expiresMs - Date.now()) / 3600000));
+  return `Cookie VOZ dự kiến hết hạn lúc ${new Date(expiresAt).toLocaleString('vi-VN')} (${diffHours} giờ nữa).`;
+}
+
 export function OverviewTab({
   health,
   loading,
@@ -33,6 +41,27 @@ export function OverviewTab({
             </div>
           ) : health ? (
             <div style={{ display: 'grid', gap: 12 }}>
+              {health.vozProxy?.needsBrowser && (
+                <div className="card" style={{ borderColor: 'var(--color-error)', background: 'rgba(239, 68, 68, 0.08)' }}>
+                  <div style={{ fontWeight: 800, color: 'var(--color-error)', marginBottom: 6 }}>VOZ cần mở Chromium trên VPS</div>
+                  <div style={{ fontSize: '0.86rem', color: 'var(--color-text)', marginBottom: 6 }}>
+                    {health.vozProxy.message || 'VOZ proxy chưa sẵn sàng để vượt Cloudflare.'}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+                    SSH/VNC vào VPS, mở Chromium đang bật remote debugging, truy cập voz.vn và vượt Cloudflare. Sau đó bấm “Tải lại số liệu”.
+                  </div>
+                </div>
+              )}
+
+              {!health.vozProxy?.needsBrowser && health.vozProxy?.cfClearanceExpiresAt && (
+                <div className="card" style={{ borderColor: 'var(--color-warning)', background: 'rgba(245, 158, 11, 0.08)' }}>
+                  <div style={{ fontWeight: 700, marginBottom: 4 }}>VOZ proxy đang hoạt động</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+                    {formatVozCookieExpiry(health.vozProxy.cfClearanceExpiresAt)} Cloudflare vẫn có thể hết hạn sớm hơn, nếu VOZ lỗi thì mở lại voz.vn trên Chromium VPS.
+                  </div>
+                </div>
+              )}
+
               <div className="card" style={{ borderColor: health.sources?.failing || health.articles?.failed || health.articleFetchJobs?.failed ? 'var(--color-warning)' : 'var(--color-border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
                   <div>

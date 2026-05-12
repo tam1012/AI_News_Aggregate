@@ -129,11 +129,15 @@ const server = createServer(async (req, res) => {
         const ctx = await getCdpContext();
         const cookies = await ctx.cookies(['https://voz.vn']);
         const cf = cookies.find((c) => c.name === 'cf_clearance');
+        const cfClearanceExpiresAt = cf?.expires && cf.expires > 0
+          ? new Date(cf.expires * 1000).toISOString()
+          : null;
         sendJson(res, 200, {
           ok: true,
           cdpConnected: true,
           cfClearanceFound: !!cf,
           cfClearanceLen: cf?.value.length ?? 0,
+          cfClearanceExpiresAt,
           cookieCount: cookies.length,
         });
       } catch (err: any) {
