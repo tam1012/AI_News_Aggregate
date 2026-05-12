@@ -55,7 +55,16 @@ ${html}`;
 export async function learnSelectorProfileFromHtml(pageUrl: string, html: string): Promise<LearnedSelectorResult | null> {
   const cleanedHtml = cleanHtmlForLearning(html);
   const output = await callAi(buildSelectorLearningPrompt(pageUrl, cleanedHtml), { max_tokens: 1200, temperature: 0.1 });
-  const parsed = JSON.parse(stripMarkdownFence(output));
+  const strippedOutput = stripMarkdownFence(output);
+  if (!strippedOutput.startsWith('{')) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(strippedOutput);
+  } catch {
+    return null;
+  }
+
   const profile = normalizeSelectorProfile(parsed);
   if (!profile) return null;
 

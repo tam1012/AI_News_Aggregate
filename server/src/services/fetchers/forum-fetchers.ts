@@ -482,8 +482,7 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
       });
     }
 
-    const feed = await rssParser.parseString(xml);
-    const items = feed.items.slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 15));
+    const items = (await parseForumFeedItems(xml)).slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 15));
     result.itemsFound = items.length;
 
     let enrichedCount = 0;
@@ -604,8 +603,7 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
       });
     }
 
-    const feed = await rssParser.parseString(xml);
-    const items = feed.items.slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 15));
+    const items = (await parseForumFeedItems(xml)).slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 15));
     result.itemsFound = items.length;
 
     for (const item of items) {
@@ -620,6 +618,7 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
         continue;
       }
 
+      const rawItem = item as RssParser.Item & Record<string, any>;
       const rawExcerpt = item.contentSnippet || item.content || '';
       const contentHash = createContentHash(item.title + rawExcerpt.substring(0, 200));
       const hashExists = await getOne('SELECT id FROM articles WHERE content_hash = $1', [contentHash]);
@@ -735,7 +734,7 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
          RETURNING id`,
         [
           id, source.id, item.guid || null, url, item.title.trim(),
-          item.creator || item.author || null, publishedAt,
+          item.creator || rawItem.author || null, publishedAt,
           source.language, truncate(stripHtml(rawExcerpt), 500),
           truncate(fullContent, FORUM_RAW_CONTENT_MAX_LENGTH), contentHash, imageUrl,
         ]
@@ -763,6 +762,46 @@ function stripHtml(html: string): string {
 
 export function stripHtmlBasic(html: string): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function getXmlText($item: cheerio.Cheerio<any>, selector: string): string {
+  return normalizeWhitespace($item.find(selector).first().text());
+}
+
+function getXmlChildHtml($item: cheerio.Cheerio<any>, selector: string): string {
+  const child = $item.find(selector).first();
+  return child.html()?.trim() || child.text().trim();
+}
+
+function parseForumRssItems(xml: string): RssParser.Item[] {
+  const $ = cheerio.load(xml, { xmlMode: true });
+  return $('item').toArray().flatMap((element) => {
+    const $item = $(element);
+    const title = getXmlText($item, 'title');
+    const link = getXmlText($item, 'link');
+    if (!title || !link) return [];
+
+    return [{
+      title,
+      link,
+      guid: getXmlText($item, 'guid') || link,
+      pubDate: getXmlText($item, 'pubDate') || getXmlText($item, 'published') || getXmlText($item, 'updated'),
+      creator: getXmlText($item, 'creator') || getXmlText($item, 'dc\\:creator'),
+      contentSnippet: stripHtmlBasic(getXmlChildHtml($item, 'description')),
+      content: getXmlChildHtml($item, 'encoded') || getXmlChildHtml($item, 'content\\:encoded') || getXmlChildHtml($item, 'description'),
+    }];
+  });
+}
+
+async function parseForumFeedItems(xml: string): Promise<RssParser.Item[]> {
+  try {
+    const feed = await rssParser.parseString(xml);
+    return feed.items;
+  } catch {
+    const items = parseForumRssItems(xml);
+    if (items.length === 0) throw new Error('Feed not recognized as RSS 1 or 2.');
+    return items;
+  }
 }
 
 interface RedditRetryResult {
