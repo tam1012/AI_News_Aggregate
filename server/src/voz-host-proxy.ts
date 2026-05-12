@@ -17,7 +17,25 @@ import { chromium, type BrowserContext, type Browser } from 'playwright';
 const PORT = parseInt(process.env.VOZ_HOST_PROXY_PORT || '8788', 10);
 const BIND_HOST = process.env.VOZ_HOST_PROXY_BIND || '0.0.0.0';
 const CDP_URL = process.env.VOZ_CDP_URL || 'http://127.0.0.1:9222';
-const ALLOWED_HOSTS = new Set(['voz.vn', 'www.voz.vn', 'reuters.com', 'www.reuters.com']);
+const BROWSER_PROXY_SOURCES = [
+  {
+    id: 'voz',
+    label: 'VOZ',
+    hosts: ['voz.vn', 'www.voz.vn'],
+    verifyUrl: 'https://voz.vn',
+    cookieName: 'cf_clearance',
+    requiresCookie: true,
+  },
+  {
+    id: 'reuters',
+    label: 'Reuters',
+    hosts: ['reuters.com', 'www.reuters.com'],
+    verifyUrl: 'https://www.reuters.com',
+    cookieName: 'cf_clearance',
+    requiresCookie: false,
+  },
+];
+const ALLOWED_HOSTS = new Set(BROWSER_PROXY_SOURCES.flatMap((source) => source.hosts));
 const CHALLENGE_MARKERS = ['Just a moment...', 'Chờ một chút...', 'cf-challenge', 'challenges.cloudflare.com'];
 
 // ---------------------------------------------------------------------------
@@ -57,6 +75,33 @@ async function getCdpContext(): Promise<BrowserContext> {
 
 function isChallengeHtml(text: string): boolean {
   return CHALLENGE_MARKERS.some((m) => text.includes(m));
+}
+
+async function getBrowserProxySourceStatuses(ctx: BrowserContext) {
+  return Promise.all(BROWSER_PROXY_SOURCES.map(async (source) => {
+    const cookies = await ctx.cookies([source.verifyUrl]);
+    const cookie = cookies.find((c) => c.name === source.cookieName);
+    const cookieExpiresAt = cookie?.expires && cookie.expires > 0
+      ? new Date(cookie.expires * 1000).toISOString()
+      : null;
+    const needsBrowser = source.requiresCookie && !cookie;
+
+    return {
+      id: source.id,
+      label: source.label,
+      hosts: source.hosts,
+      verifyUrl: source.verifyUrl,
+      ok: !needsBrowser,
+      needsBrowser,
+      cookieFound: !!cookie,
+      cookieName: source.cookieName,
+      cookieExpiresAt,
+      cookieCount: cookies.length,
+      message: needsBrowser
+        ? `${source.label} cần mở Chromium trên VPS, truy cập ${source.verifyUrl} và vượt Cloudflare để làm mới cookie.`
+        : `${source.label} proxy đang sẵn sàng.`,
+    };
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -131,18 +176,18 @@ const server = createServer(async (req, res) => {
     if (reqUrl.pathname === '/status') {
       try {
         const ctx = await getCdpContext();
-        const cookies = await ctx.cookies(['https://voz.vn']);
-        const cf = cookies.find((c) => c.name === 'cf_clearance');
-        const cfClearanceExpiresAt = cf?.expires && cf.expires > 0
-          ? new Date(cf.expires * 1000).toISOString()
-          : null;
+        const sources = await getBrowserProxySourceStatuses(ctx);
+        const voz = sources.find((source) => source.id === 'voz');
+        const vozCookies = await ctx.cookies(['https://voz.vn']);
+        const cf = vozCookies.find((c) => c.name === 'cf_clearance');
         sendJson(res, 200, {
-          ok: true,
+          ok: sources.every((source) => source.ok),
           cdpConnected: true,
           cfClearanceFound: !!cf,
           cfClearanceLen: cf?.value.length ?? 0,
-          cfClearanceExpiresAt,
-          cookieCount: cookies.length,
+          cfClearanceExpiresAt: voz?.cookieExpiresAt || null,
+          cookieCount: voz?.cookieCount ?? vozCookies.length,
+          sources,
         });
       } catch (err: any) {
         sendJson(res, 503, { ok: false, error: err.message });

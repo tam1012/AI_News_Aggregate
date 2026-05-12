@@ -1,12 +1,34 @@
 import { api } from '../../services/api';
 import { FetchJobStatus, SummaryQueueStatus, forumKindLabel, forumStatsValue, numberText, percentText, sourceQualityBadgeClass, sourceQualityLabel, sourceQualityNote, statusLabel } from './adminHelpers';
 
-function formatVozCookieExpiry(expiresAt: string | null | undefined): string | null {
+function getBrowserProxySources(health: any): any[] {
+  if (Array.isArray(health?.browserProxy?.sources) && health.browserProxy.sources.length > 0) {
+    return health.browserProxy.sources;
+  }
+  if (!health?.vozProxy) return [];
+  return [{
+    id: 'voz',
+    label: 'VOZ',
+    ok: health.vozProxy.ok,
+    needsBrowser: health.vozProxy.needsBrowser,
+    cookieFound: health.vozProxy.cfClearanceFound,
+    cookieExpiresAt: health.vozProxy.cfClearanceExpiresAt,
+    remoteBrowserUrl: health.vozProxy.remoteBrowserUrl,
+    message: health.vozProxy.message,
+  }];
+}
+
+function formatBrowserCookieExpiry(label: string, expiresAt: string | null | undefined): string | null {
   if (!expiresAt) return null;
   const expiresMs = new Date(expiresAt).getTime();
   if (!Number.isFinite(expiresMs)) return null;
   const diffHours = Math.max(0, Math.round((expiresMs - Date.now()) / 3600000));
-  return `Cookie VOZ dự kiến hết hạn lúc ${new Date(expiresAt).toLocaleString('vi-VN')} (${diffHours} giờ nữa).`;
+  return `Cookie ${label} dự kiến hết hạn lúc ${new Date(expiresAt).toLocaleString('vi-VN')} (${diffHours} giờ nữa).`;
+}
+
+function browserProxyInstruction(source: any): string {
+  const verifyUrl = source.verifyUrl || (source.id === 'reuters' ? 'https://www.reuters.com' : 'https://voz.vn');
+  return `SSH/VNC vào VPS, mở Chromium đang bật remote debugging, truy cập ${verifyUrl} và vượt Cloudflare nếu có. Sau đó bấm “Tải lại số liệu”.`;
 }
 
 export function OverviewTab({
@@ -30,6 +52,8 @@ export function OverviewTab({
   goToFetch: (status: FetchJobStatus) => void;
   goToQuality: () => void;
 }) {
+  const browserProxySources = getBrowserProxySources(health);
+
   return (
         <div>
           {loading ? (
@@ -41,37 +65,37 @@ export function OverviewTab({
             </div>
           ) : health ? (
             <div style={{ display: 'grid', gap: 12 }}>
-              {health.vozProxy?.needsBrowser && (
-                <div className="card" style={{ borderColor: 'var(--color-error)', background: 'rgba(239, 68, 68, 0.08)' }}>
-                  <div style={{ fontWeight: 800, color: 'var(--color-error)', marginBottom: 6 }}>VOZ cần mở Chromium trên VPS</div>
-                  <div style={{ fontSize: '0.86rem', color: 'var(--color-text)', marginBottom: 6 }}>
-                    {health.vozProxy.message || 'VOZ proxy chưa sẵn sàng để vượt Cloudflare.'}
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: 10 }}>
-                    SSH/VNC vào VPS, mở Chromium đang bật remote debugging, truy cập voz.vn và vượt Cloudflare. Sau đó bấm “Tải lại số liệu”.
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {health.vozProxy.remoteBrowserUrl && (
-                      <button className="btn btn-sm btn-primary" onClick={() => window.open(health.vozProxy.remoteBrowserUrl, '_blank', 'noopener,noreferrer')}>
-                        Mở trình duyệt VPS
-                      </button>
-                    )}
-                    <button className="btn btn-sm" onClick={reload}>Tải lại số liệu</button>
-                  </div>
-                </div>
-              )}
-
-              {!health.vozProxy?.needsBrowser && health.vozProxy?.cfClearanceExpiresAt && (
-                <div className="card" style={{ borderColor: 'var(--color-warning)', background: 'rgba(245, 158, 11, 0.08)' }}>
-                  <div style={{ fontWeight: 700, marginBottom: 4 }}>VOZ proxy đang hoạt động</div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: health.vozProxy.remoteBrowserUrl ? 8 : 0 }}>
-                    {formatVozCookieExpiry(health.vozProxy.cfClearanceExpiresAt)} Cloudflare vẫn có thể hết hạn sớm hơn, nếu VOZ lỗi thì mở lại voz.vn trên Chromium VPS.
-                  </div>
-                  {health.vozProxy.remoteBrowserUrl && (
-                    <button className="btn btn-sm" onClick={() => window.open(health.vozProxy.remoteBrowserUrl, '_blank', 'noopener,noreferrer')}>
-                      Mở trình duyệt VPS
-                    </button>
-                  )}
+              {browserProxySources.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                  {browserProxySources.map((source: any) => {
+                    const label = source.label || source.id || 'Nguồn';
+                    const remoteBrowserUrl = source.remoteBrowserUrl || health.browserProxy?.remoteBrowserUrl || health.vozProxy?.remoteBrowserUrl;
+                    const expiryText = formatBrowserCookieExpiry(label, source.cookieExpiresAt);
+                    const needsBrowser = Boolean(source.needsBrowser);
+                    return (
+                      <div key={source.id || label} className="card" style={{ borderColor: needsBrowser ? 'var(--color-error)' : 'var(--color-warning)', background: needsBrowser ? 'rgba(239, 68, 68, 0.08)' : 'rgba(245, 158, 11, 0.08)' }}>
+                        <div style={{ fontWeight: needsBrowser ? 800 : 700, color: needsBrowser ? 'var(--color-error)' : undefined, marginBottom: 6 }}>
+                          {needsBrowser ? `${label} cần mở Chromium trên VPS` : `${label} proxy đang hoạt động`}
+                        </div>
+                        <div style={{ fontSize: '0.86rem', color: needsBrowser ? 'var(--color-text)' : 'var(--color-text-muted)', marginBottom: 6 }}>
+                          {source.message || `${label} proxy đang sẵn sàng.`}
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: remoteBrowserUrl || needsBrowser ? 10 : 0 }}>
+                          {needsBrowser
+                            ? browserProxyInstruction(source)
+                            : `${expiryText ? `${expiryText} ` : ''}Nếu ${label} lỗi antibot thì mở lại ${source.verifyUrl || label} trên Chromium VPS.`}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {remoteBrowserUrl && (
+                            <button className={`btn btn-sm ${needsBrowser ? 'btn-primary' : ''}`} onClick={() => window.open(remoteBrowserUrl, '_blank', 'noopener,noreferrer')}>
+                              Mở trình duyệt VPS
+                            </button>
+                          )}
+                          {needsBrowser && <button className="btn btn-sm" onClick={reload}>Tải lại số liệu</button>}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 

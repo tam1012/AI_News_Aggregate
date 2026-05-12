@@ -19,6 +19,31 @@ function num(value: unknown): number {
 
 type SourceQualityStatus = 'healthy' | 'low_yield' | 'failing' | 'stale' | 'disabled';
 
+interface BrowserProxySourceStatus {
+  id: string;
+  label: string;
+  hosts?: string[];
+  verifyUrl?: string;
+  ok: boolean;
+  needsBrowser: boolean;
+  cookieFound?: boolean;
+  cookieName?: string;
+  cookieExpiresAt?: string | null;
+  cookieCount?: number;
+  remoteBrowserUrl?: string | null;
+  message: string;
+}
+
+interface BrowserProxyStatus {
+  configured: boolean;
+  ok: boolean;
+  needsBrowser: boolean;
+  cdpConnected?: boolean;
+  remoteBrowserUrl?: string | null;
+  message: string;
+  sources: BrowserProxySourceStatus[];
+}
+
 interface VozProxyStatus {
   configured: boolean;
   ok: boolean;
@@ -49,7 +74,42 @@ function getRemoteBrowserUrl(): string | null {
   return process.env.BROWSER_REMOTE_URL || process.env.GUACAMOLE_URL || 'https://vpssgp.tam1012.site';
 }
 
-async function getVozProxyStatus(): Promise<VozProxyStatus> {
+function getFallbackVozProxyStatus(remoteBrowserUrl: string | null): VozProxyStatus {
+  return {
+    configured: false,
+    ok: false,
+    needsBrowser: true,
+    remoteBrowserUrl,
+    message: 'VOZ proxy chưa được cấu hình, nguồn VOZ có thể bị Cloudflare chặn.',
+  };
+}
+
+function mapVozProxyStatus(browserProxy: BrowserProxyStatus): VozProxyStatus {
+  const voz = browserProxy.sources.find((source) => source.id === 'voz');
+  if (!voz) {
+    return {
+      configured: browserProxy.configured,
+      ok: browserProxy.ok,
+      needsBrowser: browserProxy.needsBrowser,
+      cdpConnected: browserProxy.cdpConnected,
+      remoteBrowserUrl: browserProxy.remoteBrowserUrl,
+      message: browserProxy.message,
+    };
+  }
+
+  return {
+    configured: browserProxy.configured,
+    ok: voz.ok,
+    needsBrowser: voz.needsBrowser,
+    cdpConnected: browserProxy.cdpConnected,
+    cfClearanceFound: Boolean(voz.cookieFound),
+    cfClearanceExpiresAt: voz.cookieExpiresAt || null,
+    remoteBrowserUrl: browserProxy.remoteBrowserUrl,
+    message: voz.message,
+  };
+}
+
+async function getBrowserProxyStatus(): Promise<BrowserProxyStatus> {
   const statusUrl = getVozProxyStatusUrl();
   const remoteBrowserUrl = getRemoteBrowserUrl();
   if (!statusUrl) {
@@ -58,7 +118,15 @@ async function getVozProxyStatus(): Promise<VozProxyStatus> {
       ok: false,
       needsBrowser: true,
       remoteBrowserUrl,
-      message: 'VOZ proxy chưa được cấu hình, nguồn VOZ có thể bị Cloudflare chặn.',
+      message: 'Host browser proxy chưa được cấu hình.',
+      sources: [{
+        id: 'voz',
+        label: 'VOZ',
+        ok: false,
+        needsBrowser: true,
+        remoteBrowserUrl,
+        message: getFallbackVozProxyStatus(remoteBrowserUrl).message,
+      }],
     };
   }
 
@@ -70,25 +138,55 @@ async function getVozProxyStatus(): Promise<VozProxyStatus> {
         configured: true,
         ok: false,
         needsBrowser: true,
+        cdpConnected: Boolean(data.cdpConnected),
         remoteBrowserUrl,
-        message: data.error || 'Không kết nối được VOZ host proxy. Cần kiểm tra process proxy trên VPS.',
+        message: data.error || 'Không kết nối được host browser proxy. Cần kiểm tra process proxy trên VPS.',
+        sources: [],
       };
     }
 
+    const sources: BrowserProxySourceStatus[] = Array.isArray(data.sources)
+      ? data.sources.map((source: any) => ({
+        id: String(source.id || ''),
+        label: String(source.label || source.id || 'Nguồn'),
+        hosts: source.hosts,
+        verifyUrl: source.verifyUrl,
+        ok: Boolean(source.ok),
+        needsBrowser: Boolean(source.needsBrowser),
+        cookieFound: Boolean(source.cookieFound),
+        cookieName: source.cookieName,
+        cookieExpiresAt: source.cookieExpiresAt || null,
+        cookieCount: num(source.cookieCount),
+        remoteBrowserUrl,
+        message: source.message || `${source.label || source.id || 'Nguồn'} proxy đang sẵn sàng.`,
+      }))
+      : [{
+        id: 'voz',
+        label: 'VOZ',
+        ok: Boolean(data.cfClearanceFound),
+        needsBrowser: !data.cfClearanceFound,
+        cookieFound: Boolean(data.cfClearanceFound),
+        cookieName: 'cf_clearance',
+        cookieExpiresAt: data.cfClearanceExpiresAt || null,
+        cookieCount: num(data.cookieCount),
+        remoteBrowserUrl,
+        message: data.cfClearanceFound
+          ? 'VOZ proxy đang sẵn sàng.'
+          : 'VOZ cần mở Chromium trên VPS, truy cập voz.vn và vượt Cloudflare để làm mới cookie.',
+      }];
+
     const cdpConnected = Boolean(data.cdpConnected);
-    const cfClearanceFound = Boolean(data.cfClearanceFound);
-    const needsBrowser = !cdpConnected || !cfClearanceFound;
+    const needsBrowser = !cdpConnected || sources.some((source) => source.needsBrowser);
     return {
       configured: true,
       ok: !needsBrowser,
       needsBrowser,
       cdpConnected,
-      cfClearanceFound,
-      cfClearanceExpiresAt: data.cfClearanceExpiresAt || null,
       remoteBrowserUrl,
       message: needsBrowser
-        ? 'VOZ cần mở Chromium trên VPS, truy cập voz.vn và vượt Cloudflare để làm mới cookie.'
-        : 'VOZ proxy đang sẵn sàng.',
+        ? 'Một số nguồn cần mở Chromium trên VPS để xác minh browser/cookie.'
+        : 'Host browser proxy đang sẵn sàng.',
+      sources,
     };
   } catch (err: any) {
     return {
@@ -96,7 +194,8 @@ async function getVozProxyStatus(): Promise<VozProxyStatus> {
       ok: false,
       needsBrowser: true,
       remoteBrowserUrl,
-      message: `Không gọi được VOZ host proxy: ${err.message}`,
+      message: `Không gọi được host browser proxy: ${err.message}`,
+      sources: [],
     };
   }
 }
@@ -117,7 +216,8 @@ function getSourceQualityStatus(source: any): SourceQualityStatus {
 health.get('/', async (c) => {
   try {
     const dbCheck = await getOne('SELECT NOW() as time');
-    const vozProxy = await getVozProxyStatus();
+    const browserProxy = await getBrowserProxyStatus();
+    const vozProxy = mapVozProxyStatus(browserProxy);
 
     const sourcesCount = await getOne<{ total: string; enabled: string; due: string; failing: string; backed_off: string }>(
       `SELECT COUNT(*) as total,
@@ -289,6 +389,7 @@ health.get('/', async (c) => {
         sourceQuality,
         sourceQualitySummary,
         vozProxy,
+        browserProxy,
         forum,
         recentLogs,
       },
