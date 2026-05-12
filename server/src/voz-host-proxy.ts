@@ -17,7 +17,7 @@ import { chromium, type BrowserContext, type Browser } from 'playwright';
 const PORT = parseInt(process.env.VOZ_HOST_PROXY_PORT || '8788', 10);
 const BIND_HOST = process.env.VOZ_HOST_PROXY_BIND || '0.0.0.0';
 const CDP_URL = process.env.VOZ_CDP_URL || 'http://127.0.0.1:9222';
-const ALLOWED_HOSTS = new Set(['voz.vn', 'www.voz.vn']);
+const ALLOWED_HOSTS = new Set(['voz.vn', 'www.voz.vn', 'reuters.com', 'www.reuters.com']);
 const CHALLENGE_MARKERS = ['Just a moment...', 'Chờ một chút...', 'cf-challenge', 'challenges.cloudflare.com'];
 
 // ---------------------------------------------------------------------------
@@ -60,10 +60,12 @@ function isChallengeHtml(text: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Fetch a VOZ URL using the existing browser context (with cf_clearance)
+// Fetch an allowlisted URL using the existing browser context (with user cookies)
 // ---------------------------------------------------------------------------
-async function fetchVozPage(targetUrl: string): Promise<{ html: string; status: number; challenged: boolean }> {
-  const isRss = new URL(targetUrl).pathname.endsWith('.rss');
+async function fetchProxiedPage(targetUrl: string): Promise<{ html: string; status: number; challenged: boolean }> {
+  const url = new URL(targetUrl);
+  const isRss = url.pathname.endsWith('.rss');
+  const isVoz = url.hostname.endsWith('voz.vn');
   const ctx = await getCdpContext();
   const page = await ctx.newPage();
 
@@ -82,8 +84,10 @@ async function fetchVozPage(targetUrl: string): Promise<{ html: string; status: 
 
     if (isRss) {
       await page.waitForTimeout(500);
-    } else {
+    } else if (isVoz) {
       await page.waitForSelector('article.message--post', { timeout: 10000 }).catch(() => page.waitForTimeout(2000));
+    } else {
+      await page.waitForSelector('article, main, [data-testid*="article"]', { timeout: 10000 }).catch(() => page.waitForTimeout(2500));
     }
 
     const html = isRss
@@ -92,7 +96,7 @@ async function fetchVozPage(targetUrl: string): Promise<{ html: string; status: 
     const challenged = isChallengeHtml(html);
 
     if (challenged) {
-      console.warn(`[voz-proxy] Challenge detected for ${targetUrl} — cf_clearance may have expired`);
+      console.warn(`[voz-proxy] Challenge detected for ${targetUrl} — browser verification may be needed`);
     }
 
     return { html, status, challenged };
@@ -165,7 +169,7 @@ const server = createServer(async (req, res) => {
     }
 
     console.log(`[voz-proxy] Fetching ${targetUrl.pathname}`);
-    const { html, status, challenged } = await fetchVozPage(targetUrl.toString());
+    const { html, status, challenged } = await fetchProxiedPage(targetUrl.toString());
 
     const isRss = targetUrl.pathname.endsWith('.rss');
     const contentType = isRss ? 'application/rss+xml; charset=UTF-8' : 'text/html; charset=UTF-8';
