@@ -3,7 +3,7 @@ import { URL } from 'node:url';
 import { chromium, type BrowserContext } from 'playwright';
 
 const PORT = parseInt(process.env.VOZ_HOST_PROXY_PORT || '8788', 10);
-const PROFILE_DIR = process.env.VOZ_HOST_PROFILE_DIR || '/home/ubuntu/.config/voz-proxy-browser';
+const PROFILE_DIR = process.env.VOZ_HOST_PROFILE_DIR || '/home/ubuntu/.config/chromium';
 const CHROMIUM_PATH = process.env.VOZ_HOST_CHROMIUM_PATH || '/usr/bin/chromium';
 const HEADLESS = process.env.VOZ_HOST_HEADLESS === '1';
 const ALLOWED_HOSTS = new Set(['voz.vn', 'www.voz.vn']);
