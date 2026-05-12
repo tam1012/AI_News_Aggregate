@@ -5,6 +5,7 @@ import { chromium, type BrowserContext } from 'playwright';
 const PORT = parseInt(process.env.VOZ_HOST_PROXY_PORT || '8788', 10);
 const PROFILE_DIR = process.env.VOZ_HOST_PROFILE_DIR || '/home/ubuntu/.config/voz-proxy-browser';
 const CHROMIUM_PATH = process.env.VOZ_HOST_CHROMIUM_PATH || '/usr/bin/chromium';
+const HEADLESS = process.env.VOZ_HOST_HEADLESS === '1';
 const ALLOWED_HOSTS = new Set(['voz.vn', 'www.voz.vn']);
 const DEFAULT_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 const CHALLENGE_MARKERS = ['Just a moment...', 'Chờ một chút...', 'cf-challenge', 'challenges.cloudflare.com'];
@@ -19,7 +20,7 @@ async function getContext(): Promise<BrowserContext> {
   if (!contextPromise) {
     contextPromise = chromium.launchPersistentContext(PROFILE_DIR, {
       executablePath: CHROMIUM_PATH,
-      headless: true,
+      headless: HEADLESS,
       viewport: { width: 1440, height: 900 },
       userAgent: DEFAULT_UA,
       locale: 'vi-VN',
@@ -89,4 +90,5 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`VOZ host proxy listening on http://127.0.0.1:${PORT}`);
   console.log(`Profile dir: ${PROFILE_DIR}`);
+  console.log(`Headless: ${HEADLESS}`);
 });
