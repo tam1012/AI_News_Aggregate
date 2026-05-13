@@ -57,7 +57,7 @@
 }
 .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
   outline: none; border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(91, 74, 228, 0.12);
+  box-shadow: 0 0 0 3px rgba(184, 134, 11, 0.12);
 }
 
 /* ===== Toggle ===== */
@@ -87,8 +87,8 @@
 
 /* ===== Footer ===== */
 .reader-footer {
-  text-align: center; padding: 20px 16px 28px;
-  color: var(--color-text-muted); font-size: 0.8rem; line-height: 1.7;
+  text-align: center; padding: 24px 16px 32px;
+  color: var(--color-text-muted); font-size: 0.78rem; line-height: 1.6;
 }
 .reader-footer a { color: var(--color-accent); }
 
@@ -96,7 +96,4 @@
 .loading, .empty-state {
   text-align: center; padding: 48px 16px; color: var(--color-text-muted);
 }
-.empty-state h2 {
-  font-family: var(--font-body); margin-bottom: 8px;
-  font-size: 1.1rem; font-weight: 700; color: var(--color-text);
-}
+.empty-state h2 { font-family: var(--font-heading); margin-bottom: 8px; }

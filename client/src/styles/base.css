@@ -20,7 +20,9 @@
 body {
   font-family: var(--font-body);
   font-size: var(--font-size);
-  background: var(--color-bg);
+  background:
+    radial-gradient(circle at top left, rgba(167, 116, 36, 0.08), transparent 34rem),
+    var(--color-bg);
   color: var(--color-text);
   line-height: 1.68;
   min-height: 100vh;
@@ -31,18 +33,18 @@ body {
   transition: background 0.3s, color 0.3s;
 }
 
-/* Subtle depth — no heavy radial glow */
+/* Edge glow effect for depth */
 body::before {
   content: '';
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   pointer-events: none;
   z-index: 0;
-  background: transparent;
 }
-
 [data-theme="dark"] body::before {
-  background: transparent;
+  background:
+    radial-gradient(ellipse at top left, rgba(30, 58, 110, 0.12) 0%, transparent 45%),
+    radial-gradient(ellipse at bottom right, rgba(30, 58, 110, 0.08) 0%, transparent 45%);
 }
 
 a { color: var(--color-accent); text-decoration: none; }

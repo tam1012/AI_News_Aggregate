@@ -1,60 +1,49 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,700&family=Open+Sans:wght@400;500;600;700;800&family=Roboto:wght@400;500;700;900&family=Source+Sans+3:wght@400;500;600;700;800&display=swap');
 
-/* ===== SynthAI Editorial — Design Tokens ===== */
+/* ===== Design Tokens ===== */
 :root {
-  /* Typography — consolidated: 2 families */
-  --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-heading: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-
   --font-size: 16px;
+  --font-heading: 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-body: 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --reader-width: 680px;
-  --header-height: 64px;
 
-  /* Light theme — warm white + violet accent */
-  --color-bg: #FAFAFA;
-  --color-bg-card: #FFFFFF;
-  --color-bg-hover: #F3F2EF;
-  --color-bg-overlay: rgba(10, 8, 20, 0.5);
-  --color-text: #0A0808;
-  --color-text-secondary: #4A4642;
-  --color-text-muted: #9A9590;
-  --color-accent: #5B4AE4;
-  --color-accent-hover: #4A39C8;
-  --color-accent-subtle: rgba(91, 74, 228, 0.08);
-  --color-accent-glow: rgba(91, 74, 228, 0.15);
-  --color-accent-border: rgba(91, 74, 228, 0.35);
+  /* Light theme — premium newsdigest colors */
+  --color-bg: #fbfaf6;
+  --color-bg-card: #fffdf8;
+  --color-bg-hover: #f4f0e8;
+  --color-bg-overlay: rgba(20, 16, 10, 0.48);
+  --color-text: #181511;
+  --color-text-secondary: #51493f;
+  --color-text-muted: #8f8373;
+  --color-accent: #a77424;
+  --color-accent-hover: #875a17;
   --color-success: #16a34a;
   --color-warning: #d97706;
   --color-error: #dc2626;
-  --color-border: #E8E6E2;
-  --color-border-light: #F0EEEA;
-  --color-shadow: rgba(10, 8, 20, 0.07);
-  --radius: 14px;
-  --radius-sm: 8px;
+  --color-border: #ebe3d6;
+  --color-border-light: #f3eddf;
+  --color-shadow: rgba(54, 39, 18, 0.07);
+  --radius: 16px;
+  --radius-sm: 10px;
   --max-width: var(--reader-width);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 [data-theme="dark"] {
-  /* Dark theme — deep charcoal + violet accent */
-  --color-bg: #0C0B10;
-  --color-bg-card: #161520;
-  --color-bg-hover: #1E1B2E;
-  --color-bg-overlay: rgba(0, 0, 0, 0.72);
-  --color-text: #E0DDD8;
-  --color-text-secondary: #9E9A96;
-  --color-text-muted: #A8A4A0;
-  --color-accent: #7C5EED;
-  --color-accent-hover: #9B7FF5;
-  --color-accent-subtle: rgba(124, 94, 237, 0.12);
-  --color-accent-glow: rgba(124, 94, 237, 0.2);
-  --color-accent-border: rgba(124, 94, 237, 0.4);
+  --color-bg: #0d1117;
+  --color-bg-card: #161b22;
+  --color-bg-hover: #21262d;
+  --color-bg-overlay: rgba(1, 4, 9, 0.72);
+  --color-text: #f0f6fc;
+  --color-text-secondary: #c9d1d9;
+  --color-text-muted: #8b949e;
+  --color-accent: #58a6ff;
+  --color-accent-hover: #79c0ff;
   --color-success: #3fb950;
   --color-warning: #d29922;
   --color-error: #f85149;
-  --color-border: #2A2638;
-  --color-border-light: #1E1B2E;
-  --color-shadow: rgba(0, 0, 0, 0.35);
+  --color-border: #30363d;
+  --color-border-light: #21262d;
+  --color-shadow: rgba(1, 4, 9, 0.45);
 }

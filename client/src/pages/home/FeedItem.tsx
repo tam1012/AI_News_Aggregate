@@ -78,9 +78,6 @@ export function FeedItem({
       onTouchStart={preloadMarkdown}
     >
       <div className="feed-item-meta">
-        <span className="feed-item-source-badge" aria-hidden="true">
-          {sourceLabel.charAt(0).toUpperCase()}
-        </span>
         <span className={`feed-item-source source-${sourceLabel.toLowerCase().replace(/[^a-z0-9]/g, '')}`}>
           {sourceLabel}
         </span>
