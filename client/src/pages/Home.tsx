@@ -598,7 +598,8 @@ export function Home() {
               )}
 
               <div className="reader-footer">
-                <p>Nguồn mặc định cào mỗi 60 phút và tự backoff khi lỗi · Fetch bài mỗi 5 phút · Tóm tắt AI mỗi 10 phút</p>
+                <p>Tin tức tổng hợp tự động &middot; Cập nhật liên tục trong ngày</p>
+                <p style={{ marginTop: 3, opacity: 0.55 }}>Tóm tắt bằng AI</p>
               </div>
             </div>
           )}

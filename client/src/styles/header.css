@@ -28,34 +28,51 @@
 }
 .header-actions { display: flex; align-items: center; gap: 6px; }
 
-/* ===== Icon Buttons ===== */
+/* ===== Icon Buttons — rounded-square with accent personality ===== */
 .icon-btn {
-  width: 36px; height: 36px; border-radius: 50%;
+  width: 36px; height: 36px;
+  border-radius: 10px;
   border: 1px solid var(--color-border-light);
   background: color-mix(in srgb, var(--color-bg-card) 72%, transparent);
   color: var(--color-text-secondary);
   display: flex; align-items: center; justify-content: center;
-  font-size: 1rem; transition: all 0.15s;
+  font-size: 1rem;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.icon-btn:hover { background: var(--color-bg-hover); color: var(--color-text); border-color: var(--color-border); }
-.icon-btn.active { border-color: var(--color-accent); color: var(--color-accent); }
+.icon-btn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px var(--color-shadow);
+}
+.icon-btn.active {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-subtle);
+  box-shadow: 0 0 0 1px var(--color-accent-border);
+}
 .icon-btn:disabled { opacity: 0.3; cursor: default; }
 
 /* ===== Font Size Button ===== */
 .font-size-btn {
   display: inline-flex; align-items: center; gap: 3px;
   height: 34px; padding: 0 11px;
-  border-radius: 999px;
+  border-radius: 10px;
   border: 1px solid var(--color-border-light);
   background: color-mix(in srgb, var(--color-bg-card) 72%, transparent);
   color: var(--color-text-secondary);
-  font-family: var(--font-heading);
-  transition: all 0.15s; cursor: pointer;
+  font-family: var(--font-body);
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
   margin-right: 2px;
 }
 .font-size-btn:hover {
-  background: var(--color-bg-hover); color: var(--color-text);
-  border-color: var(--color-border);
+  background: var(--color-bg-hover);
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px var(--color-shadow);
 }
 .font-size-btn:active { transform: scale(0.95); }
 .text-settings-control {
