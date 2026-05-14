@@ -1,14 +1,17 @@
 import time
+import asyncio
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 
 from .config import TIMEOUT_MS
 
 app = FastAPI(title="Scrapling Sidecar", version="1.0.0")
 
 _start_time = time.time()
+_executor = ThreadPoolExecutor(max_workers=4)
 
 
 class FetchOptions(BaseModel):
@@ -44,10 +47,11 @@ async def fetch(req: FetchRequest):
     timeout = req.options.timeout_ms or TIMEOUT_MS
 
     try:
+        loop = asyncio.get_event_loop()
         if req.mode == "stealth":
-            html = await _stealth_fetch(req.url, req.options, timeout)
+            html = await loop.run_in_executor(_executor, _stealth_fetch_sync, req.url, req.options, timeout)
         else:
-            html = await _fast_fetch(req.url, req.options, timeout)
+            html = await loop.run_in_executor(_executor, _fast_fetch_sync, req.url, req.options, timeout)
 
         elapsed = int((time.time() - start) * 1000)
 
@@ -64,7 +68,7 @@ async def fetch(req: FetchRequest):
         return FetchResponse(ok=False, error=str(e), status_code=403, elapsed_ms=elapsed)
 
 
-async def _stealth_fetch(url: str, options: FetchOptions, timeout_ms: int) -> str:
+def _stealth_fetch_sync(url: str, options: FetchOptions, timeout_ms: int) -> str:
     from scrapling.fetchers import StealthyFetcher
 
     kwargs = {
@@ -79,13 +83,12 @@ async def _stealth_fetch(url: str, options: FetchOptions, timeout_ms: int) -> st
     page = StealthyFetcher.fetch(url, **kwargs)
 
     if options.wait_ms and options.wait_ms > 0:
-        import asyncio
-        await asyncio.sleep(options.wait_ms / 1000)
+        time.sleep(options.wait_ms / 1000)
 
     return page.html_content if hasattr(page, "html_content") else str(page)
 
 
-async def _fast_fetch(url: str, options: FetchOptions, timeout_ms: int) -> str:
+def _fast_fetch_sync(url: str, options: FetchOptions, timeout_ms: int) -> str:
     from scrapling.fetchers import Fetcher
 
     kwargs = {
