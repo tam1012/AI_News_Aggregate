@@ -244,7 +244,12 @@ export function isBlockedHtml(html: string): boolean {
     lowered.includes('<title>blocked</title>') ||
     lowered.includes('challenges.cloudflare.com') ||
     lowered.includes('cf-browser-verification') ||
-    lowered.includes('access denied');
+    lowered.includes('access denied') ||
+    lowered.includes('token.awswaf.com') ||
+    lowered.includes('awswafintegration') ||
+    lowered.includes('awswafcookiedomainlist') ||
+    lowered.includes('challenge-container') ||
+    lowered.includes("verify that you're not a robot");
 }
 
 export async function playwrightFetch(

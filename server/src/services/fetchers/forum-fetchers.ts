@@ -43,7 +43,7 @@ const REDDIT_CLIENT_SECRET = process.env.REDDIT_CLIENT_SECRET || '';
 const REDDIT_USERNAME = process.env.REDDIT_USERNAME || '';
 const REDDIT_PASSWORD = process.env.REDDIT_PASSWORD || '';
 const REDDIT_PROXY_URL = process.env.REDDIT_PROXY_URL || '';
-const VOZ_PROXY_URL = process.env.VOZ_PROXY_URL || '';
+const VOZ_PROXY_URL = process.env.BROWSER_PROXY_URL || process.env.VOZ_PROXY_URL || '';
 let redditToken: { access_token: string; expires_at: number } | null = null;
 
 function hasRedditOAuth(): boolean {

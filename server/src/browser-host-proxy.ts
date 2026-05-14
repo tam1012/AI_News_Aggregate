@@ -1,15 +1,13 @@
 /**
- * VOZ Host Proxy — runs on VPS HOST (not inside Docker).
+ * Browser Host Proxy — runs on VPS HOST (not inside Docker).
  *
- * Strategy: Connect to a running Chromium GUI via CDP (Remote Debugging Protocol),
- * reuse its cf_clearance cookie (already passed by real user), and fetch VOZ pages.
+ * Strategy: Connect to a running Chromium GUI via CDP (Remote Debugging Protocol)
+ * and fetch allowlisted pages with the existing verified browser session.
  *
  * Setup:
  *   1. Start Chromium on VPS desktop with --remote-debugging-port=9222
- *   2. Visit voz.vn once to pass Cloudflare challenge
- *   3. This proxy will reuse the cf_clearance cookie for all subsequent requests
- *
- * Cookie lifetime: ~24h — user needs to revisit voz.vn once per day.
+ *   2. Visit challenged source sites once to pass antibot verification
+ *   3. This proxy will reuse the browser session for subsequent requests
  */
 import { createServer } from 'node:http';
 import { chromium, type BrowserContext, type Browser } from 'playwright';
@@ -38,8 +36,25 @@ const BROWSER_PROXY_SOURCES = [
     requiresCookie: false,
   },
 ];
-const ALLOWED_HOSTS = new Set(BROWSER_PROXY_SOURCES.flatMap((source) => source.hosts));
-const CHALLENGE_MARKERS = ['Just a moment...', 'Chờ một chút...', 'cf-challenge', 'challenges.cloudflare.com'];
+const EXTRA_ALLOWED_HOSTS = (process.env.BROWSER_PROXY_ALLOWED_HOSTS || '')
+  .split(',')
+  .map((host) => host.trim().toLowerCase())
+  .filter(Boolean);
+const ALLOWED_HOSTS = new Set([
+  ...BROWSER_PROXY_SOURCES.flatMap((source) => source.hosts),
+  ...EXTRA_ALLOWED_HOSTS,
+]);
+const CHALLENGE_MARKERS = [
+  'Just a moment...',
+  'Chờ một chút...',
+  'cf-challenge',
+  'challenges.cloudflare.com',
+  'token.awswaf.com',
+  'AwsWafIntegration',
+  'awsWafCookieDomainList',
+  'challenge-container',
+  "verify that you're not a robot",
+];
 
 // ---------------------------------------------------------------------------
 // CDP connection — connects to running Chromium GUI
@@ -62,17 +77,17 @@ async function getCdpContext(): Promise<BrowserContext> {
     cdpBrowser?.close().catch(() => {});
   } catch {}
 
-  console.log(`[voz-proxy] Connecting to Chromium via CDP at ${CDP_URL}...`);
+  console.log(`[browser-proxy] Connecting to Chromium via CDP at ${CDP_URL}...`);
   cdpBrowser = await chromium.connectOverCDP(CDP_URL);
   cdpCtx = cdpBrowser.contexts()[0] ?? await cdpBrowser.newContext();
 
   cdpBrowser.on('disconnected', () => {
-    console.warn('[voz-proxy] CDP disconnected — Chromium GUI closed or crashed');
+    console.warn('[browser-proxy] CDP disconnected — Chromium GUI closed or crashed');
     cdpBrowser = null;
     cdpCtx = null;
   });
 
-  console.log('[voz-proxy] CDP connected ✅');
+  console.log('[browser-proxy] CDP connected ✅');
   return cdpCtx;
 }
 
@@ -144,7 +159,7 @@ async function fetchProxiedPage(targetUrl: string): Promise<{ html: string; stat
     const challenged = isChallengeHtml(html);
 
     if (challenged) {
-      console.warn(`[voz-proxy] Challenge detected for ${targetUrl} — browser verification may be needed`);
+      console.warn(`[browser-proxy] Challenge detected for ${targetUrl} — browser verification may be needed`);
     }
 
     return { html, status, challenged };
@@ -204,7 +219,7 @@ const server = createServer(async (req, res) => {
         sendJson(res, 405, { error: 'Use GET or POST' });
         return;
       }
-      console.log('[voz-proxy] Cookie refresh triggered via HTTP');
+      console.log('[browser-proxy] Cookie refresh triggered via HTTP');
       try {
         const refreshResult = await refreshCookies(CDP_URL);
         lastRefreshResult = {
@@ -242,33 +257,33 @@ const server = createServer(async (req, res) => {
 
     const targetUrl = new URL(target);
     if (targetUrl.protocol !== 'https:' || !ALLOWED_HOSTS.has(targetUrl.hostname.toLowerCase())) {
-      sendJson(res, 400, { error: 'Only https://voz.vn URLs are allowed' });
+      sendJson(res, 400, { error: 'Only configured HTTPS hosts are allowed' });
       return;
     }
 
-    console.log(`[voz-proxy] Fetching ${targetUrl.pathname}`);
+    console.log(`[browser-proxy] Fetching ${targetUrl.pathname}`);
     const { html, status, challenged } = await fetchProxiedPage(targetUrl.toString());
 
     const isRss = targetUrl.pathname.endsWith('.rss');
     const contentType = isRss ? 'application/rss+xml; charset=UTF-8' : 'text/html; charset=UTF-8';
     res.writeHead(challenged ? 409 : status, { 'Content-Type': contentType });
     res.end(html);
-    console.log(`[voz-proxy] Done ${targetUrl.pathname} (status=${status}, challenged=${challenged}, size=${html.length})`);
+    console.log(`[browser-proxy] Done ${targetUrl.pathname} (status=${status}, challenged=${challenged}, size=${html.length})`);
   } catch (err: any) {
     const message = err.message || String(err);
-    console.error(`[voz-proxy] Error: ${message}`);
+    console.error(`[browser-proxy] Error: ${message}`);
     sendJson(res, 503, { error: message });
   }
 });
 
 server.listen(PORT, BIND_HOST, () => {
-  console.log(`VOZ host proxy listening on http://${BIND_HOST}:${PORT}`);
+  console.log(`Browser host proxy listening on http://${BIND_HOST}:${PORT}`);
   console.log(`CDP target: ${CDP_URL}`);
-  console.log(`Strategy: reuse cf_clearance from running Chromium GUI`);
+  console.log(`Strategy: reuse verified Chromium GUI session`);
   console.log(`Auto-refresh: every ${AUTO_REFRESH_HOURS}h`);
   console.log('');
   console.log('⚠️  Requires Chromium GUI running with --remote-debugging-port=9222');
-  console.log('   Run: ~/Desktop/voz-browser.sh');
+  console.log('   Run your Chromium launcher with remote debugging enabled.');
   console.log('');
   console.log('Endpoints:');
   console.log('   GET  /health         — health check');

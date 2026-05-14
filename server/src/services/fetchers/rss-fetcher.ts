@@ -37,7 +37,7 @@ interface RssDomainPolicy {
 }
 
 const DEFAULT_RSS_SNIPPET_FALLBACK_MIN_LENGTH = parsePositiveInt(process.env.RSS_SNIPPET_FALLBACK_MIN_LENGTH, 800);
-const HOST_BROWSER_PROXY_URL = process.env.VOZ_PROXY_URL || '';
+const HOST_BROWSER_PROXY_URL = process.env.BROWSER_PROXY_URL || process.env.VOZ_PROXY_URL || '';
 const DEFAULT_BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS: string[] = [
   'thestreet.com',
   'timesofisrael.com',
@@ -101,10 +101,6 @@ function getBlockedGoogleNewsPublisherDomains(): string[] {
 function isBlockedGoogleNewsPublisherUrl(url: string): boolean {
   const hostname = getHostname(url);
   return getBlockedGoogleNewsPublisherDomains().some(domain => domainMatches(hostname, domain));
-}
-
-function isReutersUrl(url: string): boolean {
-  return domainMatches(getHostname(url), 'reuters.com');
 }
 
 function buildHostBrowserProxyUrl(targetUrl: string): string {
@@ -390,15 +386,7 @@ async function extractWithAiSelector(html: string, pageUrl: string) {
 
 async function fetchFullArticle(jobUrl: string, policy = getRssDomainPolicy(jobUrl)): Promise<{ title: string; content: string; imageUrl: string | null; publishedAt: string | null; metadata?: any }> {
   let fetchError: Error | null = null;
-
-  if (isReutersUrl(jobUrl)) {
-    const proxyHtml = await fetchViaHostBrowserProxy(jobUrl);
-    if (proxyHtml) {
-      const article = await extractArticleFromHtml(proxyHtml, jobUrl, 'host-browser-proxy');
-      if (article.content.length >= MIN_ARTICLE_TEXT_LENGTH) return article;
-      fetchError = new Error(`host browser proxy extraction too short (${article.content.length} characters)`);
-    }
-  }
+  let browserError: Error | null = null;
 
   // ── Attempt 1: native fetch with random browser UA + full headers ────────
   try {
@@ -410,6 +398,7 @@ async function fetchFullArticle(jobUrl: string, policy = getRssDomainPolicy(jobU
     if (!response.ok) throw new Error(`Status code ${response.status}`);
 
     const html = await response.text();
+    if (isBlockedHtml(html)) throw new Error('blocked HTML');
     const article = await extractArticleFromHtml(html, jobUrl, 'fetch');
     if (article.content.length >= MIN_ARTICLE_TEXT_LENGTH) return article;
     fetchError = new Error(`fetch extraction too short (${article.content.length} characters)`);
@@ -427,6 +416,7 @@ async function fetchFullArticle(jobUrl: string, policy = getRssDomainPolicy(jobU
     if (!response.ok) throw new Error(`Status code ${response.status}`);
 
     const html = await response.text();
+    if (isBlockedHtml(html)) throw new Error('blocked HTML');
     const article = await extractArticleFromHtml(html, jobUrl, 'fetch:googlebot');
     if (article.content.length >= MIN_ARTICLE_TEXT_LENGTH) return article;
     fetchError = new Error(`googlebot extraction too short (${article.content.length} characters)`);
@@ -445,12 +435,23 @@ async function fetchFullArticle(jobUrl: string, policy = getRssDomainPolicy(jobU
       settleMs: 1000,
     };
     const html = await playwrightFetch(jobUrl, pwOptions);
+    if (isBlockedHtml(html)) throw new Error('blocked HTML');
     const article = await extractArticleFromHtml(html, jobUrl, 'playwright-stealth');
     if (article.content.length >= MIN_ARTICLE_TEXT_LENGTH) return article;
-    throw new Error(`playwright extraction too short (${article.content.length} characters)`);
-  } catch (browserErr: any) {
-    throw new Error(`Full article fetch failed: ${fetchError?.message || 'unknown fetch error'}; playwright fallback failed: ${browserErr.message}`);
+    browserError = new Error(`playwright extraction too short (${article.content.length} characters)`);
+  } catch (err: any) {
+    browserError = err instanceof Error ? err : new Error(String(err));
   }
+
+  // ── Attempt 4: existing verified Chromium GUI via host browser proxy ────────
+  const proxyHtml = await fetchViaHostBrowserProxy(jobUrl);
+  if (proxyHtml) {
+    const article = await extractArticleFromHtml(proxyHtml, jobUrl, 'host-browser-proxy');
+    if (article.content.length >= MIN_ARTICLE_TEXT_LENGTH) return article;
+    browserError = new Error(`host browser proxy extraction too short (${article.content.length} characters)`);
+  }
+
+  throw new Error(`Full article fetch failed: ${fetchError?.message || 'unknown fetch error'}; browser fallback failed: ${browserError?.message || 'unknown browser error'}`);
 }
 
 export function parseRssItems(xml: string): RssParser.Item[] {

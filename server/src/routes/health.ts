@@ -56,7 +56,7 @@ interface VozProxyStatus {
 }
 
 function getVozProxyStatusUrl(): string | null {
-  const proxyUrl = process.env.VOZ_PROXY_URL;
+  const proxyUrl = process.env.BROWSER_PROXY_URL || process.env.VOZ_PROXY_URL;
   if (!proxyUrl) return null;
 
   try {
