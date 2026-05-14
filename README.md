@@ -237,7 +237,7 @@ DevOps:
 └── README.md
 ```
 
-Một số file `.sql`, script test/debug, ảnh và tài liệu review ở root là artifact vận hành cục bộ, đã được `.gitignore` loại khỏi repo.
+Một số script debug nằm trong `scripts/debug/` là artifact vận hành cục bộ, đã được `.gitignore` loại khỏi repo.
 
 ## Luồng Dữ Liệu
 
@@ -369,8 +369,10 @@ Endpoint chính:
 | Digests | `GET /api/digests` | Public |
 | Digests | `GET /api/digests/:id` | Public |
 | Digests | `DELETE /api/digests/:id` | Admin |
-| Settings | `GET /api/settings/prompt-config` | Admin |
-| Settings | `PUT /api/settings/prompt-config` | Admin |
+| Settings | `GET /api/settings/prompt` | Admin |
+| Settings | `GET /api/settings/prompt/default` | Admin |
+| Settings | `POST /api/settings/prompt/reset` | Admin |
+| Settings | `PATCH /api/settings/prompt` | Admin |
 | Image Proxy | `GET /api/img/*` | Public |
 | AI Providers | `/api/ai-providers/*` | Admin |
 
@@ -743,7 +745,7 @@ Cleanup hiện tại:
 
 - Xóa `scrape_logs` cũ hơn 14 ngày.
 - Set `raw_content = NULL` cho bài cũ hơn 60 ngày.
-- Reset bài `processing` quá 5 phút về `pending`.
+- Reset bài `processing` quá 10 phút về `pending`.
 
 Forum rescrape:
 
