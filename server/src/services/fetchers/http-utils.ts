@@ -239,6 +239,7 @@ const stealthEvasionScript = () => {
 };
 
 export function isBlockedHtml(html: string): boolean {
+  if (html.length > 50000) return false;
   const lowered = html.toLowerCase();
   return lowered.includes('just a moment...') ||
     lowered.includes('<title>blocked</title>') ||
