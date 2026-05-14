@@ -166,6 +166,9 @@ export function ArticleDetail({
       ref={overlayRef}
       onClick={handleBackdropClick}
       style={{ backgroundColor: `rgba(0,0,0,${0.5 * opacity})` }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
     >
       <div
         className="detail-panel"
@@ -190,7 +193,7 @@ export function ArticleDetail({
         </div>
 
         <div className="detail-mobile-header">
-          <button className="detail-mobile-close" onClick={onClose} title="Close">x</button>
+          <button className="detail-mobile-close" onClick={onClose} title="Đóng" aria-label="Đóng">x</button>
           <div className="detail-mobile-meta">
             <span className={`feed-item-source source-${sourceLabel.toLowerCase().replace(/[^a-z0-9]/g, '')}`}>
               {sourceLabel}
@@ -200,10 +203,10 @@ export function ArticleDetail({
         </div>
 
         {/* Close button */}
-        <button className="detail-close" onClick={onClose} title="Đóng (Esc)">✕</button>
+        <button className="detail-close" onClick={onClose} title="Đóng (Esc)" aria-label="Đóng">✕</button>
 
         {/* Share button (top-right, opposite close) */}
-        <button className="detail-share-btn" onClick={handleShare} title="Chia sẻ">↗</button>
+        <button className="detail-share-btn" onClick={handleShare} title="Chia sẻ" aria-label="Chia sẻ">↗</button>
 
         {/* Content */}
         <div className="detail-content">

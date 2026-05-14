@@ -484,6 +484,9 @@ export function Home() {
                   className={`compact-sort-btn ${filterSource !== 'all' ? 'active' : ''}`}
                   onClick={() => setShowFilter(!showFilter)}
                   type="button"
+                  aria-expanded={showFilter}
+                  aria-haspopup="listbox"
+                  aria-label="Lọc theo nguồn tin"
                 >
                   {filterSource === 'all' ? 'Nguồn ▾' : (sources.find((s: any) => s.id === filterSource)?.name.replace(/ - .*$/, '').replace(/ RSS.*$/, '') + ' ✕')}
                 </button>

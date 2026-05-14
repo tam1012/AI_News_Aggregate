@@ -75,17 +75,19 @@ export function Layout() {
                 to="/sources"
                 className={({ isActive }) => `icon-btn ${isActive ? 'active' : ''}`}
                 title="Quản lý nguồn tin"
+                aria-label="Quản lý nguồn tin"
               >
                 🔗
               </NavLink>
             )}
             {showAdminLinks && (isAdmin ? (
-              <NavLink to="/" className="icon-btn" title="Trang chủ">📰</NavLink>
+              <NavLink to="/" className="icon-btn" title="Trang chủ" aria-label="Trang chủ">📰</NavLink>
             ) : (
               <NavLink
                 to="/admin"
                 className={({ isActive }) => `icon-btn ${isActive ? 'active' : ''}`}
                 title="Quản trị"
+                aria-label="Quản trị"
               >
                 ⚙️
               </NavLink>
@@ -131,6 +133,7 @@ export function Layout() {
               className="icon-btn desktop-only"
               onClick={toggleTheme}
               title={theme === 'light' ? 'Chế độ tối' : 'Chế độ sáng'}
+              aria-label={theme === 'light' ? 'Chế độ tối' : 'Chế độ sáng'}
             >
               {theme === 'light' ? '🌙' : '☀️'}
             </button>
@@ -140,6 +143,7 @@ export function Layout() {
               className="icon-btn mobile-only"
               onClick={() => setShowSettingsSheet(true)}
               title="Cài đặt"
+              aria-label="Cài đặt"
             >
               ⚙️
             </button>
