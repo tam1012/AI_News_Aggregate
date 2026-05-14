@@ -2,9 +2,5 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "voz-proxy",
   "main": "voz-proxy-worker.js",
-  "compatibility_date": "2026-05-12",
-  "compatibility_flags": ["nodejs_compat"],
-  "browser": {
-    "binding": "MYBROWSER"
-  }
+  "compatibility_date": "2026-05-12"
 }

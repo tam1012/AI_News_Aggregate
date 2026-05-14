@@ -38,7 +38,6 @@ interface RssDomainPolicy {
 }
 
 const DEFAULT_RSS_SNIPPET_FALLBACK_MIN_LENGTH = parsePositiveInt(process.env.RSS_SNIPPET_FALLBACK_MIN_LENGTH, 800);
-const HOST_BROWSER_PROXY_URL = process.env.BROWSER_PROXY_URL || process.env.VOZ_PROXY_URL || '';
 const DEFAULT_BLOCKED_DOMAINS: string[] = [
   'reuters.com',
   'thestreet.com',
@@ -103,34 +102,6 @@ function getBlockedDomains(): string[] {
 function isBlockedDomain(url: string): boolean {
   const hostname = getHostname(url);
   return getBlockedDomains().some(domain => domainMatches(hostname, domain));
-}
-
-function buildHostBrowserProxyUrl(targetUrl: string): string {
-  const proxy = new URL(HOST_BROWSER_PROXY_URL);
-  proxy.searchParams.set('url', targetUrl);
-  return proxy.toString();
-}
-
-async function fetchViaHostBrowserProxy(targetUrl: string, timeoutMs = 60000): Promise<string | null> {
-  if (!HOST_BROWSER_PROXY_URL) return null;
-
-  try {
-    const proxyUrl = buildHostBrowserProxyUrl(targetUrl);
-    const proxyRes = await fetch(proxyUrl, {
-      headers: { Accept: 'text/html,application/xhtml+xml' },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    const proxyText = await proxyRes.text();
-    if (proxyRes.ok && !isBlockedHtml(proxyText)) {
-      console.log(`[host-browser-proxy] fetch ok ${targetUrl}`);
-      return proxyText;
-    }
-    console.warn(`[host-browser-proxy] fetch failed for ${targetUrl}: status=${proxyRes.status}`);
-  } catch (err: any) {
-    console.warn(`[host-browser-proxy] fetch failed for ${targetUrl}: ${err.message}`);
-  }
-
-  return null;
 }
 
 function getRssDomainPolicy(url: string): RssDomainPolicy {
@@ -447,14 +418,6 @@ async function fetchFullArticle(jobUrl: string, policy = getRssDomainPolicy(jobU
     browserError = new Error(`scrapling extraction too short (${article.content.length} characters)`);
   } catch (err: any) {
     browserError = err instanceof Error ? err : new Error(String(err));
-  }
-
-  // ── Attempt 4: existing verified Chromium GUI via host browser proxy (Reuters only) ──
-  const proxyHtml = await fetchViaHostBrowserProxy(jobUrl);
-  if (proxyHtml) {
-    const article = await extractArticleFromHtml(proxyHtml, jobUrl, 'host-browser-proxy');
-    if (article.content.length >= MIN_ARTICLE_TEXT_LENGTH) return article;
-    browserError = new Error(`host browser proxy extraction too short (${article.content.length} characters)`);
   }
 
   throw new Error(`Full article fetch failed: ${fetchError?.message || 'unknown fetch error'}; browser fallback failed: ${browserError?.message || 'unknown browser error'}`);
