@@ -82,7 +82,14 @@ def _stealth_fetch_sync(url: str, options: FetchOptions, timeout_ms: int) -> str
         kwargs["wait_selector"] = options.wait_selector
 
     if options.proxy:
-        kwargs["proxy"] = {"server": options.proxy}
+        from urllib.parse import urlparse
+        parsed = urlparse(options.proxy)
+        proxy_cfg = {"server": f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"}
+        if parsed.username:
+            proxy_cfg["username"] = parsed.username
+        if parsed.password:
+            proxy_cfg["password"] = parsed.password
+        kwargs["proxy"] = proxy_cfg
 
     page = StealthyFetcher.fetch(url, **kwargs)
 
