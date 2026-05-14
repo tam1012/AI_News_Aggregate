@@ -109,6 +109,18 @@ function mapVozProxyStatus(browserProxy: BrowserProxyStatus): VozProxyStatus {
   };
 }
 
+async function getScraplingStatus(): Promise<{ configured: boolean; ok: boolean; message: string }> {
+  const url = process.env.SCRAPLING_SERVICE_URL;
+  if (!url) return { configured: false, ok: false, message: 'SCRAPLING_SERVICE_URL not configured' };
+  try {
+    const res = await fetch(`${url}/health`, { signal: AbortSignal.timeout(3000) });
+    const data = await res.json() as { ok?: boolean };
+    return { configured: true, ok: data.ok === true, message: data.ok ? 'Scrapling sidecar ready' : 'Scrapling unhealthy' };
+  } catch (err: any) {
+    return { configured: true, ok: false, message: `Scrapling unreachable: ${err.message}` };
+  }
+}
+
 async function getBrowserProxyStatus(): Promise<BrowserProxyStatus> {
   const statusUrl = getVozProxyStatusUrl();
   const remoteBrowserUrl = getRemoteBrowserUrl();
@@ -218,6 +230,7 @@ health.get('/', async (c) => {
     const dbCheck = await getOne('SELECT NOW() as time');
     const browserProxy = await getBrowserProxyStatus();
     const vozProxy = mapVozProxyStatus(browserProxy);
+    const scrapling = await getScraplingStatus();
 
     const sourcesCount = await getOne<{ total: string; enabled: string; due: string; failing: string; backed_off: string }>(
       `SELECT COUNT(*) as total,
@@ -390,6 +403,7 @@ health.get('/', async (c) => {
         sourceQualitySummary,
         vozProxy,
         browserProxy,
+        scrapling,
         forum,
         recentLogs,
       },

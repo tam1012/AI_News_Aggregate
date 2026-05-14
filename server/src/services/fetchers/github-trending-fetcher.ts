@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import { normalizePublicHttpUrl, truncate } from '../../lib/utils.js';
 import { BROWSER_UA, isBlockedHtml, playwrightFetch, randomUA } from './http-utils.js';
+import { scraplingFetchWithFallback } from './scrapling-fetch.js';
 import { SourceFetcher } from './types.js';
 
 interface GitHubTrendingPayload {
@@ -110,9 +111,13 @@ async function fetchReadmeFromRepoPage(repoUrl: string): Promise<string | null> 
     html = await response.text();
     if (isBlockedHtml(html)) throw new Error('blocked HTML');
   } catch (err: any) {
-    console.warn(`github-trending: native repo page fetch failed for ${repoUrl}, falling back to Playwright: ${err.message}`);
+    console.warn(`github-trending: native repo page fetch failed for ${repoUrl}, falling back to Scrapling: ${err.message}`);
     try {
-      html = await playwrightFetch(repoUrl, {
+      html = await scraplingFetchWithFallback(repoUrl, {
+        mode: 'fast',
+        blockResources: true,
+        waitMs: 1000,
+      }, {
         waitUntil: 'networkidle2',
         blockHeavyResources: true,
         settleMs: 1000,
@@ -127,7 +132,11 @@ async function fetchReadmeFromRepoPage(repoUrl: string): Promise<string | null> 
   let text = cleanText($('article.markdown-body, #readme').first().text());
   if (text.length < 80) {
     try {
-      html = await playwrightFetch(repoUrl, {
+      html = await scraplingFetchWithFallback(repoUrl, {
+        mode: 'fast',
+        blockResources: true,
+        waitMs: 1000,
+      }, {
         waitUntil: 'networkidle2',
         blockHeavyResources: true,
         settleMs: 1000,
@@ -188,8 +197,12 @@ export const githubTrendingFetcher: SourceFetcher = {
       html = await response.text();
       if (isBlockedHtml(html)) throw new Error('blocked HTML');
     } catch (err: any) {
-      console.warn(`github-trending: native discover failed for ${sourceUrl}, falling back to Playwright: ${err.message}`);
-      html = await playwrightFetch(sourceUrl, {
+      console.warn(`github-trending: native discover failed for ${sourceUrl}, falling back to Scrapling: ${err.message}`);
+      html = await scraplingFetchWithFallback(sourceUrl, {
+        mode: 'fast',
+        blockResources: true,
+        waitMs: 1000,
+      }, {
         waitUntil: 'networkidle2',
         blockHeavyResources: true,
         settleMs: 1000,
@@ -201,8 +214,12 @@ export const githubTrendingFetcher: SourceFetcher = {
     const discoveredAt = new Date().toISOString();
     let rows = $('article.Box-row');
     if (rows.length === 0) {
-      console.warn(`github-trending: native discover found 0 rows for ${sourceUrl}, falling back to Playwright`);
-      html = await playwrightFetch(sourceUrl, {
+      console.warn(`github-trending: native discover found 0 rows for ${sourceUrl}, falling back to Scrapling`);
+      html = await scraplingFetchWithFallback(sourceUrl, {
+        mode: 'fast',
+        blockResources: true,
+        waitMs: 1000,
+      }, {
         waitUntil: 'networkidle2',
         blockHeavyResources: true,
         settleMs: 1000,

@@ -1,0 +1,3 @@
+scrapling[all]>=0.2
+fastapi>=0.110
+uvicorn[standard]>=0.29

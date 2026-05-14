@@ -56,14 +56,6 @@ const TARGETS: RefreshTarget[] = [
     contentSelector: 'article, [data-testid*="article"], main, .media-story-card',
     waitMs: 15_000,
   },
-  {
-    id: 'voz',
-    label: 'VOZ',
-    url: 'https://voz.vn',
-    contentSelector: '.p-body, .block--category, article',
-    waitMs: 15_000,
-    cookieName: 'cf_clearance',
-  },
 ];
 
 // ---------------------------------------------------------------------------

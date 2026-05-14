@@ -1,4 +1,22 @@
 services:
+  scrapling:
+    build: ./scrapling-sidecar
+    container_name: newstamhv-scrapling
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      SCRAPLING_TIMEOUT_MS: ${SCRAPLING_TIMEOUT_MS:-60000}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
   db:
     image: postgres:16-alpine
     container_name: newstamhv-db
@@ -23,6 +41,8 @@ services:
     restart: unless-stopped
     depends_on:
       db:
+        condition: service_healthy
+      scrapling:
         condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -52,6 +72,7 @@ services:
       REDDIT_PROXY_URL: ${REDDIT_PROXY_URL:-}
       BROWSER_PROXY_URL: ${BROWSER_PROXY_URL:-}
       VOZ_PROXY_URL: ${VOZ_PROXY_URL:-http://host.docker.internal:8788/fetch}
+      SCRAPLING_SERVICE_URL: ${SCRAPLING_SERVICE_URL:-http://scrapling:8000}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/api/health/live >/dev/null"]
       interval: 30s

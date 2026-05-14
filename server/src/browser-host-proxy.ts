@@ -20,14 +20,6 @@ const AUTO_REFRESH_HOURS = parseInt(process.env.AUTO_REFRESH_HOURS || '8', 10);
 let lastRefreshResult: { results: RefreshResult[]; allOk: boolean; timestamp: string } | null = null;
 const BROWSER_PROXY_SOURCES = [
   {
-    id: 'voz',
-    label: 'VOZ',
-    hosts: ['voz.vn', 'www.voz.vn'],
-    verifyUrl: 'https://voz.vn',
-    cookieName: 'cf_clearance',
-    requiresCookie: true,
-  },
-  {
     id: 'reuters',
     label: 'Reuters',
     hosts: ['reuters.com', 'www.reuters.com'],

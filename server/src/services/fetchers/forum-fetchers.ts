@@ -3,6 +3,7 @@ import * as cheerio from 'cheerio';
 import { query, getOne, getMany } from '../../db/index.js';
 import { generateId, createContentHash, normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
 import { BROWSER_UA, browserFetch, curlFetch, isBlockedHtml, playwrightFetch, randomUA } from './http-utils.js';
+import { scraplingFetchWithFallback } from './scrapling-fetch.js';
 import {
   ForumComment,
   VozPost,
@@ -313,7 +314,11 @@ export async function fetchRedditCommentsForPost(postPath: string, initialPostCo
   try {
     markRedditStrategy(stats, 'puppeteer', false);
     const oldUrl = `https://old.reddit.com${postPath}.json?limit=${REDDIT_COMMENT_LIMIT}&sort=best&depth=${REDDIT_COMMENT_DEPTH}`;
-    const rawJsonText = await browserFetch(oldUrl, 25000, true);
+    const rawJsonText = await scraplingFetchWithFallback(
+      oldUrl,
+      { mode: 'fast', rawText: true, timeoutMs: 25000 },
+      { rawText: true, blockHeavyResources: true, settleMs: 500, timeoutMs: 25000, userAgent: randomUA() },
+    );
     if (rawJsonText && (rawJsonText.trim().startsWith('[') || rawJsonText.trim().startsWith('{'))) {
       const parsed = parseRedditJsonComments(JSON.parse(rawJsonText), initialPostContent);
       if (parsed && parsed.discussionComments.length > 0) {
@@ -475,7 +480,12 @@ export async function scrapeRedditSource(source: SourceRow): Promise<ScrapeResul
       }
     } catch (err: any) {
       console.warn(`[reddit] native RSS fetch failed for ${rssUrl}, falling back to Playwright: ${err.message}`);
-      xml = await playwrightFetch(rssUrl, {
+      xml = await scraplingFetchWithFallback(rssUrl, {
+        mode: 'stealth',
+        rawText: true,
+        blockResources: true,
+        waitMs: 1500,
+      }, {
         rawText: true,
         blockHeavyResources: true,
         settleMs: 1500,
@@ -795,51 +805,19 @@ async function fetchVozViaProxy(targetUrl: string, accept: string, timeoutMs: nu
 }
 
 async function fetchVozThreadHtml(pageUrl: string): Promise<string> {
-  const proxyHtml = await fetchVozViaProxy(pageUrl, 'text/html,application/xhtml+xml', 60000);
-  if (proxyHtml) return proxyHtml;
-
-  const threadRes = await curlFetch(pageUrl, 'text/html,application/xhtml+xml', 15);
-  const threadHtml = await threadRes.text();
-  if (threadRes.ok && !isBlockedHtml(threadHtml)) return threadHtml;
-
-  console.log(`[voz] Retrying thread with Playwright ${pageUrl}: curl status=${threadRes.status}`);
-  return playwrightFetch(pageUrl, {
-    waitUntil: 'domcontentloaded',
-    blockHeavyResources: true,
-    settleMs: 3000,
-    timeoutMs: 60000,
-    userAgent: randomUA(),
-  });
+  return scraplingFetchWithFallback(
+    pageUrl,
+    { mode: 'stealth', waitSelector: 'article.message--post', waitMs: 3000, blockResources: true, timeoutMs: 60000 },
+    { waitUntil: 'domcontentloaded', blockHeavyResources: true, settleMs: 3000, timeoutMs: 60000, userAgent: randomUA() },
+  );
 }
 
 async function fetchVozFeedXml(sourceUrl: string): Promise<string> {
-  const proxyXml = await fetchVozViaProxy(sourceUrl, 'application/rss+xml, application/xml, text/xml', 30000);
-  if (proxyXml) return proxyXml;
-
-  try {
-    const response = await fetch(sourceUrl, {
-      headers: {
-        'User-Agent': BROWSER_UA,
-        Accept: 'application/rss+xml, application/xml, text/xml, application/atom+xml;q=0.9, */*;q=0.8',
-      },
-      signal: AbortSignal.timeout(15000),
-    });
-
-    if (!response.ok) throw new Error(`Status code ${response.status}`);
-    const xml = await response.text();
-    if (isBlockedHtml(xml)) {
-      throw new Error('Cloudflare blocked HTML received instead of RSS XML');
-    }
-    return xml;
-  } catch (err: any) {
-    console.warn(`[voz] native RSS fetch failed for ${sourceUrl}, falling back to Playwright: ${err.message}`);
-    return playwrightFetch(sourceUrl, {
-      rawText: true,
-      blockHeavyResources: true,
-      settleMs: 1500,
-      userAgent: randomUA(),
-    });
-  }
+  return scraplingFetchWithFallback(
+    sourceUrl,
+    { mode: 'stealth', rawText: true, waitMs: 1500, blockResources: true, timeoutMs: 30000 },
+    { rawText: true, blockHeavyResources: true, settleMs: 1500, userAgent: randomUA() },
+  );
 }
 
 interface RedditRetryResult {

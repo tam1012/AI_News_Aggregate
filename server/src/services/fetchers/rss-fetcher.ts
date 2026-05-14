@@ -6,6 +6,7 @@ import { JSDOM } from 'jsdom';
 import { normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
 import { matchPromoKeyword } from '../../lib/promoFilter.js';
 import { BROWSER_UA, GOOGLEBOT_UA, browserHeaders, randomUA, playwrightFetch, isBlockedHtml } from './http-utils.js';
+import { scraplingFetchWithFallback } from './scrapling-fetch.js';
 import { insertArticleIfNew, MIN_ARTICLE_TEXT_LENGTH } from './article-writer.js';
 import { SourceFetcher } from './types.js';
 import { learnSelectorProfileFromHtml } from './selector-learning.js';
@@ -424,26 +425,30 @@ async function fetchFullArticle(jobUrl: string, policy = getRssDomainPolicy(jobU
     fetchError = err instanceof Error ? err : new Error(String(err));
   }
 
-  // ── Attempt 3: Playwright + stealth plugin ─────────────────────────────────
+  // ── Attempt 3: Scrapling stealth (replaces Playwright + host browser proxy) ──
   try {
-    console.warn(`Retrying RSS article with Playwright stealth fetch ${jobUrl}`);
+    console.warn(`Retrying RSS article with Scrapling stealth fetch ${jobUrl}`);
     await sleep(1500);
-    const pwOptions = {
+    const html = await scraplingFetchWithFallback(jobUrl, {
+      mode: 'stealth',
+      blockResources: true,
+      waitMs: 1000,
+      timeoutMs: 60000,
+    }, {
       ...(policy.browserOptions || {}),
       userAgent: randomUA(),
       blockHeavyResources: true,
       settleMs: 1000,
-    };
-    const html = await playwrightFetch(jobUrl, pwOptions);
+    });
     if (isBlockedHtml(html)) throw new Error('blocked HTML');
-    const article = await extractArticleFromHtml(html, jobUrl, 'playwright-stealth');
+    const article = await extractArticleFromHtml(html, jobUrl, 'scrapling-stealth');
     if (article.content.length >= MIN_ARTICLE_TEXT_LENGTH) return article;
-    browserError = new Error(`playwright extraction too short (${article.content.length} characters)`);
+    browserError = new Error(`scrapling extraction too short (${article.content.length} characters)`);
   } catch (err: any) {
     browserError = err instanceof Error ? err : new Error(String(err));
   }
 
-  // ── Attempt 4: existing verified Chromium GUI via host browser proxy ────────
+  // ── Attempt 4: existing verified Chromium GUI via host browser proxy (Reuters only) ──
   const proxyHtml = await fetchViaHostBrowserProxy(jobUrl);
   if (proxyHtml) {
     const article = await extractArticleFromHtml(proxyHtml, jobUrl, 'host-browser-proxy');
@@ -519,8 +524,13 @@ export const rssFetcher: SourceFetcher = {
         throw new Error('Cloudflare blocked HTML received instead of RSS XML');
       }
     } catch (err: any) {
-      console.warn(`rss-fetcher: native discover failed for ${sourceUrl}, falling back to Playwright: ${err.message}`);
-      xml = await playwrightFetch(sourceUrl, {
+      console.warn(`rss-fetcher: native discover failed for ${sourceUrl}, falling back to Scrapling: ${err.message}`);
+      xml = await scraplingFetchWithFallback(sourceUrl, {
+        mode: 'stealth',
+        rawText: true,
+        blockResources: true,
+        waitMs: 1500,
+      }, {
         rawText: true,
         blockHeavyResources: true,
         settleMs: 1500,

@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import { normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
 import { matchPromoKeyword } from '../../lib/promoFilter.js';
 import { browserHeaders, isBlockedHtml, randomUA, playwrightFetch } from './http-utils.js';
+import { scraplingFetchWithFallback } from './scrapling-fetch.js';
 import { insertArticleIfNew } from './article-writer.js';
 import type { DiscoveredArticle } from '../article-fetch-queue.js';
 import { SourceFetcher } from './types.js';
@@ -143,8 +144,12 @@ export const htmlFetcher: SourceFetcher = {
       html = await response.text();
       if (isBlockedHtml(html)) throw new Error('blocked HTML');
     } catch (err: any) {
-      console.warn(`html-fetcher: native discover failed for ${sourceUrl}, falling back to Playwright: ${err.message}`);
-      html = await playwrightFetch(sourceUrl, {
+      console.warn(`html-fetcher: native discover failed for ${sourceUrl}, falling back to Scrapling: ${err.message}`);
+      html = await scraplingFetchWithFallback(sourceUrl, {
+        mode: 'stealth',
+        blockResources: true,
+        waitMs: 1000,
+      }, {
         rawText: false,
         blockHeavyResources: true,
         settleMs: 1000,
@@ -177,8 +182,12 @@ export const htmlFetcher: SourceFetcher = {
     }
 
     if (discovered.length === 0) {
-      console.warn(`html-fetcher: native discover found 0 links for ${sourceUrl}, falling back to Playwright`);
-      html = await playwrightFetch(sourceUrl, {
+      console.warn(`html-fetcher: native discover found 0 links for ${sourceUrl}, falling back to Scrapling`);
+      html = await scraplingFetchWithFallback(sourceUrl, {
+        mode: 'stealth',
+        blockResources: true,
+        waitMs: 1000,
+      }, {
         rawText: false,
         blockHeavyResources: true,
         settleMs: 1000,
@@ -219,8 +228,12 @@ export const htmlFetcher: SourceFetcher = {
       if (!articleRes.ok) throw new Error(`Status code ${articleRes.status}`);
       articleHtml = await articleRes.text();
     } catch (firstErr: any) {
-      console.warn(`html-fetcher: native fetch failed for ${job.url}, falling back to Playwright: ${firstErr.message}`);
-      articleHtml = await playwrightFetch(job.url, {
+      console.warn(`html-fetcher: native fetch failed for ${job.url}, falling back to Scrapling: ${firstErr.message}`);
+      articleHtml = await scraplingFetchWithFallback(job.url, {
+        mode: 'stealth',
+        blockResources: false,
+        waitMs: 1000,
+      }, {
         rawText: false,
         blockHeavyResources: false,
         settleMs: 1000,
