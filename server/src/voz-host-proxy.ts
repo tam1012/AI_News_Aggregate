@@ -13,10 +13,13 @@
  */
 import { createServer } from 'node:http';
 import { chromium, type BrowserContext, type Browser } from 'playwright';
+import { refreshCookies, type RefreshResult } from './cookie-refresher.js';
 
 const PORT = parseInt(process.env.VOZ_HOST_PROXY_PORT || '8788', 10);
 const BIND_HOST = process.env.VOZ_HOST_PROXY_BIND || '0.0.0.0';
 const CDP_URL = process.env.VOZ_CDP_URL || 'http://127.0.0.1:9222';
+const AUTO_REFRESH_HOURS = parseInt(process.env.AUTO_REFRESH_HOURS || '8', 10);
+let lastRefreshResult: { results: RefreshResult[]; allOk: boolean; timestamp: string } | null = null;
 const BROWSER_PROXY_SOURCES = [
   {
     id: 'voz',
@@ -195,9 +198,39 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // Cookie refresh endpoint
+    if (reqUrl.pathname === '/refresh') {
+      if (req.method !== 'POST' && req.method !== 'GET') {
+        sendJson(res, 405, { error: 'Use GET or POST' });
+        return;
+      }
+      console.log('[voz-proxy] Cookie refresh triggered via HTTP');
+      try {
+        const refreshResult = await refreshCookies(CDP_URL);
+        lastRefreshResult = {
+          ...refreshResult,
+          timestamp: new Date().toISOString(),
+        };
+        const httpStatus = refreshResult.allOk ? 200 : 207;
+        sendJson(res, httpStatus, {
+          ok: refreshResult.allOk,
+          ...lastRefreshResult,
+        });
+      } catch (err: any) {
+        sendJson(res, 503, { ok: false, error: err.message });
+      }
+      return;
+    }
+
+    // Last refresh status
+    if (reqUrl.pathname === '/refresh-status') {
+      sendJson(res, 200, lastRefreshResult || { message: 'No refresh has been performed yet.' });
+      return;
+    }
+
     // Main fetch endpoint
     if (reqUrl.pathname !== '/fetch') {
-      sendJson(res, 404, { error: 'Not found. Use /fetch?url=...' });
+      sendJson(res, 404, { error: 'Not found. Use /fetch?url=..., /refresh, /status' });
       return;
     }
 
@@ -232,7 +265,37 @@ server.listen(PORT, BIND_HOST, () => {
   console.log(`VOZ host proxy listening on http://${BIND_HOST}:${PORT}`);
   console.log(`CDP target: ${CDP_URL}`);
   console.log(`Strategy: reuse cf_clearance from running Chromium GUI`);
+  console.log(`Auto-refresh: every ${AUTO_REFRESH_HOURS}h`);
   console.log('');
   console.log('⚠️  Requires Chromium GUI running with --remote-debugging-port=9222');
   console.log('   Run: ~/Desktop/voz-browser.sh');
+  console.log('');
+  console.log('Endpoints:');
+  console.log('   GET  /health         — health check');
+  console.log('   GET  /status         — cookie & CDP status');
+  console.log('   GET  /fetch?url=...  — proxy fetch');
+  console.log('   POST /refresh        — trigger cookie refresh');
+  console.log('   GET  /refresh-status — last refresh result');
+
+  // Auto-refresh: run immediately after startup (30s delay), then every N hours
+  const autoRefreshMs = AUTO_REFRESH_HOURS * 60 * 60 * 1000;
+  const runAutoRefresh = async () => {
+    console.log('[auto-refresh] Starting scheduled cookie refresh...');
+    try {
+      const result = await refreshCookies(CDP_URL);
+      lastRefreshResult = {
+        ...result,
+        timestamp: new Date().toISOString(),
+      };
+      const icon = result.allOk ? '✅' : '⚠️';
+      console.log(`[auto-refresh] ${icon} Completed: ${result.results.map((r) => `${r.label}=${r.success ? 'OK' : 'FAIL'}`).join(', ')}`);
+    } catch (err: any) {
+      console.error(`[auto-refresh] Failed: ${err.message}`);
+    }
+  };
+
+  // First refresh 30s after startup (give Chromium time to settle)
+  setTimeout(runAutoRefresh, 30_000);
+  // Then every AUTO_REFRESH_HOURS
+  setInterval(runAutoRefresh, autoRefreshMs);
 });
