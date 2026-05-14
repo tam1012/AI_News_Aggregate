@@ -618,6 +618,7 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
       let imageUrl: string | null = null;
 
       try {
+        await sleep(2000);
         const pagesToVisit: string[] = [url];
         const visited = new Set<string>();
         const allPosts: VozPost[] = [];
@@ -628,7 +629,7 @@ export async function scrapeVozSource(source: SourceRow): Promise<ScrapeResult> 
           if (visited.has(pageUrl)) continue;
           visited.add(pageUrl);
 
-          await sleep(500);
+          await sleep(1500);
           const threadHtml = await fetchVozThreadHtml(pageUrl);
           const pagePosts = parseVozPosts(threadHtml, pageIndex + 1);
 
