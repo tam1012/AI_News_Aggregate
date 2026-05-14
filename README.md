@@ -65,8 +65,8 @@ Project này được thiết kế cho nhu cầu tự host cá nhân: ít thao t
 - Web scraper với AI-learned selector profiles: tự học CSS selector từ HTML lần đầu, cache lại cho lần sau.
 - **Content extraction 3 tầng**: AI selector → cheerio CSS selectors → Mozilla Readability fallback.
 - **Quality gate**: chặn insert bài có content quá ngắn trước khi vào DB, tránh tạo summary rỗng.
-- **Fetch fallback**: nếu HTTP fetch thường bị block (429/403), tự retry bằng Puppeteer headless browser.
-- **Rate limiting**: delay 1.5s giữa các article fetch jobs và 2s trước browser retry để tránh bị rate-limit.
+- **Fetch fallback**: nếu HTTP fetch thường bị block (429/403), tự retry bằng Scrapling stealth browser sidecar. Nếu Scrapling unavailable, fallback về Playwright headless.
+- **Rate limiting**: per-domain throttle 10s giữa các request cùng domain, 1.5s giữa domain khác nhau. Configurable qua `FETCH_PER_DOMAIN_DELAY_MS`.
 - **Rescue job**: tự tìm bài cũ bị skipped vì thiếu content, requeue fetch lại và cập nhật article gốc.
 - GitHub Trending scraper riêng.
 - Reddit scraper theo hướng RSS + enrich comment theo nhiều fallback.
@@ -92,7 +92,7 @@ Repo là monorepo npm workspaces:
 - `client/`: React + Vite SPA.
 - `server/`: Hono API, PostgreSQL, cron jobs, scraper, summarizer.
 - `Dockerfile`: multi-stage build client và server.
-- `docker-compose.yml`: PostgreSQL + app container.
+- `docker-compose.yml`: PostgreSQL + Scrapling sidecar + app container.
 - `nginx-synthnews.conf`: reverse proxy production cho `synthnews.site`.
 
 Production flow:
@@ -134,7 +134,8 @@ Backend:
 - node-cron
 - rss-parser
 - cheerio
-- puppeteer-core
+- Scrapling Python sidecar (stealth browser fetch, Cloudflare bypass)
+- playwright (fallback khi Scrapling unavailable)
 - @mozilla/readability + jsdom (content extraction fallback)
 - sharp (image processing)
 
@@ -220,7 +221,8 @@ DevOps:
 │   │   │       ├── selector-learning.ts  # AI selector learning
 │   │   │       ├── selector-profile.ts   # Selector cache/profile
 │   │   │       ├── article-writer.ts     # DB insert + quality gate
-│   │   │       ├── http-utils.ts         # HTTP fetch + Puppeteer browserFetch
+│   │   │       ├── http-utils.ts         # HTTP fetch + Playwright fallback
+│   │   │       ├── scrapling-fetch.ts    # Scrapling sidecar client + fallback
 │   │   │       ├── registry.ts           # Fetcher routing
 │   │   │       └── types.ts
 │   │   └── index.ts                # Server entry point
@@ -230,6 +232,8 @@ DevOps:
 ├── docker-compose.yml
 ├── nginx-synthnews.conf            # Nginx config mẫu
 ├── reddit-proxy-worker.js          # Cloudflare Worker cho Reddit proxy
+├── reuters-proxy-worker.js         # Cloudflare Worker cho Reuters (experimental)
+├── scrapling-sidecar/              # Python Scrapling anti-bot fetch service
 ├── .env.example
 ├── .env.local.example              # Local dev env template
 ├── Caddyfile.local                 # Local HTTPS proxy
@@ -483,9 +487,12 @@ Biến quan trọng:
 | `REDDIT_USERNAME` | Reddit username, optional |
 | `REDDIT_PASSWORD` | Reddit password, optional |
 | `REDDIT_PROXY_URL` | Cloudflare Worker proxy URL, optional |
-| `PUPPETEER_EXECUTABLE_PATH` | Chromium path trong container |
+| `SCRAPLING_SERVICE_URL` | Scrapling sidecar URL, mặc định `http://scrapling:8000` trong Docker |
+| `SCRAPLING_TIMEOUT_MS` | Timeout cho Scrapling requests, mặc định `60000` |
+| `FETCH_PER_DOMAIN_DELAY_MS` | Delay tối thiểu giữa requests cùng domain, mặc định `10000` |
+| `BLOCKED_DOMAINS` | Danh sách domain bị chặn (comma-separated), override default nếu set |
 | `MIN_ARTICLE_TEXT_LENGTH` | Ngưỡng tối thiểu content để insert article, mặc định `500` chars |
-| `ARTICLE_BROWSER_FETCH_TIMEOUT_MS` | Timeout cho Puppeteer browser fetch fallback, mặc định `30000` |
+| `ARTICLE_BROWSER_FETCH_TIMEOUT_MS` | Timeout cho browser fetch fallback, mặc định `30000` |
 | `MAX_ARTICLE_FETCH_JOBS_PER_RUN` | Số fetch jobs xử lý mỗi lượt, mặc định `30` |
 | `SOURCE_SCRAPE_TIMEOUT_MS` | Timeout tổng cho mỗi source scrape, mặc định auto theo loại source |
 | `FORUM_MIN_COMMENTS` | Số comment tối thiểu để giữ bài forum VOZ, mặc định `10` |
@@ -634,7 +641,8 @@ docker compose logs -f app
 Compose services:
 
 - `db`: PostgreSQL 16 Alpine, volume `pgdata`, bind local `127.0.0.1:5433`.
-- `app`: SynthNews app, bind local `127.0.0.1:3001`, depends on DB healthcheck.
+- `scrapling`: Python Scrapling sidecar, anti-bot fetch service, internal network only.
+- `app`: SynthNews app, bind local `127.0.0.1:3001`, depends on DB + Scrapling healthcheck.
 
 Healthcheck app:
 
@@ -734,7 +742,7 @@ Lưu ý: đổi URL smoke test public trong `deploy.yml` nếu dùng domain khá
 | Job | Lịch | Việc làm |
 |---|---|---|
 | Source discovery | `*/5 * * * *` + startup check | Kiểm tra source đến hạn theo `next_run_at`; source mặc định 60 phút/lần, có jitter nhỏ, lỗi thì backoff tối đa 24 giờ |
-| Article Fetch Queue | `*/5 * * * *` | Claim URL đã discover trong `article_fetch_jobs`, fetch nội dung chi tiết (HTTP → Readability → browser fallback), rate limit 1.5s giữa mỗi job |
+| Article Fetch Queue | `*/5 * * * *` | Claim URL đã discover trong `article_fetch_jobs`, fetch nội dung chi tiết (HTTP → Scrapling stealth → Playwright fallback), per-domain throttle 10s giữa mỗi request cùng domain |
 | Summarize | `*/10 * * * *` | Claim bài `pending`, gọi AI, cập nhật `done/skipped/failed` |
 | Forum Rescrape | `0,30 * * * *` | Cào lại Reddit/VOZ mới, bỏ qua phút `00` theo nhịp digest để giảm tải |
 | Digest | `30 */SCRAPE_INTERVAL_HOURS * * *` | Tạo bản tin từ các bài đã tóm tắt trong 24 giờ gần nhất |
@@ -769,7 +777,7 @@ Khi scrape, backend nhận diện host Reddit và dùng `scrapeRedditSource()`:
 1. Lấy danh sách thread hot qua RSS.
 2. Nếu có OAuth env (`REDDIT_CLIENT_ID`, ...), gọi `oauth.reddit.com` — truy cập đầy đủ comment + score.
 3. Nếu không có OAuth, enrich tối đa 8 bài mỗi lượt theo waterfall (dừng ngay khi 1 strategy thành công):
-   1. **Puppeteer** vào `old.reddit.com/...json` — lấy được JSON đầy đủ, nhưng nhiều VPS bị Reddit chặn IP.
+   1. **Scrapling stealth** vào `old.reddit.com/...json` — lấy được JSON đầy đủ qua stealth browser.
    2. **RSS Comment Feed** `reddit.com/{postPath}.rss` — **strategy đáng tin nhất** trên hầu hết môi trường. Lấy được nội dung comment đầy đủ, tuy không có upvote score (mặc định `0 điểm`).
    3. **Cloudflare Worker proxy** qua `REDDIT_PROXY_URL` — chỉ dùng nếu cả 2 trên fail. Cần deploy `reddit-proxy-worker.js` lên Workers trước.
    4. **Pullpush archive API** — fallback cuối, data thường bị delay hoặc stale.
@@ -777,7 +785,7 @@ Khi scrape, backend nhận diện host Reddit và dùng `scrapeRedditSource()`:
 5. Score comment theo reaction/length/độ sớm/depth.
 6. Chọn top comment, rồi sắp lại theo thứ tự xuất hiện để đưa vào `raw_content`.
 
-> **Lưu ý thực tế:** Trên máy cá nhân hoặc VPS không bị chặn, Puppeteer thường work luôn. Trên VPS bị chặn (ví dụ Oracle Cloud), RSS Comment Feed tự động kick in và đủ dùng. Proxy và Pullpush hiếm khi cần thiết.
+> **Lưu ý thực tế:** Scrapling stealth browser xử lý hầu hết các site có Cloudflare protection. Nếu Scrapling service down, hệ thống tự fallback về Playwright. RSS Comment Feed là strategy đáng tin nhất cho comment Reddit. Proxy và Pullpush hiếm khi cần thiết.
 
 Retry Reddit mỗi 10 phút tìm bài trong 48 giờ gần nhất có raw content chứa `Đã trích 0 comment`, thử Pullpush lại, rồi reset summary nếu enrich được comment.
 
@@ -786,7 +794,7 @@ Retry Reddit mỗi 10 phút tìm bài trong 48 giờ gần nhất có raw conten
 VOZ dùng `scrapeVozSource()`:
 
 1. Lấy danh sách thread từ RSS.
-2. Mở trang thread thật bằng `curlFetch()` để tránh một số lỗi TLS/fingerprint của Node fetch.
+2. Fetch thread HTML qua Scrapling stealth sidecar (bypass Cloudflare). Fallback về Playwright nếu Scrapling unavailable.
 3. Parse HTML bằng Cheerio.
 4. Đọc pagination tối đa `VOZ_MAX_THREAD_PAGES`.
 5. Tách OP và comment thành viên.
