@@ -168,6 +168,14 @@ async function runScrapeJob() {
   console.log(`[${new Date().toISOString()}] Scrape job complete.`);
 }
 
+function getDomainFromJobUrl(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return 'unknown';
+  }
+}
+
 async function runArticleFetchJob() {
   console.log(`[${new Date().toISOString()}] Starting article fetch job...`);
   const limit = parseInt(process.env.MAX_ARTICLE_FETCH_JOBS_PER_RUN || '30');
@@ -175,9 +183,17 @@ async function runArticleFetchJob() {
   let succeeded = 0;
   let failed = 0;
 
-  let fetchCount = 0;
+  const domainLastFetch = new Map<string, number>();
+  const PER_DOMAIN_MIN_DELAY_MS = parseInt(process.env.FETCH_PER_DOMAIN_DELAY_MS || '5000');
+  const BASE_DELAY_MS = 1500;
+
   for (const job of jobs) {
-    if (fetchCount > 0) await sleep(1500);
+    const domain = getDomainFromJobUrl(job.url);
+    const lastFetch = domainLastFetch.get(domain) || 0;
+    const elapsed = Date.now() - lastFetch;
+    const requiredDelay = lastFetch === 0 ? BASE_DELAY_MS : Math.max(BASE_DELAY_MS, PER_DOMAIN_MIN_DELAY_MS - elapsed);
+    if (requiredDelay > 0) await sleep(requiredDelay);
+
     const source: SourceRow = {
       id: job.source_id,
       type: job.source_type,
@@ -210,7 +226,7 @@ async function runArticleFetchJob() {
       await markArticleFetchJobFailed(job.id, err);
       failed++;
     }
-    fetchCount++;
+    domainLastFetch.set(domain, Date.now());
   }
 
   console.log(`  Article fetch jobs: processed=${jobs.length}, succeeded=${succeeded}, failed=${failed}`);
