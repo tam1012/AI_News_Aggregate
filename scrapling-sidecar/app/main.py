@@ -20,6 +20,7 @@ class FetchOptions(BaseModel):
     block_resources: Optional[bool] = True
     raw_text: Optional[bool] = False
     timeout_ms: Optional[int] = None
+    proxy: Optional[str] = None
 
 
 class FetchRequest(BaseModel):
@@ -80,6 +81,9 @@ def _stealth_fetch_sync(url: str, options: FetchOptions, timeout_ms: int) -> str
     if options.wait_selector:
         kwargs["wait_selector"] = options.wait_selector
 
+    if options.proxy:
+        kwargs["proxy"] = {"server": options.proxy}
+
     page = StealthyFetcher.fetch(url, **kwargs)
 
     if options.wait_ms and options.wait_ms > 0:
@@ -94,6 +98,9 @@ def _fast_fetch_sync(url: str, options: FetchOptions, timeout_ms: int) -> str:
     kwargs = {
         "timeout": timeout_ms / 1000,
     }
+
+    if options.proxy:
+        kwargs["proxies"] = {"https": options.proxy, "http": options.proxy}
 
     page = Fetcher.get(url, **kwargs)
     return page.html_content if hasattr(page, "html_content") else str(page)
