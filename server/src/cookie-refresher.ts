@@ -48,15 +48,7 @@ interface RefreshTarget {
   cookieName?: string;
 }
 
-const TARGETS: RefreshTarget[] = [
-  {
-    id: 'reuters',
-    label: 'Reuters',
-    url: 'https://www.reuters.com',
-    contentSelector: 'article, [data-testid*="article"], main, .media-story-card',
-    waitMs: 15_000,
-  },
-];
+const TARGETS: RefreshTarget[] = [];
 
 // ---------------------------------------------------------------------------
 // Helpers

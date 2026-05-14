@@ -40,6 +40,7 @@ interface RssDomainPolicy {
 const DEFAULT_RSS_SNIPPET_FALLBACK_MIN_LENGTH = parsePositiveInt(process.env.RSS_SNIPPET_FALLBACK_MIN_LENGTH, 800);
 const HOST_BROWSER_PROXY_URL = process.env.BROWSER_PROXY_URL || process.env.VOZ_PROXY_URL || '';
 const DEFAULT_BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS: string[] = [
+  'reuters.com',
   'thestreet.com',
   'timesofisrael.com',
   'nytimes.com',
@@ -616,6 +617,10 @@ export const rssFetcher: SourceFetcher = {
 
     if ((payload.googleNewsUrl || isGoogleNewsArticleUrl(job.url)) && isBlockedGoogleNewsPublisherUrl(articleUrl)) {
       throw new Error(`Google News publisher blocked by domain policy: ${getHostname(articleUrl)}`);
+    }
+
+    if (isBlockedGoogleNewsPublisherUrl(articleUrl)) {
+      throw new Error(`Article domain blocked by policy: ${getHostname(articleUrl)}`);
     }
 
     const policy = getRssDomainPolicy(articleUrl);

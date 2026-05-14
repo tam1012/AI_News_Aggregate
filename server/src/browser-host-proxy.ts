@@ -18,16 +18,7 @@ const BIND_HOST = process.env.VOZ_HOST_PROXY_BIND || '0.0.0.0';
 const CDP_URL = process.env.VOZ_CDP_URL || 'http://127.0.0.1:9222';
 const AUTO_REFRESH_HOURS = parseInt(process.env.AUTO_REFRESH_HOURS || '8', 10);
 let lastRefreshResult: { results: RefreshResult[]; allOk: boolean; timestamp: string } | null = null;
-const BROWSER_PROXY_SOURCES = [
-  {
-    id: 'reuters',
-    label: 'Reuters',
-    hosts: ['reuters.com', 'www.reuters.com'],
-    verifyUrl: 'https://www.reuters.com',
-    cookieName: 'cf_clearance',
-    requiresCookie: false,
-  },
-];
+const BROWSER_PROXY_SOURCES: { id: string; label: string; hosts: string[]; verifyUrl: string; cookieName: string; requiresCookie: boolean }[] = [];
 const EXTRA_ALLOWED_HOSTS = (process.env.BROWSER_PROXY_ALLOWED_HOSTS || '')
   .split(',')
   .map((host) => host.trim().toLowerCase())
