@@ -39,7 +39,7 @@ interface RssDomainPolicy {
 
 const DEFAULT_RSS_SNIPPET_FALLBACK_MIN_LENGTH = parsePositiveInt(process.env.RSS_SNIPPET_FALLBACK_MIN_LENGTH, 800);
 const HOST_BROWSER_PROXY_URL = process.env.BROWSER_PROXY_URL || process.env.VOZ_PROXY_URL || '';
-const DEFAULT_BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS: string[] = [
+const DEFAULT_BLOCKED_DOMAINS: string[] = [
   'reuters.com',
   'thestreet.com',
   'timesofisrael.com',
@@ -92,17 +92,17 @@ function domainMatches(hostname: string, domain: string): boolean {
   return hostname === domain || hostname.endsWith(`.${domain}`);
 }
 
-function getBlockedGoogleNewsPublisherDomains(): string[] {
-  const configured = (process.env.BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS || '')
+function getBlockedDomains(): string[] {
+  const configured = (process.env.BLOCKED_DOMAINS || process.env.BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS || '')
     .split(',')
     .map(domain => domain.trim().toLowerCase())
     .filter(Boolean);
-  return configured.length > 0 ? configured : DEFAULT_BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS;
+  return configured.length > 0 ? configured : DEFAULT_BLOCKED_DOMAINS;
 }
 
-function isBlockedGoogleNewsPublisherUrl(url: string): boolean {
+function isBlockedDomain(url: string): boolean {
   const hostname = getHostname(url);
-  return getBlockedGoogleNewsPublisherDomains().some(domain => domainMatches(hostname, domain));
+  return getBlockedDomains().some(domain => domainMatches(hostname, domain));
 }
 
 function buildHostBrowserProxyUrl(targetUrl: string): string {
@@ -556,8 +556,8 @@ export const rssFetcher: SourceFetcher = {
           console.warn(`Failed to decode Google News URL ${googleNewsUrl}: ${err.message}`);
           continue;
         }
-        if (isBlockedGoogleNewsPublisherUrl(url)) {
-          console.log(`[google-news-filter] Skipped "${item.title}" from blocked publisher ${getHostname(url)}`);
+        if (isBlockedDomain(url)) {
+          console.log(`[blocklist] Skipped "${item.title}" from blocked domain ${getHostname(url)}`);
           continue;
         }
       }
@@ -615,11 +615,7 @@ export const rssFetcher: SourceFetcher = {
       }
     }
 
-    if ((payload.googleNewsUrl || isGoogleNewsArticleUrl(job.url)) && isBlockedGoogleNewsPublisherUrl(articleUrl)) {
-      throw new Error(`Google News publisher blocked by domain policy: ${getHostname(articleUrl)}`);
-    }
-
-    if (isBlockedGoogleNewsPublisherUrl(articleUrl)) {
+    if (isBlockedDomain(articleUrl)) {
       throw new Error(`Article domain blocked by policy: ${getHostname(articleUrl)}`);
     }
 
