@@ -805,6 +805,8 @@ async function fetchVozViaProxy(targetUrl: string, accept: string, timeoutMs: nu
 }
 
 async function fetchVozThreadHtml(pageUrl: string): Promise<string> {
+  const proxyResult = await fetchVozViaProxy(pageUrl, 'text/html', 30000);
+  if (proxyResult) return proxyResult;
   return scraplingFetchWithFallback(
     pageUrl,
     { mode: 'stealth', waitSelector: 'article.message--post', waitMs: 3000, blockResources: true, timeoutMs: 60000 },
@@ -813,6 +815,8 @@ async function fetchVozThreadHtml(pageUrl: string): Promise<string> {
 }
 
 async function fetchVozFeedXml(sourceUrl: string): Promise<string> {
+  const proxyResult = await fetchVozViaProxy(sourceUrl, 'application/rss+xml', 30000);
+  if (proxyResult) return proxyResult;
   return scraplingFetchWithFallback(
     sourceUrl,
     { mode: 'stealth', rawText: true, waitMs: 1500, blockResources: true, timeoutMs: 30000 },
