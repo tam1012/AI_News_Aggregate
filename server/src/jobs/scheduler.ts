@@ -184,7 +184,7 @@ async function runArticleFetchJob() {
   let failed = 0;
 
   const domainLastFetch = new Map<string, number>();
-  const PER_DOMAIN_MIN_DELAY_MS = parseInt(process.env.FETCH_PER_DOMAIN_DELAY_MS || '5000');
+  const PER_DOMAIN_MIN_DELAY_MS = parseInt(process.env.FETCH_PER_DOMAIN_DELAY_MS || '10000');
   const BASE_DELAY_MS = 1500;
 
   for (const job of jobs) {
