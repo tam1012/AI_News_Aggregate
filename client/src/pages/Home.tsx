@@ -244,11 +244,15 @@ export function Home() {
   // Close on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && selected) setSelected(null);
+      if (e.key === 'Escape') {
+        if (showFilter) { setShowFilter(false); return; }
+        if (showTagMenu) { setShowTagMenu(false); return; }
+        if (selected) setSelected(null);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [selected]);
+  }, [selected, showFilter, showTagMenu]);
 
   // Lock body scroll when detail open — use overflow approach to avoid layout jump
   useEffect(() => {

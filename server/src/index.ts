@@ -33,7 +33,7 @@ const app = new Hono();
 app.use('*', compress());
 app.use('*', logger());
 app.use('*', cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: process.env.CORS_ORIGIN || (process.env.PUBLIC_SITE_URL ? process.env.PUBLIC_SITE_URL.replace(/\/$/, '') : '*'),
   allowMethods: ['GET', 'POST', 'PATCH', 'DELETE'],
   allowHeaders: ['Content-Type', 'Authorization'],
 }));
@@ -104,9 +104,13 @@ if (existsSync(publicDir)) {
 // Error handler
 app.onError((err, c) => {
   console.error('Unhandled error:', err);
+  const isProduction = process.env.NODE_ENV === 'production';
   return c.json({
     success: false,
-    error: { code: 'INTERNAL_ERROR', message: err.message },
+    error: {
+      code: 'INTERNAL_ERROR',
+      message: isProduction ? 'An unexpected error occurred' : err.message,
+    },
   }, 500);
 });
 

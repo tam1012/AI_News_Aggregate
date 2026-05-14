@@ -74,8 +74,11 @@ export function FeedItem({
     <article
       className={`feed-item ${isActive ? 'active' : ''} ${isRead ? 'is-read' : ''}`}
       onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
       onMouseEnter={preloadMarkdown}
       onTouchStart={preloadMarkdown}
+      tabIndex={0}
+      role="button"
     >
       <div className="feed-item-meta">
         <span className={`feed-item-source source-${sourceLabel.toLowerCase().replace(/[^a-z0-9]/g, '')}`}>

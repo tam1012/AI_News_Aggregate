@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { getMany, getOne, query } from '../db/index.js';
+import { getMany, getOne, query, withTransaction } from '../db/index.js';
 import { generateId } from '../lib/utils.js';
 
 const aiProviders = new Hono();
@@ -70,8 +70,10 @@ aiProviders.patch('/routing', async (c) => {
   );
 
   if (primaryProviderId) {
-    await query('UPDATE ai_providers SET is_active = false');
-    await query('UPDATE ai_providers SET is_active = true WHERE id = $1', [primaryProviderId]);
+    await withTransaction(async (client) => {
+      await client.query('UPDATE ai_providers SET is_active = false');
+      await client.query('UPDATE ai_providers SET is_active = true WHERE id = $1', [primaryProviderId]);
+    });
   }
 
   return c.json({ success: true, data: JSON.parse(value) });
@@ -208,9 +210,11 @@ aiProviders.post('/:id/activate', async (c) => {
   }
 
   // Tat tat ca provider khac
-  await query('UPDATE ai_providers SET is_active = false');
+  await withTransaction(async (client) => {
+    await client.query('UPDATE ai_providers SET is_active = false');
+    await client.query('UPDATE ai_providers SET is_active = true WHERE id = $1', [id]);
+  });
   // Bat provider nay
-  await query('UPDATE ai_providers SET is_active = true WHERE id = $1', [id]);
   const routing = await getAiRoutingSettings();
   await query(
     `INSERT INTO app_settings (key, value_json, updated_at)
