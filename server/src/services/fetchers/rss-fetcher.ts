@@ -39,7 +39,6 @@ interface RssDomainPolicy {
 
 const DEFAULT_RSS_SNIPPET_FALLBACK_MIN_LENGTH = parsePositiveInt(process.env.RSS_SNIPPET_FALLBACK_MIN_LENGTH, 800);
 const DEFAULT_BLOCKED_DOMAINS: string[] = [
-  'reuters.com',
   'thestreet.com',
   'timesofisrael.com',
   'nytimes.com',
