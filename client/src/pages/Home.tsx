@@ -337,22 +337,25 @@ export function Home() {
 
     let isActive = true;
     setDeepLinkLoading(true);
-    api.getArticle(urlArticleId).then((res: any) => {
-      if (!isActive) return;
-      if (res?.data) {
-        setSelected(res.data);
-        setReadArticleIds(prev => (prev.includes(res.data.id) ? prev : [res.data.id, ...prev]));
-        // Set tab based on article type
-        const articleTab = classifyArticle(res.data);
-        setTab(articleTab);
+
+    (async () => {
+      try {
+        const res = await api.getArticle(urlArticleId);
+        if (!isActive) return;
+        if (res?.data) {
+          setSelected(res.data);
+          setReadArticleIds(prev => (prev.includes(res.data.id) ? prev : [res.data.id, ...prev]));
+          const articleTab = classifyArticle(res.data);
+          setTab(articleTab);
+        }
+      } catch {
+        if (!isActive) return;
+        window.history.replaceState(null, '', '/');
+      } finally {
+        if (isActive) setDeepLinkLoading(false);
       }
-    }).catch(() => {
-      if (!isActive) return;
-      // Article not found, go to news
-      window.history.replaceState(null, '', '/');
-    }).finally(() => {
-      if (isActive) setDeepLinkLoading(false);
-    });
+    })();
+
     return () => { isActive = false; };
   }, [urlArticleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
