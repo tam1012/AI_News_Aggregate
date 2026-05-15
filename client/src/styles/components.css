@@ -1,32 +1,33 @@
 /* ===== Buttons ===== */
 .btn {
   display: inline-flex; align-items: center; justify-content: center;
-  gap: 6px; padding: 10px 18px; border-radius: 999px;
+  gap: 6px; padding: 10px 18px; border-radius: 8px;
   border: 1px solid var(--color-border-light);
   background: var(--color-bg-card); color: var(--color-text);
-  font-size: 0.85rem; font-weight: 700;
+  font-size: 0.85rem; font-weight: 600;
   transition: all 0.15s; white-space: nowrap;
 }
-.btn:hover { background: var(--color-bg-hover); border-color: var(--color-border); text-decoration: none; }
+.btn:hover { background: var(--color-surface-container-low); border-color: var(--color-border); text-decoration: none; }
 .btn-primary {
   background: var(--color-accent); border-color: var(--color-accent);
   color: white;
 }
-.btn-primary:hover { background: var(--color-accent-hover); color: white; }
+.btn-primary:hover { background: var(--color-accent-hover); border-color: var(--color-accent-hover); color: white; }
 .btn-danger { color: var(--color-error); border-color: var(--color-error); }
-.btn-danger:hover { background: rgba(220, 38, 38, 0.08); }
+.btn-danger:hover { background: color-mix(in srgb, var(--color-error) 8%, transparent); }
 .btn-sm { padding: 5px 12px; font-size: 0.78rem; }
 .btn-ghost {
   border: none; background: transparent; color: var(--color-text-secondary);
 }
-.btn-ghost:hover { background: var(--color-bg-hover); color: var(--color-text); }
+.btn-ghost:hover { background: var(--color-surface-container-low); color: var(--color-text); }
 
 /* ===== Cards ===== */
 .card {
   background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-light);
   border-radius: var(--radius); padding: 16px;
   transition: border-color 0.2s;
+  box-shadow: 0 2px 8px var(--color-shadow);
 }
 
 /* ===== Badges ===== */
@@ -51,13 +52,13 @@
 }
 .form-group input, .form-group select, .form-group textarea {
   width: 100%; padding: 10px 12px;
-  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-light); border-radius: var(--radius-sm);
   background: var(--color-bg); color: var(--color-text);
   font-size: 0.9rem; transition: border-color 0.2s, box-shadow 0.2s;
 }
 .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
   outline: none; border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(184, 134, 11, 0.12);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
 }
 
 /* ===== Toggle ===== */
@@ -65,7 +66,7 @@
 .toggle input { display: none; }
 .toggle .slider {
   position: absolute; inset: 0;
-  background: var(--color-border); border-radius: 12px; transition: background 0.2s;
+  background: var(--color-border-light); border-radius: 12px; transition: background 0.2s;
 }
 .toggle .slider::before {
   content: ''; position: absolute;
@@ -83,6 +84,7 @@
 .page-title {
   font-family: var(--font-heading);
   font-size: 1.35rem; font-weight: 700; letter-spacing: -0.3px;
+  color: var(--color-accent);
 }
 
 /* ===== Footer ===== */

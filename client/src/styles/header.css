@@ -1,10 +1,10 @@
 /* ===== Header ===== */
 .header {
   position: sticky; top: 0; z-index: 100;
-  background: color-mix(in srgb, var(--color-bg) 88%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  background: color-mix(in srgb, var(--color-bg) 92%, transparent);
+  border-bottom: 1px solid var(--color-border-light);
   padding: calc(12px + var(--safe-top)) 0 12px;
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(20px);
 }
 .header-inner {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
@@ -13,11 +13,12 @@
 .header-logo {
   font-family: var(--font-heading);
   font-size: 1.42rem; font-weight: 800;
-  color: var(--color-text); letter-spacing: -0.7px;
+  color: var(--color-accent); letter-spacing: -0.5px;
 }
-.header-logo:hover { color: var(--color-text); text-decoration: none; }
+.header-logo:hover { color: var(--color-accent); text-decoration: none; }
 .header-date {
-  font-size: 0.78rem; color: var(--color-text-muted); font-weight: 600;
+  font-size: 0.76rem; color: var(--color-text-muted); font-weight: 500;
+  letter-spacing: -0.1px;
 }
 @media (max-width: 480px) {
   .header-date { display: none; }
@@ -32,13 +33,13 @@
 .icon-btn {
   width: 36px; height: 36px; border-radius: 50%;
   border: 1px solid var(--color-border-light);
-  background: color-mix(in srgb, var(--color-bg-card) 72%, transparent);
+  background: var(--color-surface-container-low);
   color: var(--color-text-secondary);
   display: flex; align-items: center; justify-content: center;
   font-size: 1rem; transition: all 0.15s;
 }
-.icon-btn:hover { background: var(--color-bg-hover); color: var(--color-text); border-color: var(--color-border); }
-.icon-btn.active { border-color: var(--color-accent); color: var(--color-accent); }
+.icon-btn:hover { background: var(--color-surface-container); color: var(--color-text); border-color: var(--color-border); }
+.icon-btn.active { border-color: var(--color-accent); color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg-card)); }
 .icon-btn:disabled { opacity: 0.3; cursor: default; }
 
 /* ===== Font Size Button ===== */
@@ -47,14 +48,14 @@
   height: 34px; padding: 0 11px;
   border-radius: 999px;
   border: 1px solid var(--color-border-light);
-  background: color-mix(in srgb, var(--color-bg-card) 72%, transparent);
+  background: var(--color-surface-container-low);
   color: var(--color-text-secondary);
   font-family: var(--font-heading);
   transition: all 0.15s; cursor: pointer;
   margin-right: 2px;
 }
 .font-size-btn:hover {
-  background: var(--color-bg-hover); color: var(--color-text);
+  background: var(--color-surface-container); color: var(--color-text);
   border-color: var(--color-border);
 }
 .font-size-btn:active { transform: scale(0.95); }
@@ -67,7 +68,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-card);
-  box-shadow: 0 8px 24px var(--color-shadow);
+  box-shadow: 0 8px 32px var(--color-shadow);
   z-index: 120;
   animation: fadeIn 0.12s ease-out;
 }

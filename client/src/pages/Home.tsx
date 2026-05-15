@@ -27,6 +27,20 @@ export function Home() {
 
   const [selected, setSelected] = useState<any | null>(null);
   const [tab, setTab] = useState<'news' | 'voz' | 'reddit' | 'digest'>(initialTab);
+
+  // Sync tab when URL changes (e.g. sidebar navigation)
+  useEffect(() => {
+    const path = location.pathname;
+    let newTab: 'news' | 'voz' | 'reddit' | 'digest' = 'news';
+    if (path === '/voz') newTab = 'voz';
+    else if (path === '/reddit') newTab = 'reddit';
+    else if (path === '/digest') newTab = 'digest';
+    if (newTab !== tab && !path.startsWith('/article')) {
+      setTab(newTab);
+      setSelected(null);
+      setFilterTag('');
+    }
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
   const [filterSource, setFilterSource] = useState<string>('all');
   const [filterTag, setFilterTag] = useState<string>('');
   const [showFilter, setShowFilter] = useState(false);
