@@ -41,7 +41,7 @@ export function Admin() {
   };
 
   return (
-    <div style={{ padding: '16px 0' }}>
+    <div style={{ overflow: 'auto', height: '100%', padding: '0 16px' }}>
       <div className="page-header">
         <h1 className="page-title">Quản trị hệ thống</h1>
       </div>

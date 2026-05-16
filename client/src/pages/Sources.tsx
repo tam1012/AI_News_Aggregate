@@ -157,7 +157,7 @@ export function Sources() {
   if (error) return <div className="loading" style={{ color: 'var(--color-error)' }}>Lỗi: {error}</div>;
 
   return (
-    <div>
+    <div style={{ overflow: 'auto', height: '100%', padding: '0 16px' }}>
       <div className="page-header">
         <h1 className="page-title">Nguồn tin ({sourceList.length})</h1>
       </div>
