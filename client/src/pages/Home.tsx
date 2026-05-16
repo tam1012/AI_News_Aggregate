@@ -7,7 +7,7 @@ import { ArticleDetail } from './home/ArticleDetail';
 import { DigestTab } from './home/DigestTab';
 import { ArticleDetailSkeleton, FeedItem, FeedListSkeleton } from './home/FeedItem';
 import { ReadmeWelcome } from './home/ReadmeWelcome';
-import { classifyArticle, cleanTitle, loadReadArticles, saveReadArticles } from './home/homeHelpers';
+import { classifyArticle, cleanTitle, formatDateHeading, formatTime, loadReadArticles, saveReadArticles } from './home/homeHelpers';
 
 const FEED_PAGE_SIZE = 100;
 
@@ -27,6 +27,7 @@ export function Home() {
 
   const [selected, setSelected] = useState<any | null>(null);
   const [tab, setTab] = useState<'news' | 'voz' | 'reddit' | 'digest'>(initialTab);
+  const [selectedDigestId, setSelectedDigestId] = useState<string | null>(null);
 
   // Sync tab when URL changes (e.g. sidebar navigation)
   useEffect(() => {
@@ -143,6 +144,13 @@ export function Home() {
   // Actually, to make filter work properly across dates, we should fetch /sources.
   const { data: sourcesRaw } = useFetchRaw(() => api.getSources(), []);
   const sources = useMemo(() => (sourcesRaw?.data || []).filter((s: any) => s.is_enabled), [sourcesRaw]);
+
+  // Fetch digest list for split-left panel when on digest tab
+  const { data: digestListRaw, loading: digestListLoading } = useFetchRaw(
+    () => tab === 'digest' ? api.getDigests(1) : Promise.resolve({ data: [] }),
+    [tab]
+  );
+  const digestList: any[] = useMemo(() => (digestListRaw as any)?.data || [], [digestListRaw]);
 
   // Fetch popular tags for topic chips
   const { data: tagsRaw } = useFetchRaw(
@@ -626,11 +634,38 @@ export function Home() {
               </div>
             </div>
           )}
+
+          {tab === 'digest' && (
+            <div className="feed-container">
+              {digestListLoading ? (
+                <FeedListSkeleton />
+              ) : digestList.length === 0 ? (
+                <div className="empty-state"><p>Chưa có bản tin nào.</p></div>
+              ) : (
+                <div className="feed-day-group">
+                  {digestList.map((item: any) => (
+                    <div
+                      key={item.id}
+                      className={`feed-item ${selectedDigestId === item.id || (!selectedDigestId && digestList[0]?.id === item.id) ? 'active' : ''}`}
+                      onClick={() => setSelectedDigestId(item.id)}
+                    >
+                      <div className="feed-item-text">
+                        <h3 className="feed-item-title">{item.title || `Bản tin ${item.digest_date}`}</h3>
+                        <div className="feed-item-meta">
+                          {formatDateHeading(item.digest_date)} · {formatTime(item.created_at)} · {item.article_count} tin
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       
         <div className={`split-right ${!rightPaneVisible ? 'hidden-on-mobile' : ''}`}>
           {tab === 'digest' ? (
-            <DigestTab />
+            <DigestTab digestId={selectedDigestId} />
           ) : selected ? (
             <ArticleDetail
               article={selected}
