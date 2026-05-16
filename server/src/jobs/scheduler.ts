@@ -38,7 +38,9 @@ function getSourceScrapeTimeoutMs(source: any): number {
   const name = String(source.name || '').toLowerCase();
   const url = String(source.url || '').toLowerCase();
   if (name.includes('reddit') || url.includes('reddit.com')) return 90_000;
-  if (name.includes('voz') || url.includes('voz.vn')) return 120_000;
+  // VOZ now passes through Cloudflare Turnstile (~15s solve per page);
+  // a full 15-thread sweep with multi-page reads needs serious headroom.
+  if (name.includes('voz') || url.includes('voz.vn')) return 600_000;
   return 45_000;
 }
 
