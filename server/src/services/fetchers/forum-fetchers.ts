@@ -820,7 +820,7 @@ async function fetchVozFeedXml(sourceUrl: string): Promise<string> {
   if (proxyResult) return proxyResult;
   return scraplingFetchWithFallback(
     sourceUrl,
-    { mode: 'stealth', rawText: true, waitMs: 1500, blockResources: false, solveCloudflare: true, timeoutMs: 60000 },
+    { mode: 'stealth', rawText: false, waitMs: 1500, blockResources: false, solveCloudflare: true, timeoutMs: 60000 },
     { rawText: true, blockHeavyResources: true, settleMs: 1500, userAgent: randomUA() },
   );
 }
