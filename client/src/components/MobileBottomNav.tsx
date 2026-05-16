@@ -9,6 +9,7 @@ export function MobileBottomNav() {
     { label: 'VOZ', href: '/voz' },
     { label: 'Reddit', href: '/reddit' },
     { label: 'Bản tin', href: '/digest' },
+    { label: 'Admin', href: '/admin' },
   ];
 
   const isActive = (href: string) => {

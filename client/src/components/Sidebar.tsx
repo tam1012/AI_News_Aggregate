@@ -44,6 +44,14 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
+        <NavLink to="/sources" className={`sidebar-nav-item ${path.startsWith('/sources') ? 'active' : ''}`}>
+          <span className="sidebar-nav-icon">📂</span>
+          <span className="sidebar-nav-label">Nguồn tin</span>
+        </NavLink>
+        <NavLink to="/admin" className={`sidebar-nav-item ${path.startsWith('/admin') ? 'active' : ''}`}>
+          <span className="sidebar-nav-icon">🛠️</span>
+          <span className="sidebar-nav-label">Admin</span>
+        </NavLink>
         <button className="sidebar-search-btn">
           <span>🔍</span>
           <span>Search</span>
