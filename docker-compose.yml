@@ -71,7 +71,7 @@ services:
       REDDIT_PASSWORD: ${REDDIT_PASSWORD:-}
       REDDIT_PROXY_URL: ${REDDIT_PROXY_URL:-}
       BROWSER_PROXY_URL: ${BROWSER_PROXY_URL:-}
-      VOZ_PROXY_URL: ${VOZ_PROXY_URL:-http://host.docker.internal:8788/fetch}
+      VOZ_PROXY_URL: ${VOZ_PROXY_URL:-}
       SCRAPLING_SERVICE_URL: ${SCRAPLING_SERVICE_URL:-http://scrapling:8000}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/api/health/live >/dev/null"]
