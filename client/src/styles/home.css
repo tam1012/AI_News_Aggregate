@@ -913,7 +913,7 @@
 
   .home-split-layout {
     display: flex;
-    gap: 0;
+    gap: 12px;
     align-items: stretch;
     height: 100%;
     margin: 0 auto;
@@ -921,17 +921,19 @@
     max-width: none;
     border: none;
     border-radius: 0;
-    overflow: hidden;
+    overflow: visible;
   }
-  
+
   .split-left {
     flex: 0 0 360px;
     max-width: 360px;
     height: 100%;
     overflow-y: auto;
     padding: 0 22px;
-    border-right: 1px solid var(--color-border-light);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius);
     background: var(--color-surface-container-low);
+    box-shadow: 0 1px 3px var(--color-shadow);
   }
 
   .split-left .split-feed-toolbar {
@@ -940,6 +942,7 @@
     padding: 12px 22px 8px;
     background: color-mix(in srgb, var(--color-surface-container-low) 92%, transparent);
     border-bottom: 1px solid var(--color-border-light);
+    border-radius: var(--radius) var(--radius) 0 0;
     backdrop-filter: blur(20px);
   }
 
@@ -975,6 +978,9 @@
     overflow-y: auto;
     position: static;
     background: var(--color-bg-card);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 3px var(--color-shadow);
   }
 
   .split-right .detail-content {

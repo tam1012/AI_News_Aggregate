@@ -4,7 +4,9 @@
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  background: var(--color-bg);
+  background: var(--color-surface-container);
+  gap: 12px;
+  padding: 12px;
 }
 .app-main {
   flex: 1;
@@ -29,7 +31,9 @@
   height: 100%;
   padding: 1.25rem 0;
   background: var(--color-bg);
-  border-right: 1px solid var(--color-border-light);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 3px var(--color-shadow);
 }
 
 .sidebar-brand {
@@ -298,6 +302,11 @@
 
 /* ===== Responsive ===== */
 @media (max-width: 899px) {
+  .app-shell {
+    background: var(--color-bg);
+    gap: 0;
+    padding: 0;
+  }
   .sidebar {
     display: none;
   }
