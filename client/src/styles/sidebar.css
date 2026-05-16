@@ -248,16 +248,19 @@
   background: color-mix(in srgb, var(--color-bg) 94%, transparent);
   backdrop-filter: blur(20px);
   border-top: 1px solid var(--color-border-light);
-  padding: 10px 16px calc(10px + var(--safe-bottom));
+  padding: 10px 12px calc(10px + var(--safe-bottom));
   justify-content: center;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.mobile-bottom-nav::-webkit-scrollbar { display: none; }
 .mobile-bottom-item {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 16px;
+  padding: 8px 12px;
   border-radius: 999px;
   color: var(--color-text-muted);
   text-decoration: none;

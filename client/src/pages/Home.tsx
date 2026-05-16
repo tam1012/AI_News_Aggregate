@@ -445,7 +445,7 @@ export function Home() {
   return (
     <>
       <div className="home-split-layout">
-        <div className="split-left" ref={splitLeftRef}>
+        <div className={`split-left ${tab === 'digest' ? 'digest-mode' : ''}`} ref={splitLeftRef}>
           {/* Tab bar — Row 1 */}
           <div className={`split-feed-toolbar ${toolbarHidden ? 'toolbar-hidden' : ''}`}>
             <div className="toolbar-tabs-row">
