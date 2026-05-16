@@ -13,8 +13,8 @@
   color: white;
 }
 .btn-primary:hover { background: var(--color-accent-hover); border-color: var(--color-accent-hover); color: white; }
-.btn-danger { color: var(--color-error); border-color: var(--color-error); }
-.btn-danger:hover { background: color-mix(in srgb, var(--color-error) 8%, transparent); }
+.btn-danger { color: var(--color-error); border-color: color-mix(in srgb, var(--color-error) 30%, var(--color-border-light)); }
+.btn-danger:hover { background: color-mix(in srgb, var(--color-error) 6%, transparent); border-color: var(--color-error); }
 .btn-sm { padding: 5px 12px; font-size: 0.78rem; }
 .btn-ghost {
   border: none; background: transparent; color: var(--color-text-secondary);
@@ -26,7 +26,11 @@
   background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius); padding: 16px;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 1px 3px var(--color-shadow);
+}
+.card:hover {
+  border-color: var(--color-border);
   box-shadow: 0 2px 8px var(--color-shadow);
 }
 

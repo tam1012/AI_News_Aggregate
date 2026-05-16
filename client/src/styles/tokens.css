@@ -8,27 +8,36 @@
   --font-serif: 'Newsreader', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
   --reader-width: 720px;
 
-  /* Light theme — Material Design 3 inspired */
-  --color-bg: #fbf9fa;
+  /* Light theme — warm editorial */
+  --color-bg: #f8f6f1;
   --color-bg-card: #ffffff;
-  --color-bg-hover: #efedef;
-  --color-bg-overlay: rgba(27, 28, 29, 0.48);
-  --color-text: #1b1c1d;
-  --color-text-secondary: #44474c;
-  --color-text-muted: #74777d;
-  --color-accent: #041627;
-  --color-accent-hover: #1a2b3c;
-  --color-accent-soft: #505f76;
+  --color-bg-hover: #f0ede8;
+  --color-bg-overlay: rgba(20, 24, 28, 0.52);
+  --color-text: #1a1d21;
+  --color-text-secondary: #3d4148;
+  --color-text-muted: #6b7078;
+  --color-accent: #1a2b3c;
+  --color-accent-hover: #2c3e50;
+  --color-accent-soft: #4a5d72;
   --color-success: #16a34a;
   --color-warning: #d97706;
   --color-error: #ba1a1a;
-  --color-border: #c4c6cd;
-  --color-border-light: #e9e7e9;
-  --color-shadow: rgba(27, 28, 29, 0.06);
-  --color-surface-container: #efedef;
-  --color-surface-container-low: #f5f3f4;
+  --color-border: #d4d1cc;
+  --color-border-light: #e8e5e0;
+  --color-shadow: rgba(20, 24, 28, 0.06);
+  --color-surface-container: #efecea;
+  --color-surface-container-low: #f5f3f0;
   --color-primary-container: #1a2b3c;
   --color-on-primary-container: #8192a7;
+
+  /* Source brand colors */
+  --source-vnexpress: #1565c0;
+  --source-tuoitre: #c62828;
+  --source-thanhnien: #2e7d32;
+  --source-voz: #6a1b9a;
+  --source-reddit: #e65100;
+  --source-default: #455a64;
+
   --radius: 12px;
   --radius-sm: 8px;
   --max-width: var(--reader-width);
@@ -37,24 +46,31 @@
 }
 
 [data-theme="dark"] {
-  --color-bg: #1b1c1d;
-  --color-bg-card: #242526;
-  --color-bg-hover: #323435;
-  --color-bg-overlay: rgba(0, 0, 0, 0.72);
-  --color-text: #e2e2e6;
-  --color-text-secondary: #c4c6cd;
-  --color-text-muted: #8b8d93;
-  --color-accent: #a8c8ff;
-  --color-accent-hover: #b7c8de;
-  --color-accent-soft: #8192a7;
+  --color-bg: #161819;
+  --color-bg-card: #1e2022;
+  --color-bg-hover: #2a2d30;
+  --color-bg-overlay: rgba(0, 0, 0, 0.76);
+  --color-text: #e4e4e8;
+  --color-text-secondary: #b8bac0;
+  --color-text-muted: #7d8088;
+  --color-accent: #9ec5ff;
+  --color-accent-hover: #b8d4ff;
+  --color-accent-soft: #6d8fad;
   --color-success: #3fb950;
   --color-warning: #d29922;
   --color-error: #f85149;
-  --color-border: #44474e;
-  --color-border-light: #323435;
-  --color-shadow: rgba(0, 0, 0, 0.45);
-  --color-surface-container: #2b2d2e;
-  --color-surface-container-low: #242526;
-  --color-primary-container: #003062;
-  --color-on-primary-container: #b7c8de;
+  --color-border: #363a3e;
+  --color-border-light: #2a2d30;
+  --color-shadow: rgba(0, 0, 0, 0.5);
+  --color-surface-container: #222527;
+  --color-surface-container-low: #1e2022;
+  --color-primary-container: #0d3a6e;
+  --color-on-primary-container: #a8c8f0;
+
+  --source-vnexpress: #64b5f6;
+  --source-tuoitre: #ef5350;
+  --source-thanhnien: #66bb6a;
+  --source-voz: #ba68c8;
+  --source-reddit: #ff8a65;
+  --source-default: #90a4ae;
 }

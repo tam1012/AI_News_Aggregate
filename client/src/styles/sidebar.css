@@ -27,21 +27,21 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 1.5rem 0;
+  padding: 1.25rem 0;
   background: var(--color-bg);
   border-right: 1px solid var(--color-border-light);
 }
 
 .sidebar-brand {
-  padding: 0 1.5rem;
-  margin-bottom: 2rem;
+  padding: 0 1.25rem;
+  margin-bottom: 2.25rem;
 }
 .sidebar-logo {
   font-family: var(--font-heading);
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   font-weight: 800;
   color: var(--color-accent);
-  letter-spacing: -0.5px;
+  letter-spacing: -0.6px;
   text-decoration: none;
   display: block;
 }
@@ -50,10 +50,11 @@
   text-decoration: none;
 }
 .sidebar-subtitle {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 500;
   color: var(--color-text-muted);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
+  margin-top: 2px;
 }
 
 /* Nav items */
@@ -62,18 +63,20 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding: 0 0.75rem;
 }
 .sidebar-nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 1.5rem;
+  gap: 11px;
+  padding: 10px 12px;
   color: var(--color-text-secondary);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 500;
   text-decoration: none;
   transition: all 0.15s;
-  border-left: 3px solid transparent;
+  border-radius: var(--radius-sm);
+  border: none;
 }
 .sidebar-nav-item:hover {
   background: var(--color-surface-container-low);
@@ -84,12 +87,15 @@
   background: var(--color-surface-container);
   color: var(--color-accent);
   font-weight: 700;
-  border-left-color: var(--color-accent);
 }
 .sidebar-nav-icon {
-  font-size: 1.1rem;
-  width: 24px;
+  font-size: 1rem;
+  width: 22px;
   text-align: center;
+  opacity: 0.8;
+}
+.sidebar-nav-item.active .sidebar-nav-icon {
+  opacity: 1;
 }
 .sidebar-nav-label {
   font-family: var(--font-heading);
@@ -98,11 +104,11 @@
 /* Footer */
 .sidebar-footer {
   margin-top: auto;
-  padding: 1rem 1rem 0;
+  padding: 0.75rem 0.75rem 0;
   border-top: 1px solid var(--color-border-light);
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 2px;
 }
 .sidebar-search-btn {
   display: flex;
@@ -110,31 +116,33 @@
   justify-content: center;
   gap: 8px;
   width: 100%;
-  padding: 10px;
+  padding: 9px;
   border-radius: var(--radius-sm);
-  border: none;
-  background: var(--color-primary-container);
-  color: var(--color-on-primary-container);
-  font-size: 0.85rem;
+  border: 1px solid var(--color-border-light);
+  background: var(--color-surface-container-low);
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
   font-weight: 600;
   font-family: var(--font-heading);
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: all 0.15s;
 }
 .sidebar-search-btn:hover {
-  opacity: 0.88;
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-container);
 }
 .sidebar-settings-btn {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 11px;
   width: 100%;
-  padding: 12px 1rem;
+  padding: 10px 12px;
   border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 500;
   font-family: var(--font-heading);
   cursor: pointer;
@@ -245,13 +253,13 @@
   left: 0;
   right: 0;
   z-index: 200;
-  background: color-mix(in srgb, var(--color-bg) 94%, transparent);
-  backdrop-filter: blur(20px);
+  background: color-mix(in srgb, var(--color-bg) 96%, transparent);
+  backdrop-filter: blur(24px);
   border-top: 1px solid var(--color-border-light);
-  padding: 10px 12px calc(10px + var(--safe-bottom));
+  padding: 8px 16px calc(8px + var(--safe-bottom));
   justify-content: center;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -260,7 +268,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 12px;
+  padding: 8px 14px;
   border-radius: 999px;
   color: var(--color-text-muted);
   text-decoration: none;
@@ -270,14 +278,19 @@
 .mobile-bottom-item:hover {
   text-decoration: none;
   color: var(--color-text-secondary);
+  background: var(--color-surface-container-low);
 }
 .mobile-bottom-item.active {
-  color: var(--color-bg-card);
+  color: #fff;
   background: var(--color-accent);
   border-color: var(--color-accent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-accent) 25%, transparent);
+}
+[data-theme="dark"] .mobile-bottom-item.active {
+  color: var(--color-bg);
 }
 .mobile-bottom-label {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 600;
   font-family: var(--font-heading);
   white-space: nowrap;
