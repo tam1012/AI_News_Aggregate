@@ -810,7 +810,7 @@ async function fetchVozThreadHtml(pageUrl: string): Promise<string> {
   if (proxyResult) return proxyResult;
   return scraplingFetchWithFallback(
     pageUrl,
-    { mode: 'stealth', waitSelector: 'article.message--post', waitMs: 1500, blockResources: false, solveCloudflare: true, timeoutMs: 180000 },
+    { mode: 'stealth', waitMs: 1500, blockResources: false, solveCloudflare: true, timeoutMs: 90000 },
     { waitUntil: 'domcontentloaded', blockHeavyResources: true, settleMs: 3000, timeoutMs: 90000, userAgent: randomUA() },
   );
 }
@@ -820,7 +820,7 @@ async function fetchVozFeedXml(sourceUrl: string): Promise<string> {
   if (proxyResult) return proxyResult;
   return scraplingFetchWithFallback(
     sourceUrl,
-    { mode: 'stealth', rawText: false, waitMs: 1500, blockResources: false, solveCloudflare: true, timeoutMs: 120000 },
+    { mode: 'stealth', rawText: false, waitMs: 1500, blockResources: false, solveCloudflare: true, timeoutMs: 60000 },
     { rawText: true, blockHeavyResources: true, settleMs: 1500, userAgent: randomUA() },
   );
 }

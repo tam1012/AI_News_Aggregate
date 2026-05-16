@@ -80,7 +80,6 @@ def _stealth_fetch_sync(url: str, options: FetchOptions, timeout_ms: int) -> str
         "headless": True,
         "disable_resources": bool(options.block_resources),
         "timeout": timeout_ms,
-        "network_idle": True,
         "google_search": True,
     }
 
@@ -88,6 +87,10 @@ def _stealth_fetch_sync(url: str, options: FetchOptions, timeout_ms: int) -> str
         kwargs["solve_cloudflare"] = True
         # solve_cloudflare needs the page fully loaded — don't strip resources
         kwargs["disable_resources"] = False
+    else:
+        # network_idle slows VOZ thread reads from 17s to 200s once Cloudflare
+        # is in the way; only enable it when the caller skips solve_cloudflare.
+        kwargs["network_idle"] = True
 
     if options.wait_ms and options.wait_ms > 0:
         kwargs["wait"] = options.wait_ms
