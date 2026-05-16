@@ -57,8 +57,11 @@ async def fetch(req: FetchRequest):
         elapsed = int((time.time() - start) * 1000)
 
         if req.options.raw_text and html:
-            from scrapling import Adaptor
-            page = Adaptor(html, auto_match=False)
+            try:
+                from scrapling import Selector as _Parser
+            except ImportError:
+                from scrapling import Adaptor as _Parser
+            page = _Parser(html, auto_match=False)
             text = page.get_all_text(separator="\n")
             return FetchResponse(ok=True, html=text, status_code=200, elapsed_ms=elapsed)
 
