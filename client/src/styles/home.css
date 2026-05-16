@@ -292,7 +292,7 @@
 
 /* ===== Digest Container ===== */
 .digest-container {
-  padding: 0 20px;
+  padding: 14px 20px 32px;
 }
 .digest-nav-mobile-only {
   display: none;
@@ -328,7 +328,7 @@
 }
 @media (max-width: 899px) {
   .digest-container {
-    padding: 0 16px;
+    padding: 10px 16px 28px;
   }
   .digest-nav-mobile-only {
     display: flex;
@@ -854,7 +854,7 @@
 }
 
 /* ===== Digest ===== */
-.digest-content { line-height: 1.86; font-size: 1.06rem; overflow-wrap: anywhere; }
+.digest-content { font-family: var(--font-serif); line-height: 1.8; font-size: 1rem; color: var(--color-text-secondary); overflow-wrap: anywhere; }
 .digest-content h2 {
   font-family: var(--font-heading);
   margin-top: 30px; margin-bottom: 10px;
