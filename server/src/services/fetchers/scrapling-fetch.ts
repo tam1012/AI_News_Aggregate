@@ -16,6 +16,7 @@ export interface ScraplingFetchOptions {
   waitMs?: number;
   blockResources?: boolean;
   timeoutMs?: number;
+  solveCloudflare?: boolean;
 }
 
 interface ScraplingResponse {
@@ -47,6 +48,7 @@ export async function scraplingFetch(url: string, options: ScraplingFetchOptions
           block_resources: options.blockResources ?? true,
           raw_text: options.rawText ?? false,
           timeout_ms: timeout,
+          solve_cloudflare: options.solveCloudflare ?? false,
         },
       }),
       signal: AbortSignal.timeout(timeout + 5000),

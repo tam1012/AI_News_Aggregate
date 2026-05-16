@@ -21,7 +21,13 @@ export default {
       });
     }
 
-    const redditUrl = `https://www.reddit.com${redditPath}${url.search.includes('?') ? '&' : '?'}${url.searchParams.toString().replace(/path=[^&]+&?/, '')}`;
+    // Build downstream query: copy all params except `path`
+    const forward = new URLSearchParams();
+    for (const [k, v] of url.searchParams) {
+      if (k !== 'path') forward.append(k, v);
+    }
+    const qs = forward.toString();
+    const redditUrl = `https://www.reddit.com${redditPath}${qs ? `?${qs}` : ''}`;
 
     try {
       const resp = await fetch(redditUrl, {

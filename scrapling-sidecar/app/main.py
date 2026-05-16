@@ -21,6 +21,7 @@ class FetchOptions(BaseModel):
     raw_text: Optional[bool] = False
     timeout_ms: Optional[int] = None
     proxy: Optional[str] = None
+    solve_cloudflare: Optional[bool] = False
 
 
 class FetchRequest(BaseModel):
@@ -77,9 +78,19 @@ def _stealth_fetch_sync(url: str, options: FetchOptions, timeout_ms: int) -> str
 
     kwargs = {
         "headless": True,
-        "block_images": options.block_resources,
+        "disable_resources": bool(options.block_resources),
         "timeout": timeout_ms,
+        "network_idle": True,
+        "google_search": True,
     }
+
+    if options.solve_cloudflare:
+        kwargs["solve_cloudflare"] = True
+        # solve_cloudflare needs the page fully loaded — don't strip resources
+        kwargs["disable_resources"] = False
+
+    if options.wait_ms and options.wait_ms > 0:
+        kwargs["wait"] = options.wait_ms
 
     if options.wait_selector:
         kwargs["wait_selector"] = options.wait_selector
@@ -96,10 +107,7 @@ def _stealth_fetch_sync(url: str, options: FetchOptions, timeout_ms: int) -> str
 
     page = StealthyFetcher.fetch(url, **kwargs)
 
-    if options.wait_ms and options.wait_ms > 0:
-        time.sleep(options.wait_ms / 1000)
-
-    return page.html_content if hasattr(page, "html_content") else str(page)
+    return page.html_content if hasattr(page, "html_content") else (page.body if hasattr(page, "body") else str(page))
 
 
 def _fast_fetch_sync(url: str, options: FetchOptions, timeout_ms: int) -> str:
