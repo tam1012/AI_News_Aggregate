@@ -22,6 +22,10 @@ function loadTsModule(relativePath, stubs = {}, globals = {}) {
   const moduleContext = { exports: {} };
   vm.runInNewContext(outputText, {
     AbortSignal: { timeout: () => undefined },
+    process: { env: {} },
+    Date,
+    Map,
+    Set,
     exports: moduleContext.exports,
     module: moduleContext,
     URL,
@@ -37,6 +41,10 @@ function loadTsModule(relativePath, stubs = {}, globals = {}) {
 const baseStubs = {
   cheerio,
   '../../lib/utils.js': { normalizePublicHttpUrl: (value) => new URL(value).toString() },
+  './http-utils.js': {
+    browserHeaders: () => ({ 'User-Agent': 'test-ua', Accept: 'text/html' }),
+    randomUA: () => 'test-ua',
+  },
 };
 
 test('build sitemap candidates from site origin', () => {

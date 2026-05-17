@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 import { normalizePublicHttpUrl } from '../../lib/utils.js';
+import { browserHeaders, randomUA } from './http-utils.js';
 import type { DiscoveredArticle } from '../article-fetch-queue.js';
 import type { SourceRow } from './types.js';
 
@@ -30,7 +31,18 @@ const SITEMAP_PATHS = [
   '/news_sitemap.xml',
   '/sitemap_news.xml',
   '/post-sitemap.xml',
+  '/sitemaps/news.xml',
+  '/sitemap-news.xml',
+  '/google-news-sitemap.xml',
+  '/sitemap-google-news.xml',
 ];
+
+const SITEMAP_CACHE_TTL_MS = (() => {
+  const parsed = parseInt(process.env.SITEMAP_CACHE_TTL_MS || '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 5 * 60 * 1000;
+})();
+
+const sitemapXmlCache = new Map<string, { xml: string; ts: number }>();
 
 function normalizeDate(value: string | null): string | null {
   if (!value) return null;
@@ -141,13 +153,22 @@ export async function discoverSitemapArticles(
     seenSitemaps.add(sitemapUrl);
 
     try {
-      const response = await fetcher(sitemapUrl, {
-        headers: { 'User-Agent': 'NewsDigest/1.0 (Sitemap Reader)' },
-        signal: AbortSignal.timeout(10000),
-      });
-      if (!response.ok) continue;
+      const cached = sitemapXmlCache.get(sitemapUrl);
+      const now = Date.now();
+      let xml: string | null = null;
 
-      const xml = await response.text();
+      if (cached && now - cached.ts < SITEMAP_CACHE_TTL_MS) {
+        xml = cached.xml;
+      } else {
+        const response = await fetcher(sitemapUrl, {
+          headers: browserHeaders(randomUA()),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!response.ok) continue;
+        xml = await response.text();
+        sitemapXmlCache.set(sitemapUrl, { xml, ts: now });
+      }
+
       for (const child of parseSitemapIndexUrls(xml, sitemapUrl)) {
         if (!seenSitemaps.has(child) && sitemapUrls.length < candidates.length + 20) {
           sitemapUrls.push(child);

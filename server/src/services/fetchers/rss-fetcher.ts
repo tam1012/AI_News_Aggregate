@@ -136,8 +136,12 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
 }
 
 function shouldDiscoverSitemap(config: any): boolean {
-  return config?.discoverSitemap === true || process.env.ENABLE_SITEMAP_DISCOVERY === 'true';
+  if (config?.discoverSitemap === false) return false;
+  if (config?.discoverSitemap === true) return true;
+  return process.env.ENABLE_SITEMAP_DISCOVERY !== 'false';
 }
+
+const SITEMAP_AUTO_TRIGGER_MIN_RSS_ITEMS = parsePositiveInt(process.env.SITEMAP_AUTO_TRIGGER_MIN_RSS_ITEMS, 5);
 
 function mergeDiscoveredArticles<T extends { url: string }>(primary: T[], secondary: T[]): T[] {
   const seen = new Set(primary.map((item) => item.url));
@@ -503,12 +507,19 @@ export const rssFetcher: SourceFetcher = {
       });
     }
 
-    if (shouldDiscoverSitemap(source.parser_config)) {
+    if (shouldDiscoverSitemap(source.parser_config) || results.length < SITEMAP_AUTO_TRIGGER_MIN_RSS_ITEMS) {
       const sitemapArticles = await discoverSitemapArticles(source, fetch, {
         limit: parsePositiveInt(process.env.MAX_SITEMAP_ARTICLES_PER_SOURCE, 20),
         maxAgeHours: parsePositiveInt(process.env.SITEMAP_MAX_AGE_HOURS, 72),
       });
-      return mergeDiscoveredArticles(results, sitemapArticles).slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 20));
+      if (sitemapArticles.length > 0) {
+        const beforeCount = results.length;
+        const merged = mergeDiscoveredArticles(results, sitemapArticles).slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 20));
+        if (merged.length > beforeCount) {
+          console.log(`[sitemap] ${source.url}: RSS=${beforeCount}, sitemap added ${merged.length - beforeCount}, total=${merged.length}`);
+        }
+        return merged;
+      }
     }
 
     return results;
