@@ -7,6 +7,7 @@ import { OverviewTab } from './admin/OverviewTab';
 import { PromptConfigTab } from './admin/PromptConfigTab';
 import { QualityControlTab } from './admin/QualityControlTab';
 import { SummaryQueueTab } from './admin/SummaryQueueTab';
+import { BlocklistTab } from './admin/BlocklistTab';
 import { AdminTab, FetchJobStatus, SummaryQueueStatus } from './admin/adminHelpers';
 
 export function Admin() {
@@ -54,6 +55,7 @@ export function Admin() {
           { key: 'fetchJobs', label: 'Hàng đợi lấy bài' },
           { key: 'ai', label: 'Nhà cung cấp AI' },
           { key: 'prompt', label: 'Cấu hình prompt' },
+          { key: 'blocklist', label: 'Danh sách chặn' },
         ].map(t => (
           <button
             key={t.key}
@@ -83,6 +85,7 @@ export function Admin() {
       {tab === 'fetchJobs' && <FetchJobsTab initialStatus={fetchFilter} />}
       {tab === 'ai' && <AiProvidersTab />}
       {tab === 'prompt' && <PromptConfigTab />}
+      {tab === 'blocklist' && <BlocklistTab />}
 
     </div>
   );

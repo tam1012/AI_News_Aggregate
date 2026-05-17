@@ -21,6 +21,7 @@ import {
   saveSourceProfile,
 } from './selector-profile.js';
 import { discoverSitemapArticles } from './sitemap-discovery.js';
+import { getBlocklistMatch, recordBlocklistHit } from './blocklist.js';
 
 const rssParser = new RssParser({
   timeout: 15000,
@@ -38,58 +39,6 @@ interface RssDomainPolicy {
 }
 
 const DEFAULT_RSS_SNIPPET_FALLBACK_MIN_LENGTH = parsePositiveInt(process.env.RSS_SNIPPET_FALLBACK_MIN_LENGTH, 800);
-const DEFAULT_BLOCKED_DOMAINS: string[] = [
-  'thestreet.com',
-  'timesofisrael.com',
-  'nytimes.com',
-  'eweek.com',
-  'kotaku.com',
-  'theinformation.com',
-  'politico.com',
-  'politico.eu',
-  'bangkokpost.com',
-  'al.com',
-  'jakartaglobe.id',
-  'boston25news.com',
-  'latimes.com',
-  'axios.com',
-  'wsj.com',
-  'bloomberg.com',
-  'ft.com',
-  'economist.com',
-  'barrons.com',
-  'businessinsider.com',
-  'seekingalpha.com',
-  'nikkei.com',
-  'washingtonpost.com',
-  'thetimes.com',
-  'thetimes.co.uk',
-  'telegraph.co.uk',
-  'scmp.com',
-  'theglobeandmail.com',
-  'theatlantic.com',
-  'newyorker.com',
-  'medium.com',
-  'towardsdatascience.com',
-  'wired.com',
-  'technologyreview.com',
-  'hbr.org',
-  'reuters.com',
-  'qdnd.vn',
-  'usni.org',
-  'gothamist.com',
-  'gizmodo.com',
-  'seattletimes.com',
-  'centerforpolitics.org',
-];
-
-/** Path-based blocklist — blocks specific URL paths without blocking the entire domain */
-const DEFAULT_BLOCKED_URL_PATTERNS: string[] = [
-  'bbc.com/sport/',
-  'bbc.com/audio/',
-  'bbc.com/news/videos/',
-  'aljazeera.com/video',
-];
 
 let googleDecoderPromise: Promise<any | null> | null = null;
 
@@ -101,26 +50,6 @@ function getHostname(url: string): string {
   }
 }
 
-function domainMatches(hostname: string, domain: string): boolean {
-  return hostname === domain || hostname.endsWith(`.${domain}`);
-}
-
-function getBlockedDomains(): string[] {
-  const configured = (process.env.BLOCKED_DOMAINS || process.env.BLOCKED_GOOGLE_NEWS_PUBLISHER_DOMAINS || '')
-    .split(',')
-    .map(domain => domain.trim().toLowerCase())
-    .filter(Boolean);
-  return configured.length > 0 ? configured : DEFAULT_BLOCKED_DOMAINS;
-}
-
-function isBlockedUrl(url: string): boolean {
-  const hostname = getHostname(url);
-  if (getBlockedDomains().some(domain => domainMatches(hostname, domain))) return true;
-  // Path-based blocking: check if URL contains any blocked path pattern
-  const normalized = url.toLowerCase().replace(/^https?:\/\/(www\.)?/, '');
-  return DEFAULT_BLOCKED_URL_PATTERNS.some(pattern => normalized.startsWith(pattern) || normalized.includes(`/${pattern}`));
-}
-
 function getRssDomainPolicy(url: string): RssDomainPolicy {
   const hostname = getHostname(url);
   const policy: RssDomainPolicy = {
@@ -128,7 +57,7 @@ function getRssDomainPolicy(url: string): RssDomainPolicy {
     snippetFallbackMinLength: DEFAULT_RSS_SNIPPET_FALLBACK_MIN_LENGTH,
   };
 
-  if (domainMatches(hostname, 'nytimes.com')) {
+  if (hostname === 'nytimes.com' || hostname.endsWith('.nytimes.com')) {
     return {
       ...policy,
       // Removed skipBrowserFallback so Playwright stealth fallback can run
@@ -539,8 +468,10 @@ export const rssFetcher: SourceFetcher = {
       }
 
       // Block check runs on ALL URLs (direct RSS + decoded Google News)
-      if (isBlockedUrl(url)) {
-        console.log(`[blocklist] Skipped "${item.title}" from blocked URL ${url}`);
+      const blockMatch = await getBlocklistMatch(url);
+      if (blockMatch) {
+        console.log(`[blocklist] Skipped "${item.title}" from blocked URL ${url} (pattern=${blockMatch.pattern})`);
+        recordBlocklistHit(blockMatch.id).catch(() => {});
         continue;
       }
 
@@ -597,8 +528,10 @@ export const rssFetcher: SourceFetcher = {
       }
     }
 
-    if (isBlockedUrl(articleUrl)) {
-      throw new Error(`Article blocked by policy: ${articleUrl}`);
+    const blockMatch = await getBlocklistMatch(articleUrl);
+    if (blockMatch) {
+      recordBlocklistHit(blockMatch.id).catch(() => {});
+      throw new Error(`Article blocked by policy: ${articleUrl} (pattern=${blockMatch.pattern})`);
     }
 
     const policy = getRssDomainPolicy(articleUrl);

@@ -5,7 +5,7 @@ import { recordAuthFailure } from './rateLimit.js';
 const WEAK_ADMIN_TOKENS = new Set(['', 'change-me', 'change-me-to-a-random-string']);
 
 // Routes that require auth for ALL methods (including GET)
-const PROTECTED_PREFIXES = ['/api/ai-providers', '/api/health', '/api/settings'];
+const PROTECTED_PREFIXES = ['/api/ai-providers', '/api/health', '/api/settings', '/api/blocklist'];
 const PUBLIC_GET_PATHS = new Set(['/api/health/live']);
 
 function extractBearerToken(value?: string): string {

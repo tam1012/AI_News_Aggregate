@@ -15,6 +15,7 @@ import { health } from './routes/health.js';
 import { imageProxy } from './routes/image-proxy.js';
 import { aiProviders } from './routes/ai-providers.js';
 import { settings } from './routes/settings.js';
+import { blocklist } from './routes/blocklist.js';
 import { assertAdminTokenConfigured, authMiddleware } from './lib/auth.js';
 import { writeRateLimitMiddleware } from './lib/rateLimit.js';
 import { getOne } from './db/index.js';
@@ -58,6 +59,7 @@ app.route('/api/articles', articles);
 app.route('/api/digests', digests);
 app.route('/api/ai-providers', aiProviders);
 app.route('/api/settings', settings);
+app.route('/api/blocklist', blocklist);
 
 // Serve static frontend (production)
 const publicDir = join(__dirname, '..', 'public');

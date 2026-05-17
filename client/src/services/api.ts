@@ -154,4 +154,14 @@ export const api = {
   triggerFetchArticles: () => request<any>('/health/trigger/fetch-articles', { method: 'POST' }),
   triggerSummarize: () => request<any>('/health/trigger/summarize', { method: 'POST' }),
   triggerDigest: () => request<any>('/health/trigger/digest', { method: 'POST' }),
+
+  // Blocklist
+  getBlocklist: () => request<any>('/blocklist'),
+  createBlocklistEntry: (data: { pattern: string; type: 'domain' | 'path'; reason?: string }) =>
+    request<any>('/blocklist', { method: 'POST', body: JSON.stringify(data) }),
+  updateBlocklistEntry: (id: string, data: { pattern?: string; type?: 'domain' | 'path'; reason?: string; is_enabled?: boolean }) =>
+    request<any>(`/blocklist/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteBlocklistEntry: (id: string) => request<any>(`/blocklist/${id}`, { method: 'DELETE' }),
+  testBlocklistUrl: (url: string) =>
+    request<any>('/blocklist/test', { method: 'POST', body: JSON.stringify({ url }) }),
 };

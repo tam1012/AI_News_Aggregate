@@ -17,7 +17,7 @@ export type PromptConfigFormData = {
   custom_context: string;
 };
 
-export type AdminTab = 'overview' | 'queue' | 'quality' | 'fetchJobs' | 'ai' | 'prompt';
+export type AdminTab = 'overview' | 'queue' | 'quality' | 'fetchJobs' | 'ai' | 'prompt' | 'blocklist';
 export type SummaryQueueStatus = 'failed' | 'pending' | 'processing' | 'skipped' | 'done';
 export type QualityIssue = 'missing_tldr' | 'missing_summary_short' | 'missing_tags' | 'missing_hot_score' | 'short_summary';
 export type FetchJobStatus = 'failed' | 'discovered' | 'fetching' | 'done';
