@@ -579,7 +579,8 @@ export const rssFetcher: SourceFetcher = {
     const blockMatch = await getBlocklistMatch(articleUrl);
     if (blockMatch) {
       recordBlocklistHit(blockMatch.id).catch(() => {});
-      throw new Error(`Article blocked by policy: ${articleUrl} (pattern=${blockMatch.pattern})`);
+      console.log(`[blocklist] Skipped queued job for ${articleUrl} (pattern=${blockMatch.pattern})`);
+      return null;
     }
 
     const policy = getRssDomainPolicy(articleUrl);
