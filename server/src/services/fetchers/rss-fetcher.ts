@@ -536,10 +536,12 @@ export const rssFetcher: SourceFetcher = {
           console.warn(`Failed to decode Google News URL ${googleNewsUrl}: ${err.message}`);
           continue;
         }
-        if (isBlockedUrl(url)) {
-          console.log(`[blocklist] Skipped "${item.title}" from blocked URL ${url}`);
-          continue;
-        }
+      }
+
+      // Block check runs on ALL URLs (direct RSS + decoded Google News)
+      if (isBlockedUrl(url)) {
+        console.log(`[blocklist] Skipped "${item.title}" from blocked URL ${url}`);
+        continue;
       }
 
       const rawExcerpt = item.contentSnippet || item.content || '';
