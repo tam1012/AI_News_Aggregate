@@ -101,3 +101,6 @@ jobs:
           done
 
           docker compose ps
+
+          docker builder prune -af --keep-storage=2GB || true
+          docker image prune -af || true
