@@ -74,6 +74,21 @@ const DEFAULT_BLOCKED_DOMAINS: string[] = [
   'wired.com',
   'technologyreview.com',
   'hbr.org',
+  'reuters.com',
+  'qdnd.vn',
+  'usni.org',
+  'gothamist.com',
+  'gizmodo.com',
+  'seattletimes.com',
+  'centerforpolitics.org',
+];
+
+/** Path-based blocklist — blocks specific URL paths without blocking the entire domain */
+const DEFAULT_BLOCKED_URL_PATTERNS: string[] = [
+  'bbc.com/sport/',
+  'bbc.com/audio/',
+  'bbc.com/news/videos/',
+  'aljazeera.com/video',
 ];
 
 let googleDecoderPromise: Promise<any | null> | null = null;
@@ -98,9 +113,12 @@ function getBlockedDomains(): string[] {
   return configured.length > 0 ? configured : DEFAULT_BLOCKED_DOMAINS;
 }
 
-function isBlockedDomain(url: string): boolean {
+function isBlockedUrl(url: string): boolean {
   const hostname = getHostname(url);
-  return getBlockedDomains().some(domain => domainMatches(hostname, domain));
+  if (getBlockedDomains().some(domain => domainMatches(hostname, domain))) return true;
+  // Path-based blocking: check if URL contains any blocked path pattern
+  const normalized = url.toLowerCase().replace(/^https?:\/\/(www\.)?/, '');
+  return DEFAULT_BLOCKED_URL_PATTERNS.some(pattern => normalized.startsWith(pattern) || normalized.includes(`/${pattern}`));
 }
 
 function getRssDomainPolicy(url: string): RssDomainPolicy {
@@ -518,8 +536,8 @@ export const rssFetcher: SourceFetcher = {
           console.warn(`Failed to decode Google News URL ${googleNewsUrl}: ${err.message}`);
           continue;
         }
-        if (isBlockedDomain(url)) {
-          console.log(`[blocklist] Skipped "${item.title}" from blocked domain ${getHostname(url)}`);
+        if (isBlockedUrl(url)) {
+          console.log(`[blocklist] Skipped "${item.title}" from blocked URL ${url}`);
           continue;
         }
       }
@@ -577,8 +595,8 @@ export const rssFetcher: SourceFetcher = {
       }
     }
 
-    if (isBlockedDomain(articleUrl)) {
-      throw new Error(`Article domain blocked by policy: ${getHostname(articleUrl)}`);
+    if (isBlockedUrl(articleUrl)) {
+      throw new Error(`Article blocked by policy: ${articleUrl}`);
     }
 
     const policy = getRssDomainPolicy(articleUrl);
