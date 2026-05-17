@@ -57,7 +57,7 @@ export function curlFetch(url: string, _accept: string, timeoutSec: number, ua?:
     const safeTimeout = Math.max(1, Math.min(timeoutSec, 60));
     const effectiveUA = ua || BROWSER_UA;
     const args = [
-      '-s', '-L', '--max-time', String(safeTimeout),
+      '-s', '-L', '--compressed', '--max-time', String(safeTimeout),
       '-H', `User-Agent: ${effectiveUA}`,
       '-H', `Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8`,
       '-H', 'Accept-Language: en-US,en;q=0.9,vi;q=0.8',
