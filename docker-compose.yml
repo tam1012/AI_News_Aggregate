@@ -73,6 +73,10 @@ services:
       REDDIT_PROXY_URL: ${REDDIT_PROXY_URL:-}
       BROWSER_PROXY_URL: ${BROWSER_PROXY_URL:-}
       VOZ_PROXY_URL: ${VOZ_PROXY_URL:-}
+      WORKER_PROXY_URL: ${WORKER_PROXY_URL:-}
+      WORKER_PROXY_TOKEN: ${WORKER_PROXY_TOKEN:-}
+      WORKER_PROXY_SKIP_DOMAINS: ${WORKER_PROXY_SKIP_DOMAINS:-voz.vn,vozforums.com}
+      ENABLE_SITEMAP_DISCOVERY: ${ENABLE_SITEMAP_DISCOVERY:-true}
       SCRAPLING_SERVICE_URL: ${SCRAPLING_SERVICE_URL:-http://scrapling:8000}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/api/health/live >/dev/null"]

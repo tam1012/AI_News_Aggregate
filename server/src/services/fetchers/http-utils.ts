@@ -339,6 +339,109 @@ export async function playwrightFetch(
 }
 
 // ---------------------------------------------------------------------------
+// Cloudflare Worker proxy fetch
+// ---------------------------------------------------------------------------
+// Routes a request through a generic Cloudflare Worker (see fetch-proxy-worker.js).
+// Cloudflare edge IPs have better reputation than Oracle/AWS datacenter IPs,
+// so this often bypasses simple IP-based bot blocks.
+//
+// Configure via env:
+//   WORKER_PROXY_URL=https://fetch-proxy.tamhvt.workers.dev
+//   WORKER_PROXY_TOKEN=<secret>
+//   WORKER_PROXY_SKIP_DOMAINS=voz.vn,vozforums.com   # CF-protected, Worker can't help
+//
+// Worker enforces its own domain allowlist; this helper is a simple wrapper.
+
+const WORKER_PROXY_URL = process.env.WORKER_PROXY_URL || '';
+const WORKER_PROXY_TOKEN = process.env.WORKER_PROXY_TOKEN || '';
+const WORKER_PROXY_SKIP_DOMAINS = (process.env.WORKER_PROXY_SKIP_DOMAINS || '')
+  .split(',')
+  .map((d) => d.trim().toLowerCase())
+  .filter(Boolean);
+
+export class WorkerProxyUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'WorkerProxyUnavailableError';
+  }
+}
+
+export function isWorkerProxyConfigured(): boolean {
+  return Boolean(WORKER_PROXY_URL && WORKER_PROXY_TOKEN);
+}
+
+export function shouldSkipWorkerProxy(targetUrl: string): boolean {
+  if (WORKER_PROXY_SKIP_DOMAINS.length === 0) return false;
+  try {
+    const host = new URL(targetUrl).hostname.replace(/^www\./, '').toLowerCase();
+    return WORKER_PROXY_SKIP_DOMAINS.some((d) => host === d || host.endsWith('.' + d));
+  } catch {
+    return false;
+  }
+}
+
+export interface WorkerProxyFetchOptions {
+  timeoutMs?: number;
+  userAgent?: string;
+  accept?: string;
+  acceptLanguage?: string;
+  cookie?: string;
+  referer?: string;
+}
+
+export async function workerProxyFetch(
+  url: string,
+  options: WorkerProxyFetchOptions = {},
+): Promise<{ ok: boolean; status: number; upstreamStatus: number; body: string }> {
+  if (!isWorkerProxyConfigured()) {
+    throw new WorkerProxyUnavailableError('WORKER_PROXY_URL or WORKER_PROXY_TOKEN not configured');
+  }
+  if (shouldSkipWorkerProxy(url)) {
+    throw new WorkerProxyUnavailableError(`Domain skipped per WORKER_PROXY_SKIP_DOMAINS: ${url}`);
+  }
+
+  const safeUrl = normalizePublicHttpUrl(url);
+  if (!safeUrl) throw new Error('URL must be a public http(s) URL');
+
+  const proxyUrl = `${WORKER_PROXY_URL.replace(/\/+$/, '')}/?url=${encodeURIComponent(safeUrl)}`;
+  const timeout = options.timeoutMs ?? 25000;
+
+  const headers: Record<string, string> = {
+    'X-Proxy-Token': WORKER_PROXY_TOKEN,
+    'User-Agent': options.userAgent || randomUA(),
+    Accept: options.accept || 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': options.acceptLanguage || 'en-US,en;q=0.9,vi;q=0.8',
+  };
+  if (options.cookie) headers.Cookie = options.cookie;
+  if (options.referer) headers.Referer = options.referer;
+
+  let res: Response;
+  try {
+    res = await fetch(proxyUrl, {
+      headers,
+      signal: AbortSignal.timeout(timeout),
+    });
+  } catch (err: any) {
+    throw new WorkerProxyUnavailableError(`Worker proxy unreachable: ${err.message}`);
+  }
+
+  const upstreamStatus = parseInt(res.headers.get('X-Proxy-Upstream-Status') || '0', 10) || res.status;
+
+  if (res.status === 401 || res.status === 403 || res.status === 500) {
+    const body = await res.text().catch(() => '');
+    throw new WorkerProxyUnavailableError(`Worker proxy rejected request (${res.status}): ${body.slice(0, 200)}`);
+  }
+
+  const body = await res.text();
+  return {
+    ok: res.ok && !isBlockedHtml(body) && body.length > 100,
+    status: res.status,
+    upstreamStatus,
+    body,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Convenience: fetch with Googlebot UA (bypasses paywalls that check UA)
 // ---------------------------------------------------------------------------
 export async function curlFetchGooglebot(url: string, timeoutSec = 20) {

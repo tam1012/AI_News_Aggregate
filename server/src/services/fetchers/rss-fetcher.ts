@@ -5,7 +5,7 @@ import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import { normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
 import { matchPromoKeyword } from '../../lib/promoFilter.js';
-import { BROWSER_UA, GOOGLEBOT_UA, browserHeaders, randomUA, playwrightFetch, isBlockedHtml } from './http-utils.js';
+import { BROWSER_UA, GOOGLEBOT_UA, browserHeaders, randomUA, playwrightFetch, isBlockedHtml, workerProxyFetch, isWorkerProxyConfigured, shouldSkipWorkerProxy, WorkerProxyUnavailableError } from './http-utils.js';
 import { scraplingFetchWithFallback } from './scrapling-fetch.js';
 import { insertArticleIfNew, MIN_ARTICLE_TEXT_LENGTH } from './article-writer.js';
 import { SourceFetcher } from './types.js';
@@ -347,7 +347,23 @@ async function fetchFullArticle(jobUrl: string, policy = getRssDomainPolicy(jobU
     fetchError = err instanceof Error ? err : new Error(String(err));
   }
 
-  // ── Attempt 3: Scrapling stealth (replaces Playwright + host browser proxy) ──
+  // ── Attempt 3: Cloudflare Worker proxy (better IP reputation than Oracle datacenter) ──
+  if (isWorkerProxyConfigured() && !shouldSkipWorkerProxy(jobUrl)) {
+    try {
+      console.warn(`Retrying RSS article via Worker proxy ${jobUrl}`);
+      const result = await workerProxyFetch(jobUrl, { timeoutMs: 25000 });
+      if (!result.ok) throw new Error(`worker proxy upstream ${result.upstreamStatus}`);
+      const article = await extractArticleFromHtml(result.body, jobUrl, 'worker-proxy');
+      if (article.content.length >= MIN_ARTICLE_TEXT_LENGTH) return article;
+      fetchError = new Error(`worker proxy extraction too short (${article.content.length} characters)`);
+    } catch (err: any) {
+      if (!(err instanceof WorkerProxyUnavailableError)) {
+        fetchError = err instanceof Error ? err : new Error(String(err));
+      }
+    }
+  }
+
+  // ── Attempt 4: Scrapling stealth (replaces Playwright + host browser proxy) ──
   try {
     console.warn(`Retrying RSS article with Scrapling stealth fetch ${jobUrl}`);
     await sleep(1500);
@@ -421,6 +437,7 @@ export const rssFetcher: SourceFetcher = {
     if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
 
     let xml = '';
+    let xmlOk = false;
     try {
       const response = await fetch(sourceUrl, {
         headers: {
@@ -432,24 +449,44 @@ export const rssFetcher: SourceFetcher = {
 
       if (!response.ok) throw new Error(`Status code ${response.status}`);
       xml = await response.text();
-      
+
       // Some anti-bot pages return 200 OK but with HTML challenge instead of XML
       if (isBlockedHtml(xml)) {
         throw new Error('Cloudflare blocked HTML received instead of RSS XML');
       }
+      xmlOk = true;
     } catch (err: any) {
-      console.warn(`rss-fetcher: native discover failed for ${sourceUrl}, falling back to Scrapling: ${err.message}`);
-      xml = await scraplingFetchWithFallback(sourceUrl, {
-        mode: 'stealth',
-        rawText: true,
-        blockResources: true,
-        waitMs: 1500,
-      }, {
-        rawText: true,
-        blockHeavyResources: true,
-        settleMs: 1500,
-        userAgent: randomUA(),
-      });
+      if (isWorkerProxyConfigured() && !shouldSkipWorkerProxy(sourceUrl)) {
+        try {
+          console.warn(`rss-fetcher: native discover failed for ${sourceUrl}, trying Worker proxy: ${err.message}`);
+          const result = await workerProxyFetch(sourceUrl, {
+            timeoutMs: 25000,
+            accept: 'application/rss+xml, application/xml, text/xml, application/atom+xml;q=0.9, */*;q=0.8',
+          });
+          if (result.ok && !isBlockedHtml(result.body)) {
+            xml = result.body;
+            xmlOk = true;
+          }
+        } catch (proxyErr: any) {
+          if (!(proxyErr instanceof WorkerProxyUnavailableError)) {
+            console.warn(`rss-fetcher: worker proxy discover failed for ${sourceUrl}: ${proxyErr.message}`);
+          }
+        }
+      }
+      if (!xmlOk) {
+        console.warn(`rss-fetcher: native+proxy failed for ${sourceUrl}, falling back to Scrapling: ${err.message}`);
+        xml = await scraplingFetchWithFallback(sourceUrl, {
+          mode: 'stealth',
+          rawText: true,
+          blockResources: true,
+          waitMs: 1500,
+        }, {
+          rawText: true,
+          blockHeavyResources: true,
+          settleMs: 1500,
+          userAgent: randomUA(),
+        });
+      }
     }
 
     const items = (await parseFeedItems(xml)).slice(0, parsePositiveInt(process.env.MAX_ARTICLES_PER_SOURCE, 20));

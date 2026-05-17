@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio';
 import { normalizePublicHttpUrl, truncate, sleep } from '../../lib/utils.js';
 import { matchPromoKeyword } from '../../lib/promoFilter.js';
-import { browserHeaders, isBlockedHtml, randomUA, playwrightFetch } from './http-utils.js';
+import { browserHeaders, isBlockedHtml, randomUA, playwrightFetch, workerProxyFetch, isWorkerProxyConfigured, shouldSkipWorkerProxy, WorkerProxyUnavailableError } from './http-utils.js';
 import { scraplingFetchWithFallback } from './scrapling-fetch.js';
 import { insertArticleIfNew } from './article-writer.js';
 import type { DiscoveredArticle } from '../article-fetch-queue.js';
@@ -135,6 +135,7 @@ export const htmlFetcher: SourceFetcher = {
     if (!sourceUrl) throw new Error('Source URL must be a public http(s) URL');
 
     let html = '';
+    let discoverOk = false;
     try {
       const response = await fetch(sourceUrl, {
         headers: browserHeaders(randomUA()),
@@ -143,18 +144,35 @@ export const htmlFetcher: SourceFetcher = {
       if (!response.ok) throw new Error(`Status code ${response.status}`);
       html = await response.text();
       if (isBlockedHtml(html)) throw new Error('blocked HTML');
+      discoverOk = true;
     } catch (err: any) {
-      console.warn(`html-fetcher: native discover failed for ${sourceUrl}, falling back to Scrapling: ${err.message}`);
-      html = await scraplingFetchWithFallback(sourceUrl, {
-        mode: 'stealth',
-        blockResources: true,
-        waitMs: 1000,
-      }, {
-        rawText: false,
-        blockHeavyResources: true,
-        settleMs: 1000,
-        userAgent: randomUA(),
-      });
+      if (isWorkerProxyConfigured() && !shouldSkipWorkerProxy(sourceUrl)) {
+        try {
+          console.warn(`html-fetcher: native discover failed for ${sourceUrl}, trying Worker proxy: ${err.message}`);
+          const result = await workerProxyFetch(sourceUrl, { timeoutMs: 25000 });
+          if (result.ok) {
+            html = result.body;
+            discoverOk = true;
+          }
+        } catch (proxyErr: any) {
+          if (!(proxyErr instanceof WorkerProxyUnavailableError)) {
+            console.warn(`html-fetcher: worker proxy discover failed for ${sourceUrl}: ${proxyErr.message}`);
+          }
+        }
+      }
+      if (!discoverOk) {
+        console.warn(`html-fetcher: native+proxy discover failed for ${sourceUrl}, falling back to Scrapling: ${err.message}`);
+        html = await scraplingFetchWithFallback(sourceUrl, {
+          mode: 'stealth',
+          blockResources: true,
+          waitMs: 1000,
+        }, {
+          rawText: false,
+          blockHeavyResources: true,
+          settleMs: 1000,
+          userAgent: randomUA(),
+        });
+      }
     }
 
     let $ = cheerio.load(html);
@@ -218,8 +236,9 @@ export const htmlFetcher: SourceFetcher = {
     }
 
     await sleep(500);
-    // Try native fetch first, then fall back to Playwright stealth if content is short
+    // Try native fetch first, then worker proxy, then Scrapling stealth fallback
     let articleHtml = '';
+    let fetchOk = false;
     try {
       const articleRes = await fetch(job.url, {
         headers: browserHeaders(randomUA()),
@@ -227,18 +246,36 @@ export const htmlFetcher: SourceFetcher = {
       });
       if (!articleRes.ok) throw new Error(`Status code ${articleRes.status}`);
       articleHtml = await articleRes.text();
+      if (isBlockedHtml(articleHtml)) throw new Error('blocked HTML');
+      fetchOk = true;
     } catch (firstErr: any) {
-      console.warn(`html-fetcher: native fetch failed for ${job.url}, falling back to Scrapling: ${firstErr.message}`);
-      articleHtml = await scraplingFetchWithFallback(job.url, {
-        mode: 'stealth',
-        blockResources: false,
-        waitMs: 1000,
-      }, {
-        rawText: false,
-        blockHeavyResources: false,
-        settleMs: 1000,
-        userAgent: randomUA(),
-      });
+      if (isWorkerProxyConfigured() && !shouldSkipWorkerProxy(job.url)) {
+        try {
+          console.warn(`html-fetcher: native fetch failed for ${job.url}, trying Worker proxy: ${firstErr.message}`);
+          const result = await workerProxyFetch(job.url, { timeoutMs: 25000 });
+          if (result.ok) {
+            articleHtml = result.body;
+            fetchOk = true;
+          }
+        } catch (proxyErr: any) {
+          if (!(proxyErr instanceof WorkerProxyUnavailableError)) {
+            console.warn(`html-fetcher: worker proxy failed for ${job.url}: ${proxyErr.message}`);
+          }
+        }
+      }
+      if (!fetchOk) {
+        console.warn(`html-fetcher: native+proxy failed for ${job.url}, falling back to Scrapling: ${firstErr.message}`);
+        articleHtml = await scraplingFetchWithFallback(job.url, {
+          mode: 'stealth',
+          blockResources: false,
+          waitMs: 1000,
+        }, {
+          rawText: false,
+          blockHeavyResources: false,
+          settleMs: 1000,
+          userAgent: randomUA(),
+        });
+      }
     }
 
     const aiExtraction = await extractWithAiSelector(articleHtml, job.url);
