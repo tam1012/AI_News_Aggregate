@@ -606,13 +606,14 @@ export function Home() {
               ) : (
                 <>
                   <div className="feed-day-group">
-                    {articles.map(article => (
+                    {articles.map((article, index) => (
                       <FeedItem
                         key={article.id}
                         article={article}
                         isActive={selected?.id === article.id}
                         isRead={readArticleSet.has(article.id)}
                         onClick={() => handleSelectArticle(article)}
+                        isHero={index === 0}
                       />
                     ))}
                   </div>

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { cleanTitle, extractSourceLabel, hideBrokenImage, hideTinyImage, proxyImgUrl } from './homeHelpers';
+import { cleanTitle, estimateReadingTime, extractSourceLabel, hideBrokenImage, hideTinyImage, proxyImgUrl } from './homeHelpers';
 
 const ReactMarkdown = lazy(() => import('react-markdown'));
 
@@ -32,6 +32,8 @@ export function ArticleDetail({
 
   // Reading progress bar
   const [readingProgress, setReadingProgress] = useState(0);
+  // TL;DR collapsible state
+  const [tldrCollapsed, setTldrCollapsed] = useState(false);
 
   // Swipe-to-navigate refs
   const swipeStartXRef = useRef(0);
@@ -220,22 +222,39 @@ export function ArticleDetail({
             >
               {sourceLabel} ↗
             </a>
-            {article.published_at && (
-              <span className="feed-item-time">
-                {new Date(article.published_at).toLocaleString('vi-VN', {
-                  day: 'numeric', month: 'numeric', year: 'numeric',
-                  hour: '2-digit', minute: '2-digit',
-                })}
-              </span>
-            )}
+            <div className="detail-meta-secondary">
+              {article.published_at && (
+                <span className="feed-item-time">
+                  {new Date(article.published_at).toLocaleString('vi-VN', {
+                    day: 'numeric', month: 'numeric', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
+                  })}
+                </span>
+              )}
+              <span className="detail-reading-time">{estimateReadingTime(article)}</span>
+            </div>
           </div>
 
           <h1 className="detail-title-editorial">{title}</h1>
 
           {summaryParts.tldr && (
-            <div className="ai-tldr-box">
-              <div className="ai-tldr-header">Tóm tắt nhanh</div>
-              <p>{summaryParts.tldr}</p>
+            <div className={`ai-tldr-box ${tldrCollapsed ? 'collapsed' : ''}`}>
+              <button
+                className="ai-tldr-header"
+                onClick={() => setTldrCollapsed(prev => !prev)}
+                aria-expanded={!tldrCollapsed}
+                type="button"
+              >
+                <svg className="ai-tldr-sparkle" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 2L13.5 8L20 9.5L13.5 11L12 17L10.5 11L4 9.5L10.5 8Z"/>
+                  <path d="M19 15L19.7 17L22 17.5L19.7 18L19 20L18.3 18L16 17.5L18.3 17Z" opacity="0.6"/>
+                </svg>
+                <span>Tóm tắt nhanh bởi AI</span>
+                <span className="ai-tldr-toggle">{tldrCollapsed ? '▸' : '▾'}</span>
+              </button>
+              <div className="ai-tldr-body">
+                <p>{summaryParts.tldr}</p>
+              </div>
             </div>
           )}
 

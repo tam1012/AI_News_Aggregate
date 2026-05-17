@@ -28,7 +28,7 @@ body {
   overflow-x: clip;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
-  transition: background 0.3s, color 0.3s;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 a { color: var(--color-accent); text-decoration: none; }
@@ -49,15 +49,131 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   from { transform: scale(0.96); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
 }
+@keyframes fadeInUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes scaleInBounce {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); opacity: 1; }
+}
 
 /* ===== Skeleton loading ===== */
 .skeleton {
-  background: linear-gradient(90deg, var(--color-bg-hover) 25%, var(--color-border-light) 50%, var(--color-bg-hover) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-hover) 0%,
+    color-mix(in srgb, var(--color-border-light) 60%, var(--color-bg-hover)) 40%,
+    var(--color-bg-hover) 80%
+  );
+  background-size: 300% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
   border-radius: var(--radius-sm);
 }
 @keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+/* ===== Global theme transition ===== */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 0s;
+}
+body,
+.sidebar,
+.app-shell,
+.split-left,
+.split-right,
+.feed-tab,
+.feed-item,
+.sidebar-nav-item,
+.mobile-bottom-nav,
+.mobile-top-nav,
+.card,
+.btn {
+  transition-duration: 0.25s;
+  transition-timing-function: ease;
+}
+
+/* ===== Welcome Empty State ===== */
+.welcome-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 32px;
+  min-height: 60vh;
+  animation: fadeInUp 0.4s ease-out;
+}
+.welcome-illustration {
+  margin-bottom: 24px;
+  opacity: 0.85;
+}
+.welcome-illustration svg {
+  filter: drop-shadow(0 2px 8px var(--color-shadow));
+}
+.welcome-title {
+  font-family: var(--font-heading);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 8px;
+  letter-spacing: -0.3px;
+}
+.welcome-subtitle {
+  font-size: 0.92rem;
+  color: var(--color-text-muted);
+  line-height: 1.55;
+  max-width: 320px;
+  margin-bottom: 28px;
+}
+.welcome-subtitle strong {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+.welcome-features {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+.welcome-feature {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-light);
+  background: var(--color-surface-container-low);
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: var(--font-heading);
+}
+.welcome-feature-icon {
+  display: flex;
+  align-items: center;
+  color: var(--color-accent);
+  opacity: 0.7;
+}
+.welcome-kbd-hint {
+  font-size: 0.74rem;
+  color: var(--color-text-muted);
+  opacity: 0.6;
+  letter-spacing: 0.02em;
+}
+.welcome-kbd-hint kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  border: 1px solid var(--color-border-light);
+  border-radius: 4px;
+  background: var(--color-surface-container);
+  font-size: 0.7rem;
+  font-family: var(--font-heading);
+  line-height: 1.2;
+  vertical-align: middle;
 }

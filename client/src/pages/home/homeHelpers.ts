@@ -127,3 +127,12 @@ export function classifyArticle(article: any): FeedTab {
   return 'news';
 }
 
+/** Estimate reading time in minutes from article text content */
+export function estimateReadingTime(article: any): string {
+  const text = article.summary_text || article.raw_content || article.raw_excerpt || '';
+  const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+  // Vietnamese averages ~200 words/min for reading
+  const minutes = Math.max(1, Math.round(wordCount / 200));
+  return `${minutes} phút đọc`;
+}
+

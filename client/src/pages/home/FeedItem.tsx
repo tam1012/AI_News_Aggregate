@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { buildFeedPreview, cleanTitle, extractSourceLabel, formatTime } from './homeHelpers';
+import { buildFeedPreview, cleanTitle, estimateReadingTime, extractSourceLabel, formatTime } from './homeHelpers';
 
 /* Preload react-markdown on first user interaction to avoid flash on article open */
 let markdownPreloaded = false;
@@ -56,15 +56,18 @@ export function FeedItem({
   isActive,
   isRead,
   onClick,
+  isHero,
 }: {
   article: any;
   isActive?: boolean;
   isRead?: boolean;
   onClick: () => void;
+  isHero?: boolean;
 }) {
   const sourceLabel = extractSourceLabel(article);
   const title = cleanTitle(article.title);
   const time = article.published_at ? formatTime(article.published_at) : '';
+  const readingTime = useMemo(() => estimateReadingTime(article), [article]);
 
   const preview = useMemo(() => {
     return buildFeedPreview(article);
@@ -72,7 +75,7 @@ export function FeedItem({
 
   return (
     <article
-      className={`feed-item ${isActive ? 'active' : ''} ${isRead ? 'is-read' : ''}`}
+      className={`feed-item ${isActive ? 'active' : ''} ${isRead ? 'is-read' : ''} ${isHero ? 'feed-item-hero' : ''}`}
       onClick={onClick}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
       onMouseEnter={preloadMarkdown}
@@ -85,6 +88,7 @@ export function FeedItem({
           {sourceLabel}
         </span>
         {time && <span className="feed-item-time">{time}</span>}
+        <span className="feed-item-reading-time">{readingTime}</span>
       </div>
       <div className="feed-item-body">
         <div className="feed-item-text">

@@ -1,25 +1,51 @@
 export function ReadmeWelcome() {
   return (
-    <div className="card" style={{ padding: 'clamp(20px, 4vw, 32px)', textAlign: 'center', marginTop: '16px' }}>
-      <h2 style={{ fontSize: 'clamp(1.4rem, 4vw, 1.8rem)', marginBottom: '10px', fontFamily: 'var(--font-heading)' }}>SynthNews</h2>
-      <p style={{ color: 'var(--color-text-secondary)', margin: '0 auto 18px', fontSize: '0.98rem', lineHeight: '1.55', maxWidth: '650px' }}>
-        SynthNews là repo đọc tin cá nhân tự host: backend cào RSS, web, Reddit, VOZ và GitHub Trending; AI tóm tắt tiếng Việt; frontend hiển thị feed đọc nhanh cho desktop và mobile.
-      </p>
-
-      <div style={{ textAlign: 'left', background: 'var(--color-bg)', padding: 'clamp(14px, 3vw, 18px)', borderRadius: 'var(--radius)', fontSize: '0.9rem', lineHeight: '1.55' }}>
-        <ul style={{ paddingLeft: '18px', margin: 0, color: 'var(--color-text-secondary)' }}>
-          <li style={{ marginBottom: '6px' }}>Monorepo React + Hono + PostgreSQL, deploy bằng Docker Compose sau Nginx HTTPS.</li>
-          <li style={{ marginBottom: '6px' }}>News, VOZ, Reddit và Bản tin tự động trong một giao diện, có deep link bài viết.</li>
-          <li style={{ marginBottom: '6px' }}>AI tạo TL;DR, tóm tắt bài dài, lọc quảng cáo/khuyến mãi và tạo digest định kỳ.</li>
-          <li>Hỗ trợ dark mode, mobile layout, lưu bài đã đọc, ảnh proxy và điều hướng bàn phím.</li>
-        </ul>
+    <div className="welcome-empty-state">
+      <div className="welcome-illustration">
+        <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          {/* Newspaper / reading icon */}
+          <rect x="20" y="24" width="80" height="72" rx="6" fill="var(--color-surface-container)" stroke="var(--color-border)" strokeWidth="1.5"/>
+          <rect x="30" y="36" width="35" height="4" rx="2" fill="var(--color-accent)" opacity="0.7"/>
+          <rect x="30" y="46" width="60" height="3" rx="1.5" fill="var(--color-border)" opacity="0.5"/>
+          <rect x="30" y="54" width="55" height="3" rx="1.5" fill="var(--color-border)" opacity="0.4"/>
+          <rect x="30" y="62" width="50" height="3" rx="1.5" fill="var(--color-border)" opacity="0.3"/>
+          <rect x="30" y="74" width="28" height="14" rx="3" fill="var(--color-surface-container-low)" stroke="var(--color-border-light)" strokeWidth="1"/>
+          <rect x="64" y="74" width="26" height="14" rx="3" fill="var(--color-surface-container-low)" stroke="var(--color-border-light)" strokeWidth="1"/>
+          {/* AI sparkle */}
+          <circle cx="92" cy="32" r="10" fill="var(--color-accent)" opacity="0.12"/>
+          <path d="M92 25 L93.5 30 L98 32 L93.5 34 L92 39 L90.5 34 L86 32 L90.5 30 Z" fill="var(--color-accent)" opacity="0.6"/>
+        </svg>
       </div>
 
-      <p style={{ color: 'var(--color-text-muted)', fontSize: '0.84rem', margin: '16px 0 0', lineHeight: '1.45' }}>
-        Chọn một bài để đọc. Mở tab <strong>Bản tin</strong> để xem tổng hợp gần nhất.<br />
-        Thông tin liên hệ hỗ trợ: Telegram - <a href="https://t.me/ThongThaiTuaThanTien" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)' }}>@ThongThaiTuaThanTien</a>
+      <h2 className="welcome-title">Chọn bài viết để đọc</h2>
+      <p className="welcome-subtitle">
+        Chọn một bài từ danh sách bên trái, hoặc mở tab <strong>Bản tin</strong> để xem tổng hợp gần nhất.
       </p>
+
+      <div className="welcome-features">
+        <div className="welcome-feature">
+          <span className="welcome-feature-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
+          </span>
+          <span>RSS, Reddit, VOZ</span>
+        </div>
+        <div className="welcome-feature">
+          <span className="welcome-feature-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2 L13.5 8 L20 9.5 L13.5 11 L12 17 L10.5 11 L4 9.5 L10.5 8 Z"/><path d="M19 15 L19.7 17 L22 17.5 L19.7 18 L19 20 L18.3 18 L16 17.5 L18.3 17 Z"/></svg>
+          </span>
+          <span>AI tóm tắt</span>
+        </div>
+        <div className="welcome-feature">
+          <span className="welcome-feature-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          </span>
+          <span>Cập nhật 24/7</span>
+        </div>
+      </div>
+
+      <div className="welcome-kbd-hint">
+        <kbd>←</kbd> <kbd>→</kbd> điều hướng bài &nbsp;·&nbsp; <kbd>Esc</kbd> đóng
+      </div>
     </div>
   );
 }
-
