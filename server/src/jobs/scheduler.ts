@@ -41,7 +41,9 @@ function getSourceScrapeTimeoutMs(source: any): number {
   // VOZ now passes through Cloudflare Turnstile (~15s solve per page);
   // a full 15-thread sweep with multi-page reads needs serious headroom.
   if (name.includes('voz') || url.includes('voz.vn')) return 600_000;
-  return 45_000;
+  // RSS feeds may need full fallback chain (native -> worker proxy -> scrapling stealth).
+  // Each layer can take 15-30s; default 45s is too tight for sources that hit all three.
+  return 90_000;
 }
 
 function addScrapeJitter(minutes: number): number {
