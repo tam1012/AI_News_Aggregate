@@ -11,6 +11,34 @@ function parseBoundedInt(value: string | undefined, fallback: number, min: numbe
   return Math.min(Math.max(parsed, min), max);
 }
 
+// Full-text search across articles
+articles.get('/search', async (c) => {
+  const q = (c.req.query('q') || '').trim();
+  if (!q || q.length < 2) {
+    return c.json({ success: true, data: [], meta: { query: q, total: 0 } });
+  }
+
+  const limit = parseBoundedInt(c.req.query('limit'), 20, 1, 50);
+  const pattern = `%${q}%`;
+
+  const rows = await getMany(
+    `SELECT a.id, a.source_id, a.url, a.title, a.author, a.published_at,
+            a.summary_short, a.tldr, a.hot_score, a.tags, a.image_url, a.created_at,
+            s.name as source_name, s.type as source_type,
+            CASE WHEN a.title ILIKE $1 THEN 2 ELSE 0 END +
+            CASE WHEN a.summary_short ILIKE $1 THEN 1 ELSE 0 END AS relevance
+     FROM articles a
+     LEFT JOIN sources s ON s.id = a.source_id
+     WHERE a.summary_status = 'done'
+       AND (a.title ILIKE $1 OR a.summary_short ILIKE $1 OR a.tldr ILIKE $1)
+     ORDER BY relevance DESC, COALESCE(a.published_at, a.created_at) DESC
+     LIMIT $2`,
+    [pattern, limit]
+  );
+
+  return c.json({ success: true, data: decodeArticleRows(rows), meta: { query: q, total: rows.length } });
+});
+
 // Danh sach tag pho bien (de UI hien topic filter chips)
 articles.get('/tags', async (c) => {
   const feedTab = c.req.query('feedTab');

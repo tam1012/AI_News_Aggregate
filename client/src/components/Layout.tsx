@@ -1,9 +1,10 @@
 import { Outlet, useLocation } from 'react-router-dom';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSettings } from '../hooks/useApi';
 import { Sidebar } from './Sidebar';
 import { MobileTopNav } from './MobileTopNav';
 import { MobileBottomNav } from './MobileBottomNav';
+import { SearchModal } from './SearchModal';
 
 const ADMIN_TOKEN_STORAGE_KEY = 'admin_token';
 
@@ -11,7 +12,20 @@ export function Layout() {
   const { fontSize, cycleFontSize, theme, toggleTheme, fontFamily, fontOptions, setFontFamily } = useSettings();
   const location = useLocation();
   const [showSettingsSheet, setShowSettingsSheet] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
+
+  // Global Ctrl+K / Cmd+K to open search
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowSearch(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
 
   // Close bottom sheet on click outside
   useEffect(() => {
@@ -48,7 +62,7 @@ export function Layout() {
   return (
     <>
       <div className="app-shell">
-        <Sidebar />
+        <Sidebar onOpenSearch={() => setShowSearch(true)} />
         <div className="app-main">
           <MobileTopNav />
           <main className="app-content">
@@ -116,6 +130,9 @@ export function Layout() {
           </div>
         </div>
       )}
+
+      {/* Search Modal */}
+      <SearchModal open={showSearch} onClose={() => setShowSearch(false)} />
     </>
   );
 }

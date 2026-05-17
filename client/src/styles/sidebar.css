@@ -158,7 +158,18 @@
   color: var(--color-text-secondary);
   background: var(--color-surface-container);
 }
-/* Inline quick settings — always visible at sidebar bottom */
+.sidebar-search-kbd {
+  margin-left: auto;
+  padding: 1px 6px;
+  border: 1px solid var(--color-border-light);
+  border-radius: 4px;
+  background: var(--color-surface-container);
+  font-size: 0.65rem;
+  font-weight: 600;
+  font-family: var(--font-heading);
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
 .sidebar-quick-settings {
   display: flex;
   align-items: center;

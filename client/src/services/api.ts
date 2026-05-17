@@ -107,6 +107,11 @@ export const api = {
     if (params?.date) qs.set('date', params.date);
     return request<any>(`/articles/tags?${qs}`);
   },
+  searchArticles: (q: string, limit?: number) => {
+    const qs = new URLSearchParams({ q });
+    if (limit) qs.set('limit', String(limit));
+    return request<any>(`/articles/search?${qs}`);
+  },
   getArticle: (id: string) => request<any>(`/articles/${id}`),
   resetArticleSummary: (id: string) => request<any>(`/articles/${id}/reset-summary`, { method: 'POST' }),
   rescrapeArticle: (id: string) => request<any>(`/articles/${id}/rescrape`, { method: 'POST' }),
