@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+﻿import { useState, useCallback } from 'react';
 import { api } from '../services/api';
 import { useFetch } from '../hooks/useApi';
 
@@ -32,6 +32,12 @@ export function Sources() {
   const [saving, setSaving] = useState(false);
   const [scrapingId, setScrapingId] = useState<string | null>(null);
   const [formError, setFormError] = useState('');
+  const [toast, setToast] = useState<{ message: string; isError?: boolean } | null>(null);
+
+  const showToast = useCallback((message: string, isError = false) => {
+    setToast({ message, isError });
+    setTimeout(() => setToast(null), 4000);
+  }, []);
 
   const handleDetect = async () => {
     if (!detectUrl.trim()) return;
@@ -145,10 +151,14 @@ export function Sources() {
     try {
       const res = await api.scrapeSource(id);
       const data = res.data;
-      alert(`Cào xong: ${data.itemsInserted}/${data.itemsFound} mục mới${data.status === 'partial' ? ' (có lỗi một phần)' : ''}`);
+      if (data.status === 'queued' || data.status === 'already_running') {
+        showToast(data.message || 'Đang cào ngầm...');
+      } else {
+        showToast(`Cào xong: ${data.itemsInserted}/${data.itemsFound} mục mới${data.status === 'partial' ? ' (có lỗi)' : ''}`);
+      }
       reload();
     } catch (err: any) {
-      alert('Lỗi cào nguồn: ' + err.message);
+      showToast('Lỗi cào nguồn: ' + err.message, true);
       reload();
     } finally {
       setScrapingId(null);
@@ -175,6 +185,11 @@ export function Sources() {
 
   return (
     <div style={{ overflow: 'auto', height: '100%', padding: '0 16px' }}>
+      {toast && (
+        <div className={`source-toast ${toast.isError ? 'source-toast-error' : ''}`}>
+          {toast.message}
+        </div>
+      )}
       <div className="page-header">
         <h1 className="page-title">Nguồn tin ({sourceList.length})</h1>
       </div>

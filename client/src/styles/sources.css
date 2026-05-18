@@ -7,3 +7,27 @@
 .source-name { font-weight: 600; }
 .source-url { font-size: 0.8rem; color: var(--color-text-muted); word-break: break-all; }
 .source-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+/* ===== Toast ===== */
+.source-toast {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  padding: 12px 20px;
+  border-radius: 8px;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e0e0e0);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-size: 0.875rem;
+  color: var(--color-text, #1a1a1a);
+  animation: toast-in 0.3s ease;
+}
+.source-toast-error {
+  border-color: #e53e3e;
+  color: #e53e3e;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}

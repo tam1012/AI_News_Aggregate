@@ -9,6 +9,33 @@ import { enqueueDiscoveredArticles } from '../services/article-fetch-queue.js';
 
 const sources = new Hono();
 
+interface ActiveScrapeEntry {
+  status: 'running' | 'done' | 'failed';
+  startedAt: string;
+  result?: { status: string; itemsFound: number; itemsInserted: number; errors: string[] };
+  error?: string;
+}
+
+const activeScrapes = new Map<string, ActiveScrapeEntry>();
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s`)), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+}
+
+function getSourceScrapeTimeoutMs(source: any): number {
+  const configured = Number(process.env.SOURCE_SCRAPE_TIMEOUT_MS || 0);
+  if (Number.isFinite(configured) && configured >= 10_000) return configured;
+  const name = String(source.name || '').toLowerCase();
+  const url = String(source.url || '').toLowerCase();
+  if (name.includes('reddit') || url.includes('reddit.com')) return 90_000;
+  if (name.includes('voz') || url.includes('voz.vn')) return 600_000;
+  return 90_000;
+}
+
 function getRedditRssUrl(url: string): string | null {
   try {
     const normalizedUrl = normalizeUrl(url);
@@ -221,75 +248,85 @@ sources.post('/:id/scrape', async (c) => {
     return c.json({ success: false, error: { code: 'VALIDATION', message: 'Source is disabled' } }, 400);
   }
 
-  const logId = generateId('log');
-  const startedAt = new Date().toISOString();
-
-  try {
-    const fetcher = getFetcherForSource(source, sourceFetchers);
-    const scrapeIntervalHours = Math.max(1, Math.ceil(source.fetch_interval_minutes / 60));
-    let result;
-    if (fetcher.discover) {
-      const discovered = await fetcher.discover(source);
-      const enqueued = await enqueueDiscoveredArticles(discovered);
-      result = { itemsFound: discovered.length, itemsInserted: enqueued, errors: [] as string[] };
-    } else {
-      result = await scrapeSource(source);
-    }
-
-    const nextRunDelayMinutes = result.errors.length > 0
-      ? Math.min(scrapeIntervalHours * 60 * 2, 24 * 60)
-      : scrapeIntervalHours * 60;
-    const status = result.errors.length > 0 ? (result.itemsInserted > 0 ? 'partial' : 'failed') : 'success';
-    const errorMessage = result.errors.length > 0 ? result.errors.join('; ').substring(0, 500) : null;
-
-    await query(
-      `UPDATE sources SET
-         last_checked_at = NOW(),
-         last_success_at = CASE WHEN $2 != 'failed' THEN NOW() ELSE last_success_at END,
-         consecutive_failures = CASE WHEN $2 = 'failed' THEN consecutive_failures + 1 ELSE 0 END,
-         last_error_message = $3,
-         next_run_at = NOW() + ($4 * INTERVAL '1 minute')
-       WHERE id = $1`,
-      [source.id, status, errorMessage, nextRunDelayMinutes]
-    );
-
-    await query(
-      `INSERT INTO scrape_logs (id, source_id, job_type, status, started_at, finished_at, items_found, items_inserted, error_message, metadata)
-       VALUES ($1, $2, 'manual_source_scrape', $3, $4, NOW(), $5, $6, $7, $8)`,
-      [logId, source.id, status, startedAt, result.itemsFound, result.itemsInserted, errorMessage, result.metadata ? JSON.stringify(result.metadata) : null]
-    );
-
-    return c.json({
-      success: true,
-      data: {
-        status,
-        itemsFound: result.itemsFound,
-        itemsInserted: result.itemsInserted,
-        errors: result.errors,
-      },
-    });
-  } catch (err: any) {
-    const message = err.message.substring(0, 500);
-    const failureCount = source.consecutive_failures + 1;
-    const backoffMinutes = Math.min(Math.max(1, Math.ceil(source.fetch_interval_minutes / 60)) * 60 * Math.pow(2, Math.max(failureCount - 1, 0)), 24 * 60);
-
-    await query(
-      `UPDATE sources SET
-         last_checked_at = NOW(), consecutive_failures = consecutive_failures + 1,
-         last_error_message = $1,
-         next_run_at = NOW() + ($3 * INTERVAL '1 minute')
-       WHERE id = $2`,
-      [message, source.id, backoffMinutes]
-    );
-
-    await query(
-      `INSERT INTO scrape_logs (id, source_id, job_type, status, started_at, finished_at, error_message)
-       VALUES ($1, $2, 'manual_source_scrape', 'failed', $3, NOW(), $4)`,
-      [logId, source.id, startedAt, message]
-    );
-
-    return c.json({ success: false, error: { code: 'SCRAPE_FAILED', message } }, 500);
+  const existing = activeScrapes.get(source.id);
+  if (existing?.status === 'running') {
+    return c.json({ success: true, data: { status: 'already_running', message: 'Nguồn đang được cào...' } });
   }
+
+  const startedAt = new Date().toISOString();
+  activeScrapes.set(source.id, { status: 'running', startedAt });
+
+  (async () => {
+    const logId = generateId('log');
+    try {
+      const fetcher = getFetcherForSource(source, sourceFetchers);
+      const scrapeIntervalHours = Math.max(1, Math.ceil(source.fetch_interval_minutes / 60));
+
+      const result = await withTimeout((async () => {
+        if (fetcher.discover) {
+          const discovered = await fetcher.discover(source);
+          const enqueued = await enqueueDiscoveredArticles(discovered);
+          return { itemsFound: discovered.length, itemsInserted: enqueued, errors: [] as string[] };
+        }
+        return scrapeSource(source);
+      })(), getSourceScrapeTimeoutMs(source), `Scrape source ${source.name}`);
+
+      const nextRunDelayMinutes = result.errors.length > 0
+        ? Math.min(scrapeIntervalHours * 60 * 2, 24 * 60)
+        : scrapeIntervalHours * 60;
+      const status = result.errors.length > 0 ? (result.itemsInserted > 0 ? 'partial' : 'failed') : 'success';
+      const errorMessage = result.errors.length > 0 ? result.errors.join('; ').substring(0, 500) : null;
+
+      await query(
+        `UPDATE sources SET
+           last_checked_at = NOW(),
+           last_success_at = CASE WHEN $2 != 'failed' THEN NOW() ELSE last_success_at END,
+           consecutive_failures = CASE WHEN $2 = 'failed' THEN consecutive_failures + 1 ELSE 0 END,
+           last_error_message = $3,
+           next_run_at = NOW() + ($4 * INTERVAL '1 minute')
+         WHERE id = $1`,
+        [source.id, status, errorMessage, nextRunDelayMinutes]
+      );
+
+      await query(
+        `INSERT INTO scrape_logs (id, source_id, job_type, status, started_at, finished_at, items_found, items_inserted, error_message, metadata)
+         VALUES ($1, $2, 'manual_source_scrape', $3, $4, NOW(), $5, $6, $7, $8)`,
+        [logId, source.id, status, startedAt, result.itemsFound, result.itemsInserted, errorMessage, result.metadata ? JSON.stringify(result.metadata) : null]
+      );
+
+      activeScrapes.set(source.id, { status: 'done', startedAt, result: { status, itemsFound: result.itemsFound, itemsInserted: result.itemsInserted, errors: result.errors } });
+    } catch (err: any) {
+      const message = (err.message || 'Unknown error').substring(0, 500);
+      const failureCount = source.consecutive_failures + 1;
+      const backoffMinutes = Math.min(Math.max(1, Math.ceil(source.fetch_interval_minutes / 60)) * 60 * Math.pow(2, Math.max(failureCount - 1, 0)), 24 * 60);
+
+      await query(
+        `UPDATE sources SET
+           last_checked_at = NOW(), consecutive_failures = consecutive_failures + 1,
+           last_error_message = $1,
+           next_run_at = NOW() + ($3 * INTERVAL '1 minute')
+         WHERE id = $2`,
+        [message, source.id, backoffMinutes]
+      );
+
+      await query(
+        `INSERT INTO scrape_logs (id, source_id, job_type, status, started_at, finished_at, error_message)
+         VALUES ($1, $2, 'manual_source_scrape', 'failed', $3, NOW(), $4)`,
+        [logId, source.id, startedAt, message]
+      );
+
+      activeScrapes.set(source.id, { status: 'failed', startedAt, error: message });
+    }
+    setTimeout(() => activeScrapes.delete(source.id), 5 * 60 * 1000);
+  })();
+
+  return c.json({ success: true, data: { status: 'queued', message: 'Đang cào ngầm...' } });
+});
+
+sources.get('/:id/scrape-status', (c) => {
+  const { id } = c.req.param();
+  const entry = activeScrapes.get(id);
+  return c.json({ success: true, data: entry || { status: 'idle' } });
 });
 
 // Xoa source
