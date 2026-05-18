@@ -476,6 +476,22 @@ export function Home() {
                   Bản tin
                 </button>
               </div>
+              <div className="toolbar-settings-group">
+                <button
+                  className="compact-sort-btn toolbar-theme-btn"
+                  onClick={toggleTheme}
+                  title={theme === 'light' ? 'Chế độ tối' : 'Chế độ sáng'}
+                >
+                  {theme === 'light' ? '☀' : '☾'}
+                </button>
+                <button
+                  className="compact-sort-btn toolbar-font-btn"
+                  onClick={cycleFontSize}
+                  title="Thay đổi cỡ chữ"
+                >
+                  {fontSize}px
+                </button>
+              </div>
               <button
                 className="icon-btn"
                 onClick={() => void handleManualRefresh()}
@@ -570,22 +586,6 @@ export function Home() {
                   )}
                 </div>
               )}
-              <div className="toolbar-settings-group">
-                <button
-                  className="compact-sort-btn toolbar-theme-btn"
-                  onClick={toggleTheme}
-                  title={theme === 'light' ? 'Chế độ tối' : 'Chế độ sáng'}
-                >
-                  {theme === 'light' ? '☀' : '☾'}
-                </button>
-                <button
-                  className="compact-sort-btn toolbar-font-btn"
-                  onClick={cycleFontSize}
-                  title="Thay đổi cỡ chữ"
-                >
-                  {fontSize}px
-                </button>
-              </div>
             </div>}
           </div>
 
