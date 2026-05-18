@@ -376,8 +376,8 @@ export function startCronJobs() {
     }).catch(console.error);
   });
 
-  // Generate digest ở phút 30 (sau khi đã tóm tắt xong)
-  cron.schedule(`30 */${intervalHours} * * *`, () => {
+  // Generate digest at 0:30, 6:30, 12:30, 21:30 (GMT+7 = UTC 17:30, 23:30, 5:30, 14:30)
+  cron.schedule('30 17,23,5,14 * * *', () => {
     runWithJobLock('digest', runDigestJob).catch(console.error);
   });
 
@@ -396,7 +396,7 @@ export function startCronJobs() {
   console.log(`  - Article Fetch: every 5 minutes`);
   console.log(`  - Summarize: every 10 minutes`);
   console.log(`  - Forum Rescrape: every 30 mins (max 2 times per article)`);
-  console.log(`  - Digest: every ${intervalHours}h at :30`);
+  console.log(`  - Digest: 0:30, 6:30, 12:30, 21:30 (GMT+7)`);
   console.log(`  - Retry: every 10 minutes`);
   console.log(`  - Cleanup: daily at 2:43 AM`);
 }
