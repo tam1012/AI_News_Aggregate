@@ -2,14 +2,16 @@ const READ_ARTICLES_STORAGE_KEY = 'read_articles';
 const FEED_PREVIEW_MAX_CHARS = 180;
 const DETAIL_IMAGE_MIN_HEIGHT = 120;
 
+const DISPLAY_TIMEZONE = 'Asia/Ho_Chi_Minh';
+
 export function formatTime(dateStr: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: DISPLAY_TIMEZONE });
 }
 
 export function formatDateHeading(dateStr: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric', year: 'numeric', timeZone: DISPLAY_TIMEZONE });
 }
 
 export function extractSourceLabel(article: any): string {

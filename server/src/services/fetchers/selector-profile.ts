@@ -184,6 +184,23 @@ function normalizeDate(value: string | null): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function extractJsonLdDate($: cheerio.CheerioAPI): string | null {
+  const scripts = $('script[type="application/ld+json"]');
+  for (let i = 0; i < scripts.length; i++) {
+    try {
+      const raw = $(scripts[i]).html();
+      if (!raw) continue;
+      const data = JSON.parse(raw);
+      const items = Array.isArray(data) ? data : [data];
+      for (const item of items) {
+        const candidate = item?.datePublished || item?.['@graph']?.[0]?.datePublished;
+        if (candidate && typeof candidate === 'string') return candidate;
+      }
+    } catch {}
+  }
+  return null;
+}
+
 function resolveImageUrl(rawUrl: string | undefined, pageUrl: string): string | null {
   if (!rawUrl) return null;
   try {
@@ -238,6 +255,10 @@ export function extractWithSelectorProfile(html: string, pageUrl: string, profil
     $('time[datetime]').first().attr('datetime') ||
     getMetaContent($, 'meta[property="article:published_time"]') ||
     getMetaContent($, 'meta[name="pubdate"]') ||
+    getMetaContent($, 'meta[name="parsely-pub-date"]') ||
+    $('[itemprop="datePublished"]').first().attr('content') ||
+    $('[itemprop="datePublished"]').first().attr('datetime') ||
+    extractJsonLdDate($) ||
     null
   );
 

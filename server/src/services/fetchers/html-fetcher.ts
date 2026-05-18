@@ -331,6 +331,21 @@ export const htmlFetcher: SourceFetcher = {
         } catch {}
       }
     }
+    if (!publishedAt) {
+      const fallbackDate =
+        $article('time[datetime]').first().attr('datetime') ||
+        $article('meta[property="article:published_time"]').first().attr('content') ||
+        $article('meta[name="pubdate"]').first().attr('content') ||
+        $article('meta[name="parsely-pub-date"]').first().attr('content') ||
+        $article('[itemprop="datePublished"]').first().attr('content') ||
+        $article('[itemprop="datePublished"]').first().attr('datetime') ||
+        '';
+      if (fallbackDate) {
+        try {
+          publishedAt = new Date(fallbackDate).toISOString();
+        } catch {}
+      }
+    }
 
     return {
       source,

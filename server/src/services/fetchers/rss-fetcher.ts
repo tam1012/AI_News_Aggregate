@@ -234,6 +234,23 @@ function normalizeDate(value: string | null): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function extractJsonLdDate($: cheerio.CheerioAPI): string | null {
+  const scripts = $('script[type="application/ld+json"]');
+  for (let i = 0; i < scripts.length; i++) {
+    try {
+      const raw = $(scripts[i]).html();
+      if (!raw) continue;
+      const data = JSON.parse(raw);
+      const items = Array.isArray(data) ? data : [data];
+      for (const item of items) {
+        const candidate = item?.datePublished || item?.['@graph']?.[0]?.datePublished;
+        if (candidate && typeof candidate === 'string') return candidate;
+      }
+    } catch {}
+  }
+  return null;
+}
+
 async function extractArticleFromHtml(html: string, jobUrl: string, extractor: string): Promise<{ title: string; content: string; imageUrl: string | null; publishedAt: string | null; metadata?: any }> {
   const aiExtraction = await extractWithAiSelector(html, jobUrl);
   if (aiExtraction) {
@@ -257,6 +274,12 @@ async function extractArticleFromHtml(html: string, jobUrl: string, extractor: s
   const publishedAt = $('time[datetime]').first().attr('datetime') ||
     getMetaContent($, 'meta[property="article:published_time"]') ||
     getMetaContent($, 'meta[name="pubdate"]') ||
+    getMetaContent($, 'meta[name="parsely-pub-date"]') ||
+    getMetaContent($, 'meta[property="og:article:published_time"]') ||
+    getMetaContent($, 'meta[itemprop="datePublished"]') ||
+    $('[itemprop="datePublished"]').first().attr('content') ||
+    $('[itemprop="datePublished"]').first().attr('datetime') ||
+    extractJsonLdDate($) ||
     null;
 
   // Fallback: Mozilla Readability when cheerio selectors produce short content
