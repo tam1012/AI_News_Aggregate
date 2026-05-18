@@ -82,7 +82,7 @@ export function buildArticleInsertRow(input: ArticleInsertInput): ArticleInsertR
     url: input.url,
     title,
     author: input.author || null,
-    published_at: input.publishedAt || null,
+    published_at: input.publishedAt || new Date().toISOString(),
     content_type: input.contentType || 'article',
     language: input.source.language,
     raw_excerpt: rawExcerpt,
