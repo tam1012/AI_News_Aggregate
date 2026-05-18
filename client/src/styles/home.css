@@ -1046,7 +1046,8 @@
   }
 
   .split-left {
-    flex: 0 0 360px;
+    flex: 0 1 360px;
+    min-width: 280px;
     max-width: 360px;
     height: 100%;
     overflow-y: auto;
@@ -1143,7 +1144,8 @@
 
 @media (min-width: 1200px) {
   .split-left {
-    flex: 0 0 400px;
+    flex: 0 1 400px;
+    min-width: 280px;
     max-width: 400px;
   }
 }
