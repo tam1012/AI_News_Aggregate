@@ -120,6 +120,7 @@ export function useSettings() {
     setFontSize(size);
     localStorage.setItem('font_size', String(size));
     document.documentElement.style.setProperty('--font-size', `${size}px`);
+    document.documentElement.style.fontSize = `${size}px`;
   };
 
   /** Ping-pong cycle: 16→18→20→18→16→14→12→14→16… */
@@ -149,6 +150,7 @@ export function useSettings() {
 
   useEffect(() => {
     document.documentElement.style.setProperty('--font-size', `${fontSize}px`);
+    document.documentElement.style.fontSize = `${fontSize}px`;
     document.documentElement.setAttribute('data-theme', theme);
     updateFontFamily(fontFamily);
   }, []);

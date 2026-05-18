@@ -34,6 +34,7 @@
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius);
   box-shadow: 0 1px 3px var(--color-shadow);
+  font-size: 16px;
 }
 
 .sidebar-brand {
@@ -296,6 +297,7 @@
   scroll-snap-type: x proximity;
   scroll-padding-inline: 12px;
   overscroll-behavior-x: contain;
+  font-size: 16px;
 }
 .mobile-bottom-nav::-webkit-scrollbar { display: none; }
 .mobile-bottom-item {
