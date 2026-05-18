@@ -43,7 +43,7 @@ Project này được thiết kế cho nhu cầu tự host cá nhân: ít thao t
 
 ### Đọc tin
 
-- Tab `News`, `VOZ`, `Reddit`, `Bản tin`.
+- Tab `News`, `Tech News`, `VOZ`, `Reddit`, `Bản tin`.
 - Split view trên desktop: danh sách bên trái, nội dung bên phải.
 - Bottom tab bar trên mobile, auto-hide toolbar khi cuộn, detail overlay có gesture kéo xuống để đóng.
 - Deep link bài viết qua `/article/:id`.
@@ -65,7 +65,7 @@ Project này được thiết kế cho nhu cầu tự host cá nhân: ít thao t
 - Web scraper với AI-learned selector profiles: tự học CSS selector từ HTML lần đầu, cache lại cho lần sau.
 - **Content extraction 3 tầng**: AI selector → cheerio CSS selectors → Mozilla Readability fallback.
 - **Quality gate**: chặn insert bài có content quá ngắn trước khi vào DB, tránh tạo summary rỗng.
-- **Fetch fallback**: nếu HTTP fetch thường bị block (429/403), tự retry bằng Scrapling stealth browser sidecar. Nếu Scrapling unavailable, fallback về Playwright headless.
+- **Fetch fallback 4 tầng**: HTTP native → Cloudflare Worker proxy → Scrapling stealth browser sidecar → Playwright headless. Mỗi tầng tự kích hoạt khi tầng trước bị block/timeout.
 - **Rate limiting**: per-domain throttle 10s giữa các request cùng domain, 1.5s giữa domain khác nhau. Configurable qua `FETCH_PER_DOMAIN_DELAY_MS`.
 - **Rescue job**: tự tìm bài cũ bị skipped vì thiếu content, requeue fetch lại và cập nhật article gốc.
 - GitHub Trending scraper riêng.
@@ -231,8 +231,10 @@ DevOps:
 ├── Dockerfile
 ├── docker-compose.yml
 ├── nginx-synthnews.conf            # Nginx config mẫu
+├── fetch-proxy-worker.js          # Cloudflare Worker generic proxy (Yahoo, NYT, etc.)
 ├── reddit-proxy-worker.js          # Cloudflare Worker cho Reddit proxy
-├── reuters-proxy-worker.js         # Cloudflare Worker cho Reuters (experimental)
+├── voz-proxy-worker.js             # Cloudflare Worker cho VOZ proxy
+├── reuters-proxy-worker.js         # Cloudflare Worker cho Reuters proxy
 ├── scrapling-sidecar/              # Python Scrapling anti-bot fetch service
 ├── .env.example
 ├── .env.local.example              # Local dev env template
@@ -361,6 +363,7 @@ Endpoint chính:
 | Sources | `DELETE /api/sources/:id` | Admin |
 | Sources | `POST /api/sources/:id/toggle` | Admin |
 | Sources | `POST /api/sources/:id/scrape` | Admin |
+| Sources | `GET /api/sources/:id/scrape-status` | Admin |
 | Sources | `POST /api/sources/detect` | Admin |
 | Articles | `GET /api/articles/dates` | Public |
 | Articles | `GET /api/articles/tags` | Public |
@@ -391,7 +394,7 @@ curl "https://synthnews.site/api/digests/latest?lang=vi"
 
 ## Database
 
-Migrations hiện có (12 file):
+Migrations hiện có (14 file):
 
 - `001_initial.sql` — sources, articles, scrape_logs, digests, digest_items
 - `002_ai_providers.sql` — ai_providers, app_settings
@@ -405,6 +408,8 @@ Migrations hiện có (12 file):
 - `010_scrape_log_metadata.sql` — metadata JSONB cho scrape_logs
 - `011_ai_provider_default_4096.sql` — default max_tokens
 - `012_source_profiles.sql` — source_profiles cho AI-learned selectors
+- `013_blocklist.sql` — blocklist URL/domain patterns
+- `014_source_feed_category.sql` — feed_category (news/tech) cho sources
 
 Bảng chính:
 
@@ -416,6 +421,7 @@ Bảng chính:
 - `digest_items`
 - `ai_providers`
 - `source_profiles`
+- `blocklist`
 - `app_settings`
 - `_migrations`
 
@@ -487,6 +493,9 @@ Biến quan trọng:
 | `REDDIT_USERNAME` | Reddit username, optional |
 | `REDDIT_PASSWORD` | Reddit password, optional |
 | `REDDIT_PROXY_URL` | Cloudflare Worker proxy URL, optional |
+| `WORKER_PROXY_URL` | URL Cloudflare Worker generic proxy, optional |
+| `WORKER_PROXY_TOKEN` | Auth token cho Worker proxy, optional |
+| `WORKER_PROXY_SKIP_DOMAINS` | Domains không dùng Worker proxy (comma-separated), optional |
 | `SCRAPLING_SERVICE_URL` | Scrapling sidecar URL, mặc định `http://scrapling:8000` trong Docker |
 | `SCRAPLING_TIMEOUT_MS` | Timeout cho Scrapling requests, mặc định `60000` |
 | `FETCH_PER_DOMAIN_DELAY_MS` | Delay tối thiểu giữa requests cùng domain, mặc định `10000` |
@@ -664,7 +673,7 @@ Sau khi `docker compose up -d --build` thành công:
 
 2. **Thêm nguồn tin** — Mở `https://your-domain/sources`, thêm nguồn RSS hoặc web. Backend tự nhận diện URL Reddit/VOZ và chuyển sang scraper riêng.
 
-3. **Chờ cron hoặc trigger thủ công** — Source mới mặc định cào lại mỗi 60 phút, cron chính kiểm tra nguồn đến hạn mỗi 5 phút. Để test ngay, vào `/admin` → bấm nút "Cào tin", "Fetch bài" và "Tóm tắt".
+3. **Chờ cron hoặc trigger thủ công** — Source mới mặc định cào lại mỗi 60 phút, cron chính kiểm tra nguồn đến hạn mỗi 5 phút. Để test ngay, vào `/sources` → bấm "Cào ngay" (chạy async, trả kết quả ngay) hoặc vào `/admin` → bấm nút "Cào tin", "Fetch bài" và "Tóm tắt".
 
 4. **Kiểm tra** — Sau khi scrape + summarize xong, bài sẽ hiện trên trang chủ với TL;DR preview.
 
@@ -742,10 +751,10 @@ Lưu ý: đổi URL smoke test public trong `deploy.yml` nếu dùng domain khá
 | Job | Lịch | Việc làm |
 |---|---|---|
 | Source discovery | `*/5 * * * *` + startup check | Kiểm tra source đến hạn theo `next_run_at`; source mặc định 60 phút/lần, có jitter nhỏ, lỗi thì backoff tối đa 24 giờ |
-| Article Fetch Queue | `*/5 * * * *` | Claim URL đã discover trong `article_fetch_jobs`, fetch nội dung chi tiết (HTTP → Scrapling stealth → Playwright fallback), per-domain throttle 10s giữa mỗi request cùng domain |
+| Article Fetch Queue | `*/5 * * * *` | Claim URL đã discover trong `article_fetch_jobs`, fetch nội dung chi tiết (HTTP → Worker proxy → Scrapling stealth → Playwright fallback), per-domain throttle 10s giữa mỗi request cùng domain |
 | Summarize | `*/10 * * * *` | Claim bài `pending`, gọi AI, cập nhật `done/skipped/failed` |
 | Forum Rescrape | `0,30 * * * *` | Cào lại Reddit/VOZ mới, bỏ qua phút `00` theo nhịp digest để giảm tải |
-| Digest | `30 */SCRAPE_INTERVAL_HOURS * * *` | Tạo bản tin từ các bài đã tóm tắt trong 24 giờ gần nhất |
+| Digest | `30 17,23,5,14 * * *` (UTC) = 0:30, 6:30, 12:30, 21:30 (GMT+7) | Tạo bản tin từ các bài đã tóm tắt trong 24 giờ gần nhất |
 | Retry | `*/10 * * * *` | Reset bài/queue kẹt, retry failed còn hạn, retry comment Reddit, **rescue bài skipped vì content ngắn** |
 | Cleanup | `43 2 * * *` | Xóa scrape logs cũ, dọn raw_content bài cũ, reset processing kẹt |
 
@@ -846,3 +855,7 @@ Nếu dùng domain riêng (không phải domain mẫu trong repo), cập nhật 
 - Nếu AI provider trả summary không có `<tldr>`, bài vẫn có summary nhưng list preview sẽ fallback sang excerpt/summary.
 - Nếu source Reddit/VOZ thiếu comment lúc mới scrape, forum rescrape và retry job sẽ có cơ hội cập nhật lại trong vài giờ đầu.
 - `reddit-proxy-worker.js` trong repo là Cloudflare Worker dùng bypass Reddit IP block. Deploy lên Cloudflare Workers rồi set `REDDIT_PROXY_URL` nếu cần.
+- `fetch-proxy-worker.js` là generic Cloudflare Worker proxy cho các domain bị block IP datacenter (Yahoo, NYT, Reuters, v.v.). Deploy rồi set `WORKER_PROXY_URL` và `WORKER_PROXY_TOKEN`.
+- `voz-proxy-worker.js` là Cloudflare Worker proxy cho VOZ (bypass Cloudflare-to-Cloudflare challenge).
+- `reuters-proxy-worker.js` là Cloudflare Worker proxy riêng cho Reuters.
+- **Blocklist**: quản lý URL/domain patterns bị chặn qua `/api/blocklist`. Bài từ URL match pattern sẽ bị skip ở bước discover và fetch.
