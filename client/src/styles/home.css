@@ -469,14 +469,14 @@
 
 .feed-item-title {
   font-family: var(--font-heading);
-  font-size: 1.02rem; font-weight: 700; line-height: 1.36;
+  font-size: var(--font-size); font-weight: 700; line-height: 1.36;
   margin-bottom: 6px; color: var(--color-text);
   letter-spacing: -0.02em;
 }
 
 .feed-item-preview {
   font-family: var(--font-serif);
-  font-size: 0.9rem; line-height: 1.65;
+  font-size: calc(var(--font-size) - 2px); line-height: 1.65;
   color: var(--color-text-secondary);
 }
 
@@ -938,7 +938,7 @@
 
 .detail-body {
   font-family: var(--font-serif);
-  font-size: 1rem; line-height: 1.8;
+  font-size: var(--font-size); line-height: 1.8;
   color: var(--color-text-secondary);
   margin-bottom: 24px;
 }
