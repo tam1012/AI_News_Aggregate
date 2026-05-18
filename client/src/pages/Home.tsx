@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback, startTransition } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { api } from '../services/api';
-import { useFetchRaw } from '../hooks/useApi';
+import { useFetchRaw, useSettings } from '../hooks/useApi';
 import { filterArticlesBySelectedDate, getEmptyFeedMessage, getReaderLoadingState, shouldShowDetailPane, shouldShowRightPane, shouldShowScrollTopButton } from './homeUx';
 import { ArticleDetail } from './home/ArticleDetail';
 import { DigestTab } from './home/DigestTab';
@@ -15,6 +15,7 @@ export function Home() {
   const location = useLocation();
   const { articleId: urlArticleId } = useParams<{ articleId?: string }>();
   const hasArticleDeepLink = Boolean(urlArticleId);
+  const { fontSize, cycleFontSize, theme, toggleTheme } = useSettings();
 
   // Derive initial tab from URL path
   const initialTab = useMemo(() => {
@@ -569,6 +570,22 @@ export function Home() {
                   )}
                 </div>
               )}
+              <div className="toolbar-settings-group">
+                <button
+                  className="compact-sort-btn toolbar-theme-btn"
+                  onClick={toggleTheme}
+                  title={theme === 'light' ? 'Chế độ tối' : 'Chế độ sáng'}
+                >
+                  {theme === 'light' ? '☀' : '☾'}
+                </button>
+                <button
+                  className="compact-sort-btn toolbar-font-btn"
+                  onClick={cycleFontSize}
+                  title="Thay đổi cỡ chữ"
+                >
+                  {fontSize}px
+                </button>
+              </div>
             </div>}
           </div>
 

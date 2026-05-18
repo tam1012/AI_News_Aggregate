@@ -37,6 +37,15 @@
   padding: 6px 0 4px;
   flex-wrap: wrap;
 }
+.toolbar-settings-group {
+  display: flex; align-items: center; gap: 4px;
+  margin-left: auto;
+}
+.toolbar-theme-btn, .toolbar-font-btn {
+  font-size: 0.78rem;
+  padding: 4px 8px;
+  min-width: unset;
+}
 .compact-date-nav {
   display: flex; align-items: center; gap: 2px;
   flex-shrink: 0;
