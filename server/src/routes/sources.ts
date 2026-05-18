@@ -42,7 +42,7 @@ function isYoutubeUrl(url: string): boolean {
 sources.get('/', async (c) => {
   const rows = await getMany(
     `SELECT id, type, name, url, language, category, is_enabled,
-            fetch_interval_minutes, parser_config,
+            fetch_interval_minutes, parser_config, feed_category,
             last_checked_at, last_success_at, last_error_message,
             consecutive_failures, next_run_at, created_at, updated_at
      FROM sources ORDER BY created_at DESC`
@@ -63,7 +63,7 @@ sources.get('/:id', async (c) => {
 // Them source moi
 sources.post('/', async (c) => {
   const body = await c.req.json();
-  let { type, name, url, language, category, fetch_interval_minutes, parser_config } = body;
+  let { type, name, url, language, category, fetch_interval_minutes, parser_config, feed_category } = body;
 
   if (!type || !name || !url) {
     return c.json({
@@ -76,6 +76,13 @@ sources.post('/', async (c) => {
     return c.json({
       success: false,
       error: { code: 'VALIDATION', message: 'type must be rss or web' },
+    }, 400);
+  }
+
+  if (feed_category !== undefined && !['news', 'tech'].includes(feed_category)) {
+    return c.json({
+      success: false,
+      error: { code: 'VALIDATION', message: 'feed_category must be news or tech' },
     }, 400);
   }
 
@@ -104,9 +111,9 @@ sources.post('/', async (c) => {
 
   try {
     await query(
-      `INSERT INTO sources (id, type, name, url, language, category, fetch_interval_minutes, parser_config, next_run_at, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $9)`,
-      [id, type, name, normalizedUrl, language || 'vi', category || null, fetch_interval_minutes || 60, parser_config ? JSON.stringify(parser_config) : null, now]
+      `INSERT INTO sources (id, type, name, url, language, category, fetch_interval_minutes, parser_config, feed_category, next_run_at, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), $10, $10)`,
+      [id, type, name, normalizedUrl, language || 'vi', category || null, fetch_interval_minutes || 60, parser_config ? JSON.stringify(parser_config) : null, feed_category || 'news', now]
     );
 
     const row = await getOne('SELECT * FROM sources WHERE id = $1', [id]);
@@ -155,8 +162,15 @@ sources.patch('/:id', async (c) => {
     }, 400);
   }
 
+  if (body.feed_category !== undefined && !['news', 'tech'].includes(body.feed_category)) {
+    return c.json({
+      success: false,
+      error: { code: 'VALIDATION', message: 'feed_category must be news or tech' },
+    }, 400);
+  }
+
   // Cho phep update cac truong nay
-  const allowedFields = ['name', 'url', 'language', 'category', 'is_enabled', 'fetch_interval_minutes', 'parser_config', 'type'];
+  const allowedFields = ['name', 'url', 'language', 'category', 'is_enabled', 'fetch_interval_minutes', 'parser_config', 'type', 'feed_category'];
   const updates: string[] = [];
   const values: any[] = [];
   let paramIndex = 1;

@@ -58,8 +58,14 @@ articles.get('/tags', async (c) => {
     where += ` AND (s.name ILIKE '%reddit%' OR a.url ILIKE '%reddit.com%' OR a.title ILIKE '[r/%')`;
   } else if (feedTab === 'voz') {
     where += ` AND (s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`;
+  } else if (feedTab === 'all') {
+    where += ` AND NOT (s.name ILIKE '%reddit%' OR a.url ILIKE '%reddit.com%' OR a.title ILIKE '[r/%' OR s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`;
   } else if (feedTab === 'news') {
     where += ` AND NOT (s.name ILIKE '%reddit%' OR a.url ILIKE '%reddit.com%' OR a.title ILIKE '[r/%' OR s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`;
+    where += ` AND COALESCE(s.feed_category, 'news') = 'news'`;
+  } else if (feedTab === 'tech') {
+    where += ` AND NOT (s.name ILIKE '%reddit%' OR a.url ILIKE '%reddit.com%' OR a.title ILIKE '[r/%' OR s.name ILIKE '%voz%' OR a.url ILIKE '%voz.vn%')`;
+    where += ` AND COALESCE(s.feed_category, 'news') = 'tech'`;
   }
 
   const rows = await getMany(

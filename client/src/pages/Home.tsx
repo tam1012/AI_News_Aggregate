@@ -22,20 +22,24 @@ export function Home() {
     if (path === '/voz') return 'voz' as const;
     if (path === '/reddit') return 'reddit' as const;
     if (path === '/digest') return 'digest' as const;
-    return 'news' as const;
+    if (path === '/news') return 'news' as const;
+    if (path === '/tech') return 'tech' as const;
+    return 'all' as const;
   }, []); // only on mount
 
   const [selected, setSelected] = useState<any | null>(null);
-  const [tab, setTab] = useState<'news' | 'voz' | 'reddit' | 'digest'>(initialTab);
+  const [tab, setTab] = useState<'all' | 'news' | 'tech' | 'voz' | 'reddit' | 'digest'>(initialTab);
   const [selectedDigestId, setSelectedDigestId] = useState<string | null>(null);
 
   // Sync tab when URL changes (e.g. sidebar navigation)
   useEffect(() => {
     const path = location.pathname;
-    let newTab: 'news' | 'voz' | 'reddit' | 'digest' = 'news';
+    let newTab: 'all' | 'news' | 'tech' | 'voz' | 'reddit' | 'digest' = 'all';
     if (path === '/voz') newTab = 'voz';
     else if (path === '/reddit') newTab = 'reddit';
     else if (path === '/digest') newTab = 'digest';
+    else if (path === '/news') newTab = 'news';
+    else if (path === '/tech') newTab = 'tech';
     if (newTab !== tab && !path.startsWith('/article')) {
       setTab(newTab);
       setSelected(null);
@@ -120,7 +124,7 @@ export function Home() {
     () => {
       // Wait for dates to load before fetching articles (prevents empty flash)
       if (datesLoading && !datesRaw) return Promise.resolve({ data: [], meta: { total: 0, page: 1, totalPages: 0 } });
-      return api.getArticles({ page: 1, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab, tag: filterTag || undefined });
+      return api.getArticles({ page: 1, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'all' : tab, tag: filterTag || undefined });
     },
     [selectedDate, filterSource, datesLoading, tab, filterTag]
   );
@@ -154,7 +158,7 @@ export function Home() {
 
   // Fetch popular tags for topic chips
   const { data: tagsRaw } = useFetchRaw(
-    () => api.getArticleTags({ feedTab: tab === 'digest' ? 'news' : tab, date: selectedDate || undefined }),
+    () => api.getArticleTags({ feedTab: tab === 'digest' ? 'all' : tab, date: selectedDate || undefined }),
     [tab, selectedDate]
   );
   const popularTags: { tag: string; count: number }[] = useMemo(() => tagsRaw?.data || [], [tagsRaw]);
@@ -214,7 +218,7 @@ export function Home() {
   });
   const emptyFeedMessage = getEmptyFeedMessage({
     isOfflineCache: isShowingOfflineCache,
-    hasFilter: filterSource !== 'all' || tab !== 'news',
+    hasFilter: filterSource !== 'all' || tab !== 'all',
     tab,
   });
 
@@ -240,7 +244,7 @@ export function Home() {
     setIsLoadingMore(true);
     setLoadMoreError(null);
     try {
-      const response = await api.getArticles({ page: nextPage, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'news' : tab, tag: filterTag || undefined });
+      const response = await api.getArticles({ page: nextPage, limit: FEED_PAGE_SIZE, status: 'done', date: selectedDate || undefined, sourceId: filterSource === 'all' ? undefined : filterSource, feedTab: tab === 'digest' ? 'all' : tab, tag: filterTag || undefined });
       setArticlePages(prev => [...prev, ...(response?.data || [])]);
       setArticlePage(nextPage);
     } catch (err: any) {
@@ -344,9 +348,9 @@ export function Home() {
   }, [selected]);
 
   // Navigate helper: sync tab to URL (no React Router re-render)
-  const navigateTab = useCallback((t: 'news' | 'voz' | 'reddit' | 'digest') => {
+  const navigateTab = useCallback((t: 'all' | 'news' | 'tech' | 'voz' | 'reddit' | 'digest') => {
     setTab(t);
-    const path = t === 'news' ? '/' : `/${t}`;
+    const path = t === 'all' ? '/' : `/${t}`;
     window.history.replaceState(null, '', path);
   }, []);
 
@@ -393,7 +397,7 @@ export function Home() {
   const handleSelectArticle = useCallback((article: any) => {
     selectArticle(article);
     // Stay on current feed tab, just make sure we're not on digest
-    if (tab === 'digest') setTab('news');
+    if (tab === 'digest') setTab('all');
   }, [selectArticle, tab]);
 
   const selectedArticleIndex = selected ? articles.findIndex(article => article.id === selected.id) : -1;
@@ -450,7 +454,7 @@ export function Home() {
           <div className={`split-feed-toolbar ${toolbarHidden ? 'toolbar-hidden' : ''}`}>
             <div className="toolbar-tabs-row">
               <div className="feed-tabs">
-                {(['news', 'voz', 'reddit'] as const).map(t => (
+                {(['all', 'news', 'tech', 'voz', 'reddit'] as const).map(t => (
                   <button
                     key={t}
                     className={`feed-tab ${tab === t ? 'active' : ''}`}
@@ -461,7 +465,7 @@ export function Home() {
                       setFilterTag('');
                     }}
                   >
-                    {t === 'news' ? 'Tin mới' : t === 'voz' ? 'VOZ' : 'Reddit'}
+                    {t === 'all' ? 'Tất cả' : t === 'news' ? 'News' : t === 'tech' ? 'Tech' : t === 'voz' ? 'VOZ' : 'Reddit'}
                   </button>
                 ))}
                 <button
@@ -673,7 +677,7 @@ export function Home() {
               onClose={() => {
                 setSelected(null);
                 // Navigate back to current tab URL (no re-render)
-                const path = tab === 'news' ? '/' : `/${tab}`;
+                const path = tab === 'all' ? '/' : `/${tab}`;
                 window.history.replaceState(null, '', path);
               }}
               onPrevArticle={handlePrevArticle}

@@ -286,12 +286,16 @@
   background: color-mix(in srgb, var(--color-bg) 96%, transparent);
   backdrop-filter: blur(24px);
   border-top: 1px solid var(--color-border-light);
-  padding: 8px 16px calc(8px + var(--safe-bottom));
-  justify-content: center;
+  padding: 8px 12px calc(8px + var(--safe-bottom));
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 12px;
+  overscroll-behavior-x: contain;
 }
 .mobile-bottom-nav::-webkit-scrollbar { display: none; }
 .mobile-bottom-item {
@@ -304,6 +308,8 @@
   text-decoration: none;
   transition: all 0.15s;
   border: 1px solid transparent;
+  flex: 0 0 auto;
+  scroll-snap-align: center;
 }
 .mobile-bottom-item:hover {
   text-decoration: none;

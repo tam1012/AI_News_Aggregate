@@ -1,4 +1,4 @@
-export type ReaderTab = 'news' | 'voz' | 'reddit' | 'digest';
+export type ReaderTab = 'all' | 'news' | 'tech' | 'voz' | 'reddit' | 'digest';
 export type ReaderLoadingState = 'feed-only' | 'split';
 
 export function getReaderLoadingState({

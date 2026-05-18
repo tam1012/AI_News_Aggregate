@@ -116,7 +116,7 @@ export function hideTinyImage(img: HTMLImageElement) {
 
 /* ── main component ── */
 
-export type FeedTab = 'news' | 'voz' | 'reddit';
+export type FeedTab = 'all' | 'news' | 'tech' | 'voz' | 'reddit';
 
 export function classifyArticle(article: any): FeedTab {
   const name = (article.source_name || '').toLowerCase();
@@ -124,7 +124,7 @@ export function classifyArticle(article: any): FeedTab {
   const title = (article.title || '').toLowerCase();
   if (name.includes('reddit') || url.includes('reddit.com') || title.startsWith('[r/')) return 'reddit';
   if (name.includes('voz') || url.includes('voz.vn')) return 'voz';
-  return 'news';
+  return 'all';
 }
 
 /** Estimate reading time in minutes from article text content */

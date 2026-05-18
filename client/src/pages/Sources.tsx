@@ -26,6 +26,7 @@ export function Sources() {
     category: '',
     fetch_interval_minutes: 60,
     parser_config: undefined as any,
+    feed_category: 'news' as 'news' | 'tech',
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -88,7 +89,7 @@ export function Sources() {
       } else {
         await api.createSource(formData);
       }
-      setFormData({ type: 'rss', name: '', url: '', language: 'vi', category: '', fetch_interval_minutes: 60, parser_config: undefined });
+      setFormData({ type: 'rss', name: '', url: '', language: 'vi', category: '', fetch_interval_minutes: 60, parser_config: undefined, feed_category: 'news' });
       setEditingId(null);
       setShowForm(false);
       setDetectUrl('');
@@ -110,6 +111,7 @@ export function Sources() {
       category: source.category || '',
       fetch_interval_minutes: source.fetch_interval_minutes || 60,
       parser_config: source.parser_config,
+      feed_category: (source.feed_category === 'tech' ? 'tech' : 'news'),
     });
     setEditingId(source.id);
     setShowForm(true);
@@ -151,6 +153,21 @@ export function Sources() {
     } finally {
       setScrapingId(null);
     }
+  };
+
+  const handleChangeCategory = async (id: string, feed_category: 'news' | 'tech') => {
+    try {
+      await api.updateSource(id, { feed_category });
+      reload();
+    } catch (err: any) {
+      alert('Lỗi: ' + err.message);
+    }
+  };
+
+  const isSpecialSource = (source: any) => {
+    const url = (source.url || '').toLowerCase();
+    const name = (source.name || '').toLowerCase();
+    return name.includes('voz') || url.includes('voz.vn') || name.includes('reddit') || url.includes('reddit.com');
   };
 
   if (loading) return <div className="loading">Đang tải...</div>;
@@ -276,6 +293,20 @@ export function Sources() {
           </div>
 
           <div className="form-group">
+            <label>Danh mục feed</label>
+            <select
+              value={formData.feed_category}
+              onChange={(e) => setFormData({ ...formData, feed_category: e.target.value as 'news' | 'tech' })}
+            >
+              <option value="news">News (tin tức chung)</option>
+              <option value="tech">Tech News (công nghệ)</option>
+            </select>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
+              Chỉ áp dụng cho nguồn không phải VOZ/Reddit (chúng tự động gom về tab riêng).
+            </div>
+          </div>
+
+          <div className="form-group">
             <label>Tên nguồn *</label>
             <input type="text" required value={formData.name}
               placeholder="VD: VnExpress, TechCrunch..."
@@ -318,12 +349,30 @@ export function Sources() {
           sourceList.map((source: any) => (
             <div key={source.id} className="card source-item">
               <div className="source-info">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                   <span className={`badge badge-${source.type}`}>{source.type.toUpperCase()}</span>
                   <span className="source-name">{source.name}</span>
                   {!source.is_enabled && <span className="badge badge-error">Tắt</span>}
                   {source.consecutive_failures > 0 && (
                     <span className="badge badge-error">{source.consecutive_failures} lỗi</span>
+                  )}
+                  {!isSpecialSource(source) && (
+                    <select
+                      value={source.feed_category || 'news'}
+                      onChange={(e) => handleChangeCategory(source.id, e.target.value as 'news' | 'tech')}
+                      style={{
+                        fontSize: '0.7rem',
+                        padding: '2px 6px',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 4,
+                        background: 'var(--color-bg)',
+                        color: 'var(--color-text)',
+                      }}
+                      title="Xếp vào tab News hoặc Tech News"
+                    >
+                      <option value="news">News</option>
+                      <option value="tech">Tech</option>
+                    </select>
                   )}
                 </div>
                 <div className="source-url">{source.url}</div>
